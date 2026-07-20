@@ -1,4 +1,4 @@
-import { IconDictionaryService } from "@egon/diagram-js-egon-plugin";
+import type { IconDictionaryService } from "./IconDictionaryService";
 import { IconSet } from "../../domain/entities/iconSet";
 import { Dictionary } from "../../domain/entities/dictionary";
 import { sanitizeIconName } from "../../utils/sanitizer";
