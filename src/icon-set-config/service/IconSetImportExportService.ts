@@ -1,17 +1,23 @@
 import type { IconDictionaryService } from "./IconDictionaryService";
-import { IconSet } from "../../domain/entities/iconSet";
+import {
+    IconSet,
+    IconSetExportConfiguration,
+} from "../../domain/entities/iconSet";
 import { Dictionary } from "../../domain/entities/dictionary";
 import { sanitizeIconName } from "../../utils/sanitizer";
 import { ElementTypes } from "../../domain/entities/elementTypes";
 
+export type { IconSetExportConfiguration };
+
+/**
+ * The inbound raw icon set read from a file, before it is turned into an
+ * in-memory {@link IconSet}. `name` is optional because legacy files and the
+ * icon-only client API omit it (it then defaults to "").
+ */
 export interface FileConfiguration {
+    name?: string;
     actors: { [p: string]: any };
     workObjects: { [p: string]: any };
-}
-
-export interface IconSetConfigurationForExport {
-    actors: any;
-    workObjects: any;
 }
 
 export class IconSetImportExportService {
@@ -22,10 +28,11 @@ export class IconSetImportExportService {
     ) {}
 
     public createIconSetConfiguration(
-        fileConfiguration: FileConfiguration,
+        fileConfiguration: FileConfiguration | undefined,
     ): IconSet {
         if (fileConfiguration === undefined) {
             return {
+                name: "",
                 actors: new Dictionary(),
                 workObjects: new Dictionary(),
             };
@@ -50,6 +57,7 @@ export class IconSetImportExportService {
         });
 
         return {
+            name: fileConfiguration.name ?? "",
             actors: actorsDict,
             workObjects: workObjectsDict,
         };
@@ -82,8 +90,7 @@ export class IconSetImportExportService {
         );
     }
 
-    getCurrentConfigurationForExport():
-        IconSetConfigurationForExport | undefined {
+    getCurrentConfigurationForExport(): IconSetExportConfiguration | undefined {
         const currentConfiguration = this.getCurrentConfiguration();
 
         if (currentConfiguration) {
@@ -98,6 +105,7 @@ export class IconSetImportExportService {
             });
 
             return {
+                name: currentConfiguration.name,
                 actors: actors,
                 workObjects: workObjects,
             };
@@ -145,6 +153,7 @@ export class IconSetImportExportService {
         });
 
         return {
+            name: this.iconDictionaryService.getIconSetName(),
             actors: newActors,
             workObjects: newWorkobjects,
         };

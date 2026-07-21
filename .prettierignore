@@ -11,3 +11,6 @@ yarn.lock
 
 # Large third-party / non-source files.
 LICENSE
+
+# Vendored upstream test fixtures — kept byte-for-byte as Egon.io wrote them.
+src/import/service/__tests__/fixtures
