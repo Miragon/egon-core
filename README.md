@@ -43,15 +43,15 @@ Both the runtime (`dist/index.js`) and its type declarations
 
 ## Scripts
 
-| Script              | Description                                            |
-| ------------------- | ------------------------------------------------------ |
-| `yarn build`        | Production build → `dist/` (ESM, `.d.ts` tree, styles) |
-| `yarn dev`          | Build in development mode                              |
-| `yarn test`         | Run the test suite (Vitest, jsdom)                    |
-| `yarn test:watch`   | Run tests in watch mode                               |
-| `yarn test:coverage`| Run tests with coverage                               |
-| `yarn typecheck`    | Type-check without emitting (`tsc --noEmit`)          |
-| `yarn lint`         | Lint with ESLint                                      |
+| Script               | Description                                            |
+| -------------------- | ------------------------------------------------------ |
+| `yarn build`         | Production build → `dist/` (ESM, `.d.ts` tree, styles) |
+| `yarn dev`           | Build in development mode                              |
+| `yarn test`          | Run the test suite (Vitest, jsdom)                     |
+| `yarn test:watch`    | Run tests in watch mode                                |
+| `yarn test:coverage` | Run tests with coverage                                |
+| `yarn typecheck`     | Type-check without emitting (`tsc --noEmit`)           |
+| `yarn lint`          | Lint with ESLint                                       |
 
 ## Architecture
 

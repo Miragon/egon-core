@@ -19,7 +19,11 @@ export class DomainStoryPopupService {
 
     private popupElement: HTMLElement | null = null;
     private currentUpdateCallback:
-        | ((label: string, index: number | undefined, isMultiple: boolean) => void)
+        | ((
+              label: string,
+              index: number | undefined,
+              isMultiple: boolean,
+          ) => void)
         | null = null;
 
     constructor(
@@ -99,14 +103,22 @@ export class DomainStoryPopupService {
 
             // Add click listener to close on an outside click
             setTimeout(() => {
-                document.addEventListener("click", this.handleOutsideClick, true);
+                document.addEventListener(
+                    "click",
+                    this.handleOutsideClick,
+                    true,
+                );
             }, 0);
         }
     }
 
     private close() {
         if (this.popupElement) {
-            document.removeEventListener("click", this.handleOutsideClick, true);
+            document.removeEventListener(
+                "click",
+                this.handleOutsideClick,
+                true,
+            );
             this.popupElement.remove();
             this.popupElement = null;
             this.currentUpdateCallback = null;
@@ -127,7 +139,10 @@ export class DomainStoryPopupService {
 
         if (number) {
             element.businessObject.number = number;
-            this.domainStoryNumberingRegistry.setNumberIsMultiple(number, isMultiple);
+            this.domainStoryNumberingRegistry.setNumberIsMultiple(
+                number,
+                isMultiple,
+            );
         }
         element.businessObject.multipleNumberAllowed = isMultiple;
 
@@ -175,7 +190,9 @@ export class DomainStoryPopupService {
 
         // Check if the click target is inside the popup or any of its children
         const target = event.target as HTMLElement;
-        const clickedInsidePopup = target.closest('[data-numbering-popup="true"]');
+        const clickedInsidePopup = target.closest(
+            '[data-numbering-popup="true"]',
+        );
 
         if (!clickedInsidePopup && this.currentUpdateCallback) {
             // Get current values from the popup inputs
@@ -202,7 +219,8 @@ export class DomainStoryPopupService {
 
     private calculatePosition(element: ActivityCanvasObject) {
         const point1 = element["waypoints"][0];
-        const point2: any = element["waypoints"][element["waypoints"].length - 1];
+        const point2: any =
+            element["waypoints"][element["waypoints"].length - 1];
         const canvasX = (point1.x + point2.x) / 2;
         const canvasY = (point1.y + point2.y) / 2;
 

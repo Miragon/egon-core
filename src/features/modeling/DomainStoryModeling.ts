@@ -1,4 +1,6 @@
-import Modeling, { ModelingHints } from "diagram-js/lib/features/modeling/Modeling";
+import Modeling, {
+    ModelingHints,
+} from "diagram-js/lib/features/modeling/Modeling";
 
 import EventBus from "diagram-js/lib/core/EventBus";
 import ElementFactory from "diagram-js/lib/core/ElementFactory";

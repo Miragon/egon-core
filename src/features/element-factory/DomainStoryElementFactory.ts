@@ -21,7 +21,10 @@ export class DomainStoryElementFactory extends ElementFactory<
     }
 
     override create(type: "label", attrs?: Partial<Label>): Label;
-    override create(type: "connection", attrs?: Partial<Connection>): Connection;
+    override create(
+        type: "connection",
+        attrs?: Partial<Connection>,
+    ): Connection;
     override create(type: "shape", attrs?: Partial<Shape>): Shape;
     override create(type: "root", attrs?: Partial<Root>): Root;
     override create(

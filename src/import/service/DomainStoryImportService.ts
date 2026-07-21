@@ -53,10 +53,16 @@ export class DomainStoryImportService {
         const domainStoryIcons: FileConfiguration = configAndDST.domain;
 
         const iconSet: IconSet =
-            this.iconSetImportExportService.createIconSetConfiguration(domainStoryIcons);
+            this.iconSetImportExportService.createIconSetConfiguration(
+                domainStoryIcons,
+            );
 
-        this.importRepairService.removeWhitespacesFromIcons(domainStoryElements);
-        this.importRepairService.removeUnnecessaryBpmnProperties(domainStoryElements);
+        this.importRepairService.removeWhitespacesFromIcons(
+            domainStoryElements,
+        );
+        this.importRepairService.removeUnnecessaryBpmnProperties(
+            domainStoryElements,
+        );
         this.importRepairService.checkForUnreferencedElementsInActivitiesAndRepair(
             domainStoryElements,
         );
@@ -131,7 +137,11 @@ export class DomainStoryImportService {
             const parentShape = this.groupElements[parentId];
 
             if (isOfTypeGroup(parentShape)) {
-                return this.canvas.addShape(shape, parentShape, Number(parentShape.id));
+                return this.canvas.addShape(
+                    shape,
+                    parentShape,
+                    Number(parentShape.id),
+                );
             }
         }
         return this.canvas.addShape(shape);
@@ -169,7 +179,9 @@ export class DomainStoryImportService {
         );
         if (versionPrefix <= 0.5) {
             elements =
-                this.importRepairService.updateCustomElementsPreviousV050(elements);
+                this.importRepairService.updateCustomElementsPreviousV050(
+                    elements,
+                );
             // TODO: add V050 dialog
             // this.showPreviousV050Dialog(versionPrefix);
         }

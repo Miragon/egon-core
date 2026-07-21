@@ -13,7 +13,10 @@ export class ImportRepairService {
 
         elements.forEach((element) => {
             const type = element.type;
-            if (type === ElementTypes.ACTIVITY || type === ElementTypes.CONNECTION) {
+            if (
+                type === ElementTypes.ACTIVITY ||
+                type === ElementTypes.CONNECTION
+            ) {
                 activities.push(element as ActivityBusinessObject);
             } else {
                 objectIDs.push(element.id);
@@ -37,7 +40,9 @@ export class ImportRepairService {
      * Previously Document had no special name and was just addressed as workObject
      * Bubble was renamed to Conversation
      */
-    updateCustomElementsPreviousV050(elements: BusinessObject[]): BusinessObject[] {
+    updateCustomElementsPreviousV050(
+        elements: BusinessObject[],
+    ): BusinessObject[] {
         for (const element of elements) {
             if (element.type === ElementTypes.WORKOBJECT) {
                 element.type = ElementTypes.WORKOBJECT + "Document";

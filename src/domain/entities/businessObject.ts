@@ -1,12 +1,12 @@
 export interface BusinessObject {
-  id: string;
-  name: string;
+    id: string;
+    name: string;
 
-  type: string;
+    type: string;
 
-  x: number;
-  y: number;
-  height: number | undefined;
-  width: number | undefined;
-  pickedColor: string | undefined;
+    x: number;
+    y: number;
+    height: number | undefined;
+    width: number | undefined;
+    pickedColor: string | undefined;
 }

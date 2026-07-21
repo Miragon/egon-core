@@ -1,5 +1,5 @@
-import { BusinessObject } from './businessObject';
+import { BusinessObject } from "./businessObject";
 
 export interface GroupBusinessObject extends BusinessObject {
-  children: string[];
+    children: string[];
 }

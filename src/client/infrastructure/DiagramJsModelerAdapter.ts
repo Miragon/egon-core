@@ -119,7 +119,8 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     }
 
     private initializeRootElement(): void {
-        const elementFactory = this.diagram.get<ElementFactory>("elementFactory");
+        const elementFactory =
+            this.diagram.get<ElementFactory>("elementFactory");
         const root = elementFactory.createRoot();
         this.canvas.setRootElement(root);
     }

@@ -2,13 +2,15 @@ import { assign, isArray } from "min-dash";
 import Connect from "diagram-js/lib/features/connect/Connect";
 import Create from "diagram-js/lib/features/create/Create";
 import Canvas from "diagram-js/lib/core/Canvas";
-import ContextPad, { ContextPadTarget } from "diagram-js/lib/features/context-pad/ContextPad";
+import ContextPad, {
+    ContextPadTarget,
+} from "diagram-js/lib/features/context-pad/ContextPad";
 import PopupMenu from "diagram-js/lib/features/popup-menu/PopupMenu";
 import CommandStack from "diagram-js/lib/command/CommandStack";
 import EventBus from "diagram-js/lib/core/EventBus";
 import ContextPadProvider, {
     ContextPadEntries,
-    ContextPadEntry
+    ContextPadEntry,
 } from "diagram-js/lib/features/context-pad/ContextPadProvider";
 import { Connection, Element } from "diagram-js/lib/model/Types";
 import { hasPrimaryModifier } from "diagram-js/lib/util/Mouse";
@@ -19,7 +21,11 @@ import { DomainStoryModeling } from "../modeling/DomainStoryModeling";
 import { DomainStoryReplaceMenuProvider } from "../replace/DomainStoryReplaceMenuProvider";
 import { DirtyFlagService } from "../../domain/service/DirtyFlagService";
 import { IconDictionaryService } from "../../icon-set-config/service/IconDictionaryService";
-import { hexToRGBA, isHexWithAlpha, rgbaToHex } from "../../utils/colorConverter";
+import {
+    hexToRGBA,
+    isHexWithAlpha,
+    rgbaToHex,
+} from "../../utils/colorConverter";
 import { ElementTypes } from "../../domain/entities/elementTypes";
 import { DomainStoryNumberingRegistry } from "../popup/DomainStoryNumberingRegistry";
 
@@ -147,7 +153,10 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
     private executeCommandStack(event: any) {
         const selectedBusinessObject = this.getSelectedBusinessObject(event);
 
-        this.commandStack.execute("element.colorChange", selectedBusinessObject);
+        this.commandStack.execute(
+            "element.colorChange",
+            selectedBusinessObject,
+        );
         this.dirtyFlagService.makeDirty();
     }
 
@@ -199,12 +208,15 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
                                     el.type.includes(ElementTypes.GROUP),
                                 );
                                 const otherElements = element.filter(
-                                    (el) => !el.type.includes(ElementTypes.GROUP),
+                                    (el) =>
+                                        !el.type.includes(ElementTypes.GROUP),
                                 );
                                 groups.forEach((group) =>
                                     this.modeling.removeGroup(group),
                                 );
-                                this.modeling.removeElements(otherElements.slice());
+                                this.modeling.removeElements(
+                                    otherElements.slice(),
+                                );
                             } else {
                                 this.modeling.removeElements([element]);
                             }
@@ -262,9 +274,12 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
                 title: this.translate("Change type"),
                 action: {
                     click: (event: any, element: ContextPadTarget) => {
-                        const position = assign(this.getReplaceMenuPosition(element), {
-                            cursor: { x: event.x, y: event.y },
-                        });
+                        const position = assign(
+                            this.getReplaceMenuPosition(element),
+                            {
+                                cursor: { x: event.x, y: event.y },
+                            },
+                        );
                         this.popupMenu.open(element, "ds-replace", position);
                     },
                 },
@@ -281,7 +296,9 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
                 title: this.translate("Change color"),
                 action: {
                     click: function () {
-                        document.dispatchEvent(new CustomEvent("openColorPicker"));
+                        document.dispatchEvent(
+                            new CustomEvent("openColorPicker"),
+                        );
                     },
                 },
             },
@@ -322,7 +339,8 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         const entries: Map<string, ContextPadEntry> = new Map();
         workObjects.keysArray().forEach((workObjectType) => {
             const name = workObjectType;
-            const icon = this.iconDictionaryService.getCSSClassOfIcon(workObjectType);
+            const icon =
+                this.iconDictionaryService.getCSSClassOfIcon(workObjectType);
             entries.set(
                 "append.workObject" + name,
                 this.appendAction(
@@ -337,11 +355,14 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
     }
 
     private addActors(): Map<string, ContextPadEntry> {
-        const actors = this.iconDictionaryService.getIconsAssignedAs(ElementTypes.ACTOR);
+        const actors = this.iconDictionaryService.getIconsAssignedAs(
+            ElementTypes.ACTOR,
+        );
         const entries: Map<string, ContextPadEntry> = new Map();
         actors.keysArray().forEach((actorType) => {
             const name = actorType;
-            const icon = this.iconDictionaryService.getCSSClassOfIcon(actorType);
+            const icon =
+                this.iconDictionaryService.getCSSClassOfIcon(actorType);
             entries.set(
                 "append.actor" + name,
                 this.appendAction(
@@ -364,9 +385,12 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
                 title: this.translate("Change type"),
                 action: {
                     click: (event: any, element: ContextPadTarget) => {
-                        const position = assign(this.getReplaceMenuPosition(element), {
-                            cursor: { x: event.x, y: event.y },
-                        });
+                        const position = assign(
+                            this.getReplaceMenuPosition(element),
+                            {
+                                cursor: { x: event.x, y: event.y },
+                            },
+                        );
                         this.popupMenu.open(element, "ds-replace", position);
                     },
                 },

@@ -19,4 +19,5 @@ export interface IconsChangedEvent {
     readonly icons: IconSet;
 }
 
-export type DomainEvent = StoryChangedEvent | ViewportChangedEvent | IconsChangedEvent;
+export type DomainEvent =
+    StoryChangedEvent | ViewportChangedEvent | IconsChangedEvent;

@@ -38,7 +38,11 @@ export class ElementRegistryService {
             const groups = this.getAllGroups();
             const objectList: CanvasObject[] = [];
 
-            this.fillListOfCanvasObjects(allObjectsFromCanvas, objectList, groups);
+            this.fillListOfCanvasObjects(
+                allObjectsFromCanvas,
+                objectList,
+                groups,
+            );
 
             return objectList;
         }
@@ -55,7 +59,7 @@ export class ElementRegistryService {
         });
         return activities;
     }
-    
+
     getAllCanvasObjects(): CanvasObject[] {
         const allObjects: CanvasObject[] = [];
         const groupObjects: GroupCanvasObject[] = [];
@@ -120,8 +124,12 @@ export class ElementRegistryService {
                 activityCanvasA: ActivityCanvasObject,
                 activityCanvasB: ActivityCanvasObject,
             ) => {
-                const activityNumberA = Number(activityCanvasA.businessObject.number);
-                const activityNumberB = Number(activityCanvasB.businessObject.number);
+                const activityNumberA = Number(
+                    activityCanvasA.businessObject.number,
+                );
+                const activityNumberB = Number(
+                    activityCanvasB.businessObject.number,
+                );
 
                 return activityNumberA - activityNumberB;
             },
@@ -131,7 +139,9 @@ export class ElementRegistryService {
     }
 
     getActivityFromActorById(id: string): ActivityCanvasObject | undefined {
-        return this.getActivitiesFromActors().find((activity) => activity.id === id);
+        return this.getActivitiesFromActors().find(
+            (activity) => activity.id === id,
+        );
     }
 
     getUsedIcons(): UsedIconList {

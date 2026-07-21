@@ -98,7 +98,10 @@ function canResize(shape: Shape, newBounds: Shape) {
     if (is(shape, ElementTypes.GROUP)) {
         if (newBounds) {
             const lowerLeft = { x: shape.x, y: shape.y + shape.height };
-            const lowerRight = { x: shape.x + shape.width, y: shape.y + shape.height };
+            const lowerRight = {
+                x: shape.x + shape.width,
+                y: shape.y + shape.height,
+            };
             const upperRight = { x: shape.x + shape.width, y: shape.y };
 
             if (newBounds.x !== shape.x && newBounds.y !== shape.y) {
@@ -142,14 +145,22 @@ function canResize(shape: Shape, newBounds: Shape) {
     return false;
 }
 
-function canConnectToAnnotation(source: Element, target: Element, connection: Element) {
+function canConnectToAnnotation(
+    source: Element,
+    target: Element,
+    connection: Element,
+) {
     // do not allow an activity connecting to an annotation
     if (isActivity(connection) && isAnnotation(target)) {
         return false;
     }
 
     // do not allow an annotation connection between two annotations
-    if (isConnection(connection) && isAnnotation(source) && isAnnotation(target)) {
+    if (
+        isConnection(connection) &&
+        isAnnotation(source) &&
+        isAnnotation(target)
+    ) {
         return false;
     }
 

@@ -190,8 +190,10 @@ export class DomainStoryLabelEditingProvider {
             defaultLineHeight = defaultStyle?.lineHeight;
 
         const style = {
-            fontFamily: this.domainStoryTextRenderer.getDefaultStyle()?.fontFamily,
-            fontWeight: this.domainStoryTextRenderer.getDefaultStyle()?.fontWeight,
+            fontFamily:
+                this.domainStoryTextRenderer.getDefaultStyle()?.fontFamily,
+            fontWeight:
+                this.domainStoryTextRenderer.getDefaultStyle()?.fontWeight,
         };
 
         // adjust for groups
@@ -285,7 +287,9 @@ export class DomainStoryLabelEditingProvider {
     }
 
     private createAutocomplete(element: Element) {
-        const editingBox = document.getElementsByClassName("djs-direct-editing-content");
+        const editingBox = document.getElementsByClassName(
+            "djs-direct-editing-content",
+        );
         focusElement(editingBox.item(0) as HTMLDivElement);
         autocomplete(
             editingBox[0] as HTMLInputElement,

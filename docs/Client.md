@@ -25,12 +25,12 @@ static create(
 
 ### `EgonClientConfig`
 
-| Field       | Type          | Description                                    |
-| ----------- | ------------- | ---------------------------------------------- |
-| `container` | `HTMLElement` | The element to render the diagram into.        |
-| `width`     | `string?`     | Canvas width (default `"100%"`).               |
-| `height`    | `string?`     | Canvas height (default `"100%"`).              |
-| `viewport`  | `ViewportData?` | Initial viewport (scroll + zoom).            |
+| Field       | Type            | Description                             |
+| ----------- | --------------- | --------------------------------------- |
+| `container` | `HTMLElement`   | The element to render the diagram into. |
+| `width`     | `string?`       | Canvas width (default `"100%"`).        |
+| `height`    | `string?`       | Canvas height (default `"100%"`).       |
+| `viewport`  | `ViewportData?` | Initial viewport (scroll + zoom).       |
 
 `additionalModules` accepts extra diagram-js
 [`ModuleDeclaration`](https://github.com/nikku/didi)s. `ports` is intended for
@@ -62,11 +62,11 @@ on<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void
 off<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void
 ```
 
-| Event              | Callback signature                  | Fired when …                     |
-| ------------------ | ----------------------------------- | -------------------------------- |
-| `story.changed`    | `() => void`                        | The diagram content changes.     |
-| `viewport.changed` | `(viewport: ViewportData) => void`  | The user scrolls or zooms.       |
-| `icons.changed`    | `(icons: IconSet) => void`          | The registered icon set changes. |
+| Event              | Callback signature                 | Fired when …                     |
+| ------------------ | ---------------------------------- | -------------------------------- |
+| `story.changed`    | `() => void`                       | The diagram content changes.     |
+| `viewport.changed` | `(viewport: ViewportData) => void` | The user scrolls or zooms.       |
+| `icons.changed`    | `(icons: IconSet) => void`         | The registered icon set changes. |
 
 ```ts
 client.on("story.changed", () => {

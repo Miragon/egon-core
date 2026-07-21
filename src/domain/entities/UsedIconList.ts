@@ -1,4 +1,4 @@
 export interface UsedIconList {
-  actors: string[];
-  workobjects: string[];
+    actors: string[];
+    workobjects: string[];
 }

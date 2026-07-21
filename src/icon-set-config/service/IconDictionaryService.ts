@@ -55,7 +55,9 @@ export class IconDictionaryService {
                 actorIcons.map((element) => getIconId(element.type)),
             );
         }
-        if (!this.allInTypeDictionary(ElementTypes.WORKOBJECT, workObjectIcons)) {
+        if (
+            !this.allInTypeDictionary(ElementTypes.WORKOBJECT, workObjectIcons)
+        ) {
             this.addIconsFromIconSetConfiguration(
                 ElementTypes.WORKOBJECT,
                 workObjectIcons.map((element) => getIconId(element.type)),
@@ -137,8 +139,14 @@ export class IconDictionaryService {
                 }
             `;
 
-            // @ts-expect-error sheet does not exist on HtmlElement
-            sheetEl?.sheet?.insertRule(iconStyle, sheetEl.sheet.cssRules.length);
+            // getElementById types the node as HTMLElement; the "iconsCss"
+            // node is a <style> element, so cast to reach its CSSOM sheet.
+            // Typing it properly (vs. @ts-expect-error) keeps the suppression
+            // from breaking when Prettier wraps this call across lines.
+            const styleSheet = (sheetEl as HTMLStyleElement | null)?.sheet;
+            if (styleSheet) {
+                styleSheet.insertRule(iconStyle, styleSheet.cssRules.length);
+            }
         });
     }
 
@@ -165,7 +173,9 @@ export class IconDictionaryService {
         } else if (type === ElementTypes.WORKOBJECT) {
             return this.selectedWorkObjectsDictionary.get(name);
         }
-        throw new Error(`[IconDictionaryService] Unsupported value type: ${type}`);
+        throw new Error(
+            `[IconDictionaryService] Unsupported value type: ${type}`,
+        );
     }
 
     getCSSClassOfIcon(name: string): string {
@@ -176,7 +186,9 @@ export class IconDictionaryService {
         if (customIcons.has(name)) {
             return customIcons.get(name);
         }
-        throw new Error(`[IconDictionaryService] Unsupported value name: ${name}`);
+        throw new Error(
+            `[IconDictionaryService] Unsupported value name: ${name}`,
+        );
     }
 
     getActorsDictionary(): Dictionary {

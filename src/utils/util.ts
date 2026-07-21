@@ -18,8 +18,14 @@ export function getBusinessObject(element: Element) {
 export function reworkGroupElements(parent: any, shape: Shape) {
     parent.children.slice().forEach((innerShape: any) => {
         if (innerShape.id !== shape.id) {
-            if (innerShape.x >= shape.x && innerShape.x <= shape.x + shape.width) {
-                if (innerShape.y >= shape.y && innerShape.y <= shape.y + shape.height) {
+            if (
+                innerShape.x >= shape.x &&
+                innerShape.x <= shape.x + shape.width
+            ) {
+                if (
+                    innerShape.y >= shape.y &&
+                    innerShape.y <= shape.y + shape.height
+                ) {
                     if (innerShape.children.includes(shape)) {
                         innerShape.children.remove(shape);
                     }
@@ -144,7 +150,8 @@ export function getScaledPath(param: any) {
         // path
         const heightRatio =
             (param.containerHeight / rawPath.height) * param.yScaleFactor;
-        const widthRatio = (param.containerWidth / rawPath.width) * param.xScaleFactor;
+        const widthRatio =
+            (param.containerWidth / rawPath.width) * param.xScaleFactor;
 
         // Apply a height ratio
         for (
@@ -183,13 +190,20 @@ function format(str: string, obj: any) {
 
 // copied and adjusted from https://github.com/adobe-webplatform/Snap.svg/blob/master/src/svg.js
 const tokenRegex = /\{([^{}]+)}/g,
-    objNotationRegex = /(?:(?:^|\.)(.+?)(?=\[|\.|$|\()|\[(['"])(.+?)\2])(\(\))?/g; // matches .xxxxx or ["xxxxx"] to run over object properties
+    objNotationRegex =
+        /(?:(?:^|\.)(.+?)(?=\[|\.|$|\()|\[(['"])(.+?)\2])(\(\))?/g; // matches .xxxxx or ["xxxxx"] to run over object properties
 
 function replacer(all: any, key: any, obj: any) {
     let res = obj;
     key.replace(
         objNotationRegex,
-        function (_all: any, name: any, _quote: any, quotedName: any, isFunc: boolean) {
+        function (
+            _all: any,
+            name: any,
+            _quote: any,
+            quotedName: any,
+            isFunc: boolean,
+        ) {
             name = name || quotedName;
             if (res) {
                 if (name in res) {

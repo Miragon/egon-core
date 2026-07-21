@@ -154,7 +154,10 @@ export function autocomplete(
         for (const name of workObjectNames) {
             // check if the item starts with the same letters as the text field value:
             if (val) {
-                if (name.substring(0, val.length).toUpperCase() === val.toUpperCase()) {
+                if (
+                    name.substring(0, val.length).toUpperCase() ===
+                    val.toUpperCase()
+                ) {
                     // create a DIV element for each matching element:
                     autocompleteItem = document.createElement("DIV");
 
@@ -183,7 +186,8 @@ export function autocomplete(
 
     // execute a function presses a key on the keyboard:
     input.onkeydown = function (e: KeyboardEvent) {
-        let autocompleteList: HTMLElement | HTMLCollectionOf<HTMLDivElement> | null =
+        let autocompleteList:
+            HTMLElement | HTMLCollectionOf<HTMLDivElement> | null =
             document.getElementById("autocomplete-list");
         if (autocompleteList) {
             autocompleteList = autocompleteList.getElementsByTagName("div");
@@ -215,7 +219,8 @@ export function autocomplete(
                 e.preventDefault();
                 // If the ENTER key is pressed, prevent the form from being submitted,
                 if (currentFocus > -1) {
-                    element.businessObject.name = filteredWorkObjectNames[currentFocus];
+                    element.businessObject.name =
+                        filteredWorkObjectNames[currentFocus];
                     eventBus.fire("element.changed", { element });
                 }
                 break;
@@ -255,7 +260,8 @@ export function autocomplete(
      *  except the one passed as an argument:
      */
     function closeAllLists(survivor?: any) {
-        const autocompleteList = document.getElementsByClassName("autocomplete-items");
+        const autocompleteList =
+            document.getElementsByClassName("autocomplete-items");
         Array.from(autocompleteList).forEach((item) => {
             if (survivor != item && survivor != input) {
                 item.parentNode?.removeChild(item);

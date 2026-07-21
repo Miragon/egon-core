@@ -17,7 +17,7 @@ application present, and its output must be consumable by arbitrary bundlers.
 - **Test**: Vitest with jsdom, so diagram-js code that touches the DOM is
   testable without a browser.
 - **Static checks**: ESLint (flat config, typescript-eslint) plus a `tsc
-  --noEmit` typecheck over both the library (`tsconfig.lib.json`) and the test
+--noEmit` typecheck over both the library (`tsconfig.lib.json`) and the test
   files (`tsconfig.spec.json`).
 - **Package manager**: Yarn 4 via corepack, pinned in `package.json`
   (`packageManager`), so CI and contributors resolve identical dependency

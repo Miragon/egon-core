@@ -76,7 +76,10 @@ export class LabelDictionaryService {
                 element.type.includes(ElementTypes.WORKOBJECT) &&
                 !this.workObjektLabels.map((e) => e.name).includes(name)
             ) {
-                const iconName = element.type.replace(ElementTypes.WORKOBJECT, "");
+                const iconName = element.type.replace(
+                    ElementTypes.WORKOBJECT,
+                    "",
+                );
                 let icon = this.iconDictionaryService.getIconSource(iconName);
                 if (!icon) {
                     return;

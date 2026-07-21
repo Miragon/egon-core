@@ -1,0 +1,13 @@
+# Build output and generated artifacts — Prettier owns source, not builds.
+dist
+coverage
+.vite
+
+# Dependencies and lockfiles (managed by Yarn, not hand-formatted).
+node_modules
+.yarn
+.pnp.*
+yarn.lock
+
+# Large third-party / non-source files.
+LICENSE

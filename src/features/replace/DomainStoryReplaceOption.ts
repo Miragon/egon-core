@@ -12,10 +12,14 @@ export type ReplaceOption = {
 export class DomainStoryReplaceOption {
     static $inject: string[] = ["domainStoryIconDictionaryService"];
 
-    constructor(private readonly iconDictionaryService: IconDictionaryService) {}
+    constructor(
+        private readonly iconDictionaryService: IconDictionaryService,
+    ) {}
 
     actorReplaceOptions(name: string) {
-        const actors = this.iconDictionaryService.getIconsAssignedAs(ElementTypes.ACTOR);
+        const actors = this.iconDictionaryService.getIconsAssignedAs(
+            ElementTypes.ACTOR,
+        );
 
         const replaceOption: ReplaceOption[] = [];
 
@@ -25,7 +29,8 @@ export class DomainStoryReplaceOption {
                 replaceOption[index] = {
                     label: "Change to " + typeName,
                     actionName: "replace-with-actor-" + typeName.toLowerCase(),
-                    className: this.iconDictionaryService.getCSSClassOfIcon(actorType),
+                    className:
+                        this.iconDictionaryService.getCSSClassOfIcon(actorType),
                     target: {
                         type: `${ElementTypes.ACTOR}${actorType}`,
                     },
@@ -49,7 +54,9 @@ export class DomainStoryReplaceOption {
                     label: "Change to " + typeName,
                     actionName: "replace-with-actor-" + typeName,
                     className:
-                        this.iconDictionaryService.getCSSClassOfIcon(workObjectType),
+                        this.iconDictionaryService.getCSSClassOfIcon(
+                            workObjectType,
+                        ),
                     target: {
                         type: `${ElementTypes.WORKOBJECT}${workObjectType}`,
                     },

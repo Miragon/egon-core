@@ -12,7 +12,7 @@
 
 [class*="icon-domain-story-"]::before {
     /* This pseudo-element will become the icon */
-    content: '';
+    content: "";
     display: inline-block;
 
     /* Use the parent's font-size to define our size */
@@ -20,7 +20,7 @@
     height: 1em;
 
     /* The icon's color */
-    background-color: #22242A;
+    background-color: #22242a;
 
     /* The magic: the background is shaped by the SVG mask */
     mask-size: contain;

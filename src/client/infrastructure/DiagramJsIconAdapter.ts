@@ -28,19 +28,19 @@ export class DiagramJsIconAdapter implements IconPort {
         this.iconDictionaryService = diagram.get<IconDictionaryService>(
             "domainStoryIconDictionaryService",
         );
-        this.iconSetImportExportService = diagram.get<IconSetImportExportService>(
-            "domainStoryIconSetImportExportService",
-        );
+        this.iconSetImportExportService =
+            diagram.get<IconSetImportExportService>(
+                "domainStoryIconSetImportExportService",
+            );
         this.eventBus = diagram.get<EventBus>("eventBus");
     }
 
     loadIcons(icons: Partial<IconSetData>): void {
-        const iconSetConfig = this.iconSetImportExportService.createIconSetConfiguration(
-            {
+        const iconSetConfig =
+            this.iconSetImportExportService.createIconSetConfiguration({
                 actors: icons.actors ?? {},
                 workObjects: icons.workObjects ?? {},
-            },
-        );
+            });
 
         this.iconSetImportExportService.loadConfiguration(iconSetConfig);
         this.fireIconsChangedEvent();
@@ -77,7 +77,9 @@ export class DiagramJsIconAdapter implements IconPort {
     }
 
     onIconsChanged(callback: (icons: IconSet) => void): void {
-        const wrapped = this.createDebouncedCallback(() => callback(this.getIcons()));
+        const wrapped = this.createDebouncedCallback(() =>
+            callback(this.getIcons()),
+        );
         this.callbackRegistry.set(callback, wrapped);
         (this.eventBus.on as any)("dst.config.changed", wrapped);
     }
@@ -91,7 +93,9 @@ export class DiagramJsIconAdapter implements IconPort {
     }
 
     private toElementType(category: IconCategory): ElementTypes {
-        return category === "actor" ? ElementTypes.ACTOR : ElementTypes.WORKOBJECT;
+        return category === "actor"
+            ? ElementTypes.ACTOR
+            : ElementTypes.WORKOBJECT;
     }
 
     private addIconToCss(name: string, svg: string): void {

@@ -65,9 +65,11 @@ export class DomainStoryContextPad extends ContextPad {
 
                 // Transform element model coordinates to screen coordinates
                 const x =
-                    (shape["x"] - viewbox.x) * viewbox.scale + containerBounds.left;
+                    (shape["x"] - viewbox.x) * viewbox.scale +
+                    containerBounds.left;
                 const y =
-                    (shape["y"] - viewbox.y) * viewbox.scale + containerBounds.top;
+                    (shape["y"] - viewbox.y) * viewbox.scale +
+                    containerBounds.top;
                 const width = shape["width"] * viewbox.scale;
                 const height = shape["height"] * viewbox.scale;
 
