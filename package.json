@@ -39,6 +39,9 @@
         "typecheck": "tsc -p tsconfig.lib.json --noEmit && tsc -p tsconfig.spec.json --noEmit",
         "prepack": "yarn build"
     },
+    "resolutions": {
+        "lodash": "4.18.1"
+    },
     "dependencies": {
         "diagram-js": "15.22.0",
         "diagram-js-direct-editing": "3.5.1",
