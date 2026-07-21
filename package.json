@@ -40,7 +40,8 @@
         "prepack": "yarn build"
     },
     "resolutions": {
-        "lodash": "4.18.1"
+        "lodash": "4.18.1",
+        "@microsoft/api-extractor/minimatch": "3.1.5"
     },
     "dependencies": {
         "diagram-js": "15.22.0",
