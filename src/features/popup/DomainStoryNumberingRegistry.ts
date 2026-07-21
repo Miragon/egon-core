@@ -2,7 +2,7 @@ import EventBus from "diagram-js/lib/core/EventBus";
 import { Element } from "diagram-js/lib/model/Types";
 
 import { ElementRegistryService } from "../../domain/service/ElementRegistryService";
-import { ActivityCanvasObject } from "../../domain/entities/activityCanvasObject";
+import { ActivityCanvasObject } from "../../domain/entities/canvasObject";
 import CommandStack from "diagram-js/lib/command/CommandStack";
 import { ActivityBusinessObject } from "../../domain/entities/activityBusinessObject";
 

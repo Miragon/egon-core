@@ -1,6 +1,5 @@
-import ElementRegistry from "diagram-js/lib/core/ElementRegistry";
-import { CanvasObject } from "../entities/canvasObject";
-import { ActivityCanvasObject } from "../entities/activityCanvasObject";
+import { ElementRegistryPort } from "../ports/ElementRegistryPort";
+import { ActivityCanvasObject, CanvasObject } from "../entities/canvasObject";
 import { ElementTypes } from "../entities/elementTypes";
 import { GroupCanvasObject } from "../entities/groupCanvasObject";
 import { UsedIconList } from "../entities/UsedIconList";
@@ -10,7 +9,7 @@ export class ElementRegistryService {
 
     private fullyInitialized = false;
 
-    constructor(private readonly registry: ElementRegistry) {}
+    constructor(private readonly registry: ElementRegistryPort) {}
 
     /**
      * Initially, the registry has only the root-Element.

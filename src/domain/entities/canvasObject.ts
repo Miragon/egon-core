@@ -1,7 +1,19 @@
-import { BusinessObject, testBusinessObject } from "./businessObject";
-import { RootObject, testRoot } from "./rootObject";
-import { ActivityCanvasObject } from "./activityCanvasObject";
-import { ElementTypes } from "./elementTypes";
+import { BusinessObject } from "./businessObject";
+import { ActivityBusinessObject } from "./activityBusinessObject";
+import { Waypoint } from "./waypoint";
+
+/**
+ * The canvas-element cluster of the domain model. `CanvasObject`,
+ * `ActivityCanvasObject` and `RootObject` are mutually recursive — elements
+ * know their parent and their connecting activities, activities connect
+ * elements, the root holds children — so they live in one file: splitting
+ * them across files forces an import cycle, which the architecture tests
+ * (src/architecture.spec.ts) forbid.
+ */
+export interface RootObject {
+    children: CanvasObject[];
+    id: string;
+}
 
 export interface CanvasObject {
     attachers: any;
@@ -24,22 +36,10 @@ export interface CanvasObject {
     pickedColor: string | undefined;
 }
 
-export const testCanvasObject: CanvasObject = {
-    attachers: undefined,
-    host: undefined,
+export interface ActivityCanvasObject extends CanvasObject {
+    source: CanvasObject;
+    target: CanvasObject;
 
-    parent: testRoot,
-    businessObject: testBusinessObject,
-    incoming: [],
-    outgoing: [],
-    id: "test",
-    type: ElementTypes.WORKOBJECT,
-    height: 38,
-    width: 38,
-    x: 0,
-    y: 0,
-    name: "test",
-    text: undefined,
-
-    pickedColor: undefined,
-};
+    waypoints: Waypoint[];
+    businessObject: ActivityBusinessObject;
+}

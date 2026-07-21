@@ -6,7 +6,7 @@ import { IconSetImportExportService } from "../../icon-set-config/service/IconSe
 import { ElementTypes } from "../../domain/entities/elementTypes";
 import { Dictionary } from "../../domain/entities/dictionary";
 
-import { IconPort } from "../application";
+import { IconPort } from "../application/ports";
 import { IconCategory, IconSet, IconSetData } from "../domain/model/IconTypes";
 
 const DEFAULT_DEBOUNCE_MS = 100;

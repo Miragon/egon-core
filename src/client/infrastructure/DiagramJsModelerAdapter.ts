@@ -8,7 +8,7 @@ import EgonPlugin from "../../plugin";
 import { DomainStoryImportService } from "../../import/service/DomainStoryImportService";
 import { DomainStoryExportService } from "../../export/service/DomainStoryExportService";
 
-import { ModelerPort } from "../application";
+import { ModelerPort } from "../application/ports";
 import { DomainStoryDocument, ViewportData } from "../domain";
 
 const DEFAULT_DEBOUNCE_MS = 100;
