@@ -67,7 +67,9 @@ export class DomainStoryTextRenderer {
 
         // resize label shape to fit label text
         return {
-            x: Math.round(bounds.x + bounds.width / 2 - layoutDimensions.width / 2),
+            x: Math.round(
+                bounds.x + bounds.width / 2 - layoutDimensions.width / 2,
+            ),
             y: Math.round(bounds.y),
             width: Math.ceil(layoutDimensions.width),
             height: Math.ceil(layoutDimensions.height),

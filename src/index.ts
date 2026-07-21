@@ -22,7 +22,12 @@ export type {
     DomainStoryElement, // Assuming this was meant to be exported from DomainStoryDocument.ts
 } from "./client/domain/model/DomainStoryDocument";
 export type { ViewportData } from "./client/domain/model/Viewport";
-export type { IconSet, IconSetData, IconCategory, IconMap } from "./client/domain/model/IconTypes";
+export type {
+    IconSet,
+    IconSetData,
+    IconCategory,
+    IconMap,
+} from "./client/domain/model/IconTypes";
 
 // =============================================================================
 // Plugin module (for advanced usage / custom integrations)

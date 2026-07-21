@@ -22,21 +22,25 @@ export class DomainStoryCopyPaste {
         private readonly domainStoryPropertyCopy: DomainStoryPropertyCopy,
         eventBus: EventBus,
     ) {
-        eventBus.on("copyPaste.copyElement", LOW_PRIORITY, function (context: any) {
-            const descriptor = context.descriptor,
-                element = context.element;
+        eventBus.on(
+            "copyPaste.copyElement",
+            LOW_PRIORITY,
+            function (context: any) {
+                const descriptor = context.descriptor,
+                    element = context.element;
 
-            const businessObject = (descriptor.oldBusinessObject =
-                getBusinessObject(element));
+                const businessObject = (descriptor.oldBusinessObject =
+                    getBusinessObject(element));
 
-            descriptor.type = element.type;
+                descriptor.type = element.type;
 
-            copyProperties(businessObject, descriptor, "name");
+                copyProperties(businessObject, descriptor, "name");
 
-            if (isLabel(descriptor)) {
-                return descriptor;
-            }
-        });
+                if (isLabel(descriptor)) {
+                    return descriptor;
+                }
+            },
+        );
 
         eventBus.on("copyPaste.pasteElements", () => {
             this.references = {};
@@ -57,10 +61,11 @@ export class DomainStoryCopyPaste {
                 return;
             }
 
-            descriptor.businessObject = this.domainStoryPropertyCopy.copyElement(
-                oldBusinessObject,
-                newBusinessObject,
-            );
+            descriptor.businessObject =
+                this.domainStoryPropertyCopy.copyElement(
+                    oldBusinessObject,
+                    newBusinessObject,
+                );
 
             // resolve references e.g. default sequence flow
             this.resolveReferences(descriptor, cache);

@@ -1,11 +1,5 @@
-import { BusinessObject, testBusinessObject } from './businessObject';
+import { BusinessObject } from "./businessObject";
 
 export interface GroupBusinessObject extends BusinessObject {
-  children: string[];
+    children: string[];
 }
-
-export const testGroupBusinessObject: GroupBusinessObject = {
-  ...testBusinessObject,
-
-  children: [],
-};

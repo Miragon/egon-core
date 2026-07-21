@@ -23,11 +23,19 @@ export class DomainStoryUpdateLabelHandler implements CommandHandler {
     execute(context: CommandContext): ElementLike[] {
         context.oldLabel = getLabel(context.element);
         context.oldNumber = getNumber(context.element);
-        return this.setText(context.element, context.newLabel, context.newNumber);
+        return this.setText(
+            context.element,
+            context.newLabel,
+            context.newNumber,
+        );
     }
 
     revert(context: CommandContext): ElementLike[] {
-        return this.setText(context.element, context.oldLabel, context.oldNumber);
+        return this.setText(
+            context.element,
+            context.oldLabel,
+            context.oldNumber,
+        );
     }
 
     postExecute(context: CommandContext) {

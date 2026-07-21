@@ -1,8 +1,22 @@
-import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import {
+    afterEach,
+    beforeEach,
+    describe,
+    expect,
+    it,
+    type Mock,
+    vi,
+} from "vitest";
 import { EgonClient } from "../EgonClient";
 import { IconPort, ModelerPort } from "../ports";
 import { EgonClientConfig } from "../EgonClientConfig";
-import { DomainStoryDocument, IconCategory, IconSet, IconSetData, ViewportData } from "../../domain";
+import {
+    DomainStoryDocument,
+    IconCategory,
+    IconSet,
+    IconSetData,
+    ViewportData,
+} from "../../domain";
 
 /**
  * Creates mock ports for testing EgonClient.
@@ -12,7 +26,9 @@ function createMockPorts() {
     const mockModelerPort: ModelerPort = {
         import: vi.fn(),
         export: vi.fn(),
-        getViewport: vi.fn().mockReturnValue({ x: 0, y: 0, width: 100, height: 100 }),
+        getViewport: vi
+            .fn()
+            .mockReturnValue({ x: 0, y: 0, width: 100, height: 100 }),
         setViewport: vi.fn(),
         onStoryChanged: vi.fn(),
         onViewportChanged: vi.fn(),
@@ -122,14 +138,18 @@ describe("EgonClient (Application Service)", () => {
             const callback = vi.fn();
             client.on("story.changed", callback);
 
-            expect(mockModelerPort.onStoryChanged).toHaveBeenCalledWith(callback);
+            expect(mockModelerPort.onStoryChanged).toHaveBeenCalledWith(
+                callback,
+            );
         });
 
         it("should route viewport.changed to modeler port", () => {
             const callback = vi.fn();
             client.on("viewport.changed", callback);
 
-            expect(mockModelerPort.onViewportChanged).toHaveBeenCalledWith(callback);
+            expect(mockModelerPort.onViewportChanged).toHaveBeenCalledWith(
+                callback,
+            );
         });
 
         it("should route icons.changed to icon port", () => {
@@ -143,14 +163,18 @@ describe("EgonClient (Application Service)", () => {
             const callback = vi.fn();
             client.off("story.changed", callback);
 
-            expect(mockModelerPort.offStoryChanged).toHaveBeenCalledWith(callback);
+            expect(mockModelerPort.offStoryChanged).toHaveBeenCalledWith(
+                callback,
+            );
         });
 
         it("should route off viewport.changed to modeler port", () => {
             const callback = vi.fn();
             client.off("viewport.changed", callback);
 
-            expect(mockModelerPort.offViewportChanged).toHaveBeenCalledWith(callback);
+            expect(mockModelerPort.offViewportChanged).toHaveBeenCalledWith(
+                callback,
+            );
         });
 
         it("should route off icons.changed to icon port", () => {
@@ -162,7 +186,12 @@ describe("EgonClient (Application Service)", () => {
     });
 
     describe("viewport operations", () => {
-        const mockViewport: ViewportData = { x: 10, y: 20, width: 900, height: 700 };
+        const mockViewport: ViewportData = {
+            x: 10,
+            y: 20,
+            width: 900,
+            height: 700,
+        };
 
         it("should delegate getViewport to modeler port", () => {
             (mockModelerPort.getViewport as Mock).mockReturnValue(mockViewport);
@@ -175,7 +204,9 @@ describe("EgonClient (Application Service)", () => {
         it("should delegate setViewport to modeler port", () => {
             client.setViewport(mockViewport);
 
-            expect(mockModelerPort.setViewport).toHaveBeenCalledWith(mockViewport);
+            expect(mockModelerPort.setViewport).toHaveBeenCalledWith(
+                mockViewport,
+            );
         });
     });
 
@@ -197,7 +228,11 @@ describe("EgonClient (Application Service)", () => {
             const svg = "<svg>new</svg>";
             client.addIcon(category, name, svg);
 
-            expect(mockIconPort.addIcon).toHaveBeenCalledWith(category, name, svg);
+            expect(mockIconPort.addIcon).toHaveBeenCalledWith(
+                category,
+                name,
+                svg,
+            );
         });
 
         it("should delegate removeIcon to icon port", () => {
@@ -205,7 +240,10 @@ describe("EgonClient (Application Service)", () => {
             const name = "OldObject";
             client.removeIcon(category, name);
 
-            expect(mockIconPort.removeIcon).toHaveBeenCalledWith(category, name);
+            expect(mockIconPort.removeIcon).toHaveBeenCalledWith(
+                category,
+                name,
+            );
         });
 
         it("should delegate getIcons to icon port", () => {
@@ -225,7 +263,10 @@ describe("EgonClient (Application Service)", () => {
             const result = client.hasIcon("actor", "CheckActor");
 
             expect(result).toBe(true);
-            expect(mockIconPort.hasIcon).toHaveBeenCalledWith("actor", "CheckActor");
+            expect(mockIconPort.hasIcon).toHaveBeenCalledWith(
+                "actor",
+                "CheckActor",
+            );
         });
     });
 

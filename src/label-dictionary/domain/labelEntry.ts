@@ -1,4 +1,4 @@
 export interface LabelEntry {
-  name: string;
-  originalName: string;
+    name: string;
+    originalName: string;
 }

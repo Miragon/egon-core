@@ -1,4 +1,8 @@
-import { IconSet, IconSetData, IconCategory } from "../../domain/model/IconTypes";
+import {
+    IconSet,
+    IconSetData,
+    IconCategory,
+} from "../../domain/model/IconTypes";
 
 /**
  * Port interface for icon management operations.

@@ -18,7 +18,10 @@ export default {
         ResizeModule,
         CommandStack,
     ],
-    __init__: ["domainStoryLabelEditingProvider", "domainStoryLabelEditingPreview"],
+    __init__: [
+        "domainStoryLabelEditingProvider",
+        "domainStoryLabelEditingPreview",
+    ],
     domainStoryLabelEditingProvider: ["type", DomainStoryLabelEditingProvider],
     domainStoryLabelEditingPreview: ["type", DomainStoryLabelEditingPreview],
 };

@@ -18,9 +18,14 @@ export class ElementColorChangeHandler implements CommandHandler {
         const semantic = context.businessObject;
         const element: Element = context.element;
 
-        if (semantic.type.includes(ElementTypes.TEXTANNOTATION) && element.incoming[0]) {
+        if (
+            semantic.type.includes(ElementTypes.TEXTANNOTATION) &&
+            element.incoming[0]
+        ) {
             element.incoming[0].businessObject.pickedColor = context.newColor;
-            this.eventBus.fire("element.changed", { element: element.incoming[0] });
+            this.eventBus.fire("element.changed", {
+                element: element.incoming[0],
+            });
         }
 
         semantic.pickedColor = context.newColor;
@@ -39,9 +44,14 @@ export class ElementColorChangeHandler implements CommandHandler {
         const semantic = context.businessObject;
         const element: Element = context.element;
 
-        if (semantic.type.includes(ElementTypes.TEXTANNOTATION) && element.incoming[0]) {
+        if (
+            semantic.type.includes(ElementTypes.TEXTANNOTATION) &&
+            element.incoming[0]
+        ) {
             element.incoming[0].businessObject.pickedColor = context.oldColor;
-            this.eventBus.fire("element.changed", { element: element.incoming[0] });
+            this.eventBus.fire("element.changed", {
+                element: element.incoming[0],
+            });
         }
 
         semantic.pickedColor = context.oldColor;

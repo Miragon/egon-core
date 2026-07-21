@@ -1,0 +1,10 @@
+# Code owners are auto-requested as reviewers on every matching PR.
+# Dependabot's `reviewers:` config was removed by GitHub (2025-05-20) and
+# replaced by CODEOWNERS, so this is how dependency PRs get a review request.
+#
+# CODEOWNERS is path-based, not bot-scoped — any PR touching these paths
+# (human or Dependabot) auto-requests the owners below. A repo-wide `*` rule
+# covers all PRs from one place instead of drifting across per-block
+# `assignees:` in dependabot.yml.
+
+* @peterhnm

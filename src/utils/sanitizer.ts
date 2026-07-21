@@ -16,7 +16,9 @@ export function sanitizeForDesktop(str: string): string {
         "|": "",
     };
     const reg = /[/\\:*?"<>|]/gi;
-    return str ? sanitizeTextForSVGExport(str.replace(reg, (match) => map[match])) : "";
+    return str
+        ? sanitizeTextForSVGExport(str.replace(reg, (match) => map[match]))
+        : "";
 }
 
 export function sanitizeIconName(name: string): string {
@@ -24,7 +26,9 @@ export function sanitizeIconName(name: string): string {
         return "";
     }
     const nameWithoutFileEnding =
-        name.lastIndexOf(".") > 0 ? name.substring(0, name.lastIndexOf(".")) : name;
+        name.lastIndexOf(".") > 0
+            ? name.substring(0, name.lastIndexOf("."))
+            : name;
     const map: { [key: string]: string } = {
         "/": "",
         "\\": "",

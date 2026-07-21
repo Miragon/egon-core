@@ -4,7 +4,11 @@ import DomainStoryEditorActions from "../editor-actions";
 import { DomainStoryKeyboardBindings } from "./DomainStoryKeyboardBindings";
 
 export default {
-    __depends__: [KeyboardModule, EditorActionsModule, DomainStoryEditorActions],
+    __depends__: [
+        KeyboardModule,
+        EditorActionsModule,
+        DomainStoryEditorActions,
+    ],
     __init__: ["domainStoryKeyboardBindings"],
     domainStoryKeyboardBindings: ["type", DomainStoryKeyboardBindings],
 };

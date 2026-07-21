@@ -2,7 +2,10 @@ import ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import CommandInterceptor from "diagram-js/lib/command/CommandInterceptor";
 import EventBus from "diagram-js/lib/core/EventBus";
 import CroppingConnectionDocking from "diagram-js/lib/layout/CroppingConnectionDocking";
-import { add as collectionAdd, remove as collectionRemove } from "diagram-js/lib/util/Collections";
+import {
+    add as collectionAdd,
+    remove as collectionRemove,
+} from "diagram-js/lib/util/Collections";
 import { Point } from "diagram-js/lib/util/Types";
 import { assign, pick } from "min-dash";
 import { Connection, Shape } from "diagram-js/lib/model/Types";
@@ -26,7 +29,10 @@ export class DomainStoryUpdater extends CommandInterceptor {
 
         // cropping must be done before updateElement
         // do not change the order of these .executed calls
-        this.executed(["connection.layout", "connection.create"], this.cropConnection());
+        this.executed(
+            ["connection.layout", "connection.create"],
+            this.cropConnection(),
+        );
 
         this.reverted(["connection.layout"], function (e) {
             delete e.context.cropped;
@@ -190,11 +196,12 @@ export class DomainStoryUpdater extends CommandInterceptor {
 
             if (!context.cropped && hints.createElementsBehavior !== false) {
                 const connection: Connection = context.connection;
-                connection.waypoints = this.connectionDocking.getCroppedWaypoints(
-                    connection,
-                    connection.source,
-                    connection.target,
-                );
+                connection.waypoints =
+                    this.connectionDocking.getCroppedWaypoints(
+                        connection,
+                        connection.source,
+                        connection.target,
+                    );
                 context.cropped = true;
             }
         };

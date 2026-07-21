@@ -1,0 +1,25 @@
+name: Setup
+description: >-
+    Provision Node and install dependencies with the repo-pinned Yarn 4.
+    Centralised so every CI job installs identically and the toolchain is
+    changed in one place instead of per-job.
+
+runs:
+    using: composite
+    steps:
+        # Corepack activates the exact Yarn version from package.json's
+        # `packageManager` field, so CI and local dev never drift.
+        - name: Enable Corepack
+          run: corepack enable
+          shell: bash
+
+        - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+          with:
+              node-version: 22
+              cache: yarn
+
+        # --immutable fails the build if yarn.lock would change, catching an
+        # out-of-date lockfile instead of silently resolving new versions in CI.
+        - name: Install dependencies
+          run: yarn install --immutable
+          shell: bash

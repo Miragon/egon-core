@@ -3,7 +3,13 @@ import type { ModuleDeclaration } from "didi";
 import { EgonClientConfig } from "./EgonClientConfig";
 import { IconPort, ModelerPort } from "./ports";
 
-import type { DomainStoryDocument, IconCategory, IconSet, IconSetData, ViewportData } from "../domain";
+import type {
+    DomainStoryDocument,
+    IconCategory,
+    IconSet,
+    IconSetData,
+    ViewportData,
+} from "../domain";
 
 /**
  * User-friendly event types exposed by EgonClient.
@@ -63,16 +69,18 @@ export class EgonClient {
         ports?: EgonClientPorts,
     ): Promise<EgonClient> {
         if (ports) {
-            return new EgonClient(ports.modelerPort, ports.iconPort, config.viewport);
+            return new EgonClient(
+                ports.modelerPort,
+                ports.iconPort,
+                config.viewport,
+            );
         }
 
         // dynamic ESM import (works in browser and node ESM)
-        const { DiagramJsModelerAdapter } = await import(
-            "../infrastructure/DiagramJsModelerAdapter"
-        );
-        const { DiagramJsIconAdapter } = await import(
-            "../infrastructure/DiagramJsIconAdapter"
-        );
+        const { DiagramJsModelerAdapter } =
+            await import("../infrastructure/DiagramJsModelerAdapter");
+        const { DiagramJsIconAdapter } =
+            await import("../infrastructure/DiagramJsIconAdapter");
 
         const modelerAdapter = new DiagramJsModelerAdapter(
             config.container,
@@ -81,7 +89,9 @@ export class EgonClient {
             additionalModules,
         );
 
-        const iconAdapter = new DiagramJsIconAdapter(modelerAdapter.getDiagram());
+        const iconAdapter = new DiagramJsIconAdapter(
+            modelerAdapter.getDiagram(),
+        );
 
         return new EgonClient(modelerAdapter, iconAdapter, config.viewport);
     }
@@ -121,7 +131,9 @@ export class EgonClient {
                 );
                 break;
             case "icons.changed":
-                this.iconPort.onIconsChanged(callback as EgonEventMap["icons.changed"]);
+                this.iconPort.onIconsChanged(
+                    callback as EgonEventMap["icons.changed"],
+                );
                 break;
         }
     }
@@ -142,7 +154,9 @@ export class EgonClient {
                 );
                 break;
             case "icons.changed":
-                this.iconPort.offIconsChanged(callback as EgonEventMap["icons.changed"]);
+                this.iconPort.offIconsChanged(
+                    callback as EgonEventMap["icons.changed"],
+                );
                 break;
         }
     }

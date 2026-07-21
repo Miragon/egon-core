@@ -2,7 +2,10 @@ import { Shape } from "diagram-js/lib/model/Types";
 import { forEach } from "min-dash";
 import { ElementTypes } from "../../domain/entities/elementTypes";
 import { DomainStoryReplace } from "./DomainStoryReplace";
-import { DomainStoryReplaceOption, ReplaceOption } from "./DomainStoryReplaceOption";
+import {
+    DomainStoryReplaceOption,
+    ReplaceOption,
+} from "./DomainStoryReplaceOption";
 import PopupMenuProvider, {
     PopupMenuEntries,
     PopupMenuEntriesProvider,
@@ -11,7 +14,10 @@ import PopupMenuProvider, {
 import { PopupMenuTarget } from "diagram-js/lib/features/popup-menu/PopupMenu";
 
 export class DomainStoryReplaceMenuProvider implements PopupMenuProvider {
-    static $inject: string[] = ["domainStoryReplace", "domainStoryReplaceOption"];
+    static $inject: string[] = [
+        "domainStoryReplace",
+        "domainStoryReplaceOption",
+    ];
 
     constructor(
         private readonly domainStoryReplace: DomainStoryReplace,
@@ -34,9 +40,13 @@ export class DomainStoryReplaceMenuProvider implements PopupMenuProvider {
 
         let entries: ReplaceOption[] = [];
         if (el["type"].includes(ElementTypes.ACTOR)) {
-            entries = this.domainStoryReplaceOption.actorReplaceOptions(el["type"]);
+            entries = this.domainStoryReplaceOption.actorReplaceOptions(
+                el["type"],
+            );
         } else if (el["type"].includes(ElementTypes.WORKOBJECT)) {
-            entries = this.domainStoryReplaceOption.workObjectReplaceOptions(el["type"]);
+            entries = this.domainStoryReplaceOption.workObjectReplaceOptions(
+                el["type"],
+            );
         }
 
         return this.createEntries(el, entries);
@@ -76,7 +86,10 @@ export class DomainStoryReplaceMenuProvider implements PopupMenuProvider {
         action?: () => void,
     ): PopupMenuEntry {
         const replaceAction = () => {
-            return this.domainStoryReplace.replaceElement(element, definition.target);
+            return this.domainStoryReplace.replaceElement(
+                element,
+                definition.target,
+            );
         };
 
         action = action || replaceAction;

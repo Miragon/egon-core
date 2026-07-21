@@ -8,7 +8,11 @@ interface PopupProps {
     index?: number;
     isMultiple?: boolean;
     displayNumber?: boolean;
-    onUpdate: (label: string, index: number | undefined, isMultiple: boolean) => void;
+    onUpdate: (
+        label: string,
+        index: number | undefined,
+        isMultiple: boolean,
+    ) => void;
     onCancel: () => void;
 }
 
@@ -22,7 +26,9 @@ export default function PopupMenu(props: PopupProps) {
     ) => void = props.onUpdate;
     const onCancel: () => void = props.onCancel;
 
-    const [isMultiple, setIsMultiple] = useState<boolean>(props.isMultiple || false);
+    const [isMultiple, setIsMultiple] = useState<boolean>(
+        props.isMultiple || false,
+    );
     const [label, setLabel] = useState<string>(props.label || "");
     const [index, setIndex] = useState<number>(props.index || 0);
 
@@ -69,43 +75,53 @@ export default function PopupMenu(props: PopupProps) {
         >
             <h3 style="margin: 0 0 8px 0;">Edit Activity</h3>
             <div style="display: flex; flex-direction: column; gap: 8px;">
-                ${props.displayNumber
-                    ? html`
-                          <div style="display: flex; align-items: center; gap: 8px;">
-                              <label for="multiple" style="min-width: 80px;"
-                                  >Multiple:</label
+                ${
+                    props.displayNumber
+                        ? html`
+                              <div
+                                  style="display: flex; align-items: center; gap: 8px;"
                               >
-                              <input
-                                  name="multiple"
-                                  type="checkbox"
-                                  onInput=${handleMultipleChange}
-                              />
-                          </div>
-                          <div style="display: flex; align-items: center; gap: 8px;">
-                              <label for="index" style="min-width: 80px;">Number:</label>
-                              <input
-                                  name="index"
-                                  type="number"
-                                  value=${index}
-                                  onInput=${handleNumberChange}
-                                  style="flex: 1; 
+                                  <label for="multiple" style="min-width: 80px;"
+                                      >Multiple:</label
+                                  >
+                                  <input
+                                      name="multiple"
+                                      type="checkbox"
+                                      onInput=${handleMultipleChange}
+                                  />
+                              </div>
+                              <div
+                                  style="display: flex; align-items: center; gap: 8px;"
+                              >
+                                  <label for="index" style="min-width: 80px;"
+                                      >Number:</label
+                                  >
+                                  <input
+                                      name="index"
+                                      type="number"
+                                      value=${index}
+                                      onInput=${handleNumberChange}
+                                      style="flex: 1; 
                         border: 1px solid #ccc; 
                         border-radius: 4px; 
                         padding: 6px;
                         transition: border-color 0.2s ease;"
-                                  onFocus=${(e: FocusEvent) => {
-                                      const target = e.target as HTMLInputElement;
-                                      target.style.borderColor = "#00e379";
-                                      target.style.outline = "none";
-                                  }}
-                                  onBlur=${(e: FocusEvent) => {
-                                      const target = e.target as HTMLInputElement;
-                                      target.style.borderColor = "#ccc";
-                                  }}
-                              />
-                          </div>
-                      `
-                    : ""}
+                                      onFocus=${(e: FocusEvent) => {
+                                          const target =
+                                              e.target as HTMLInputElement;
+                                          target.style.borderColor = "#00e379";
+                                          target.style.outline = "none";
+                                      }}
+                                      onBlur=${(e: FocusEvent) => {
+                                          const target =
+                                              e.target as HTMLInputElement;
+                                          target.style.borderColor = "#ccc";
+                                      }}
+                                  />
+                              </div>
+                          `
+                        : ""
+                }
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <label for="label" style="min-width: 80px;">Label:</label>
                     <input

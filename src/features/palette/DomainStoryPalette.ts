@@ -2,7 +2,7 @@ import { assign } from "min-dash";
 import PaletteProvider, {
     PaletteEntries,
     PaletteEntriesCallback,
-    PaletteEntry
+    PaletteEntry,
 } from "diagram-js/lib/features/palette/PaletteProvider";
 import Create from "diagram-js/lib/features/create/Create";
 import ElementFactory from "diagram-js/lib/core/ElementFactory";
@@ -55,7 +55,11 @@ export class DomainStoryPaletteProvider implements PaletteProvider {
         );
 
         actorTypes?.keysArray().forEach((name: any) => {
-            const entries = this.addCanvasObjectTypes(name, "actor", ElementTypes.ACTOR);
+            const entries = this.addCanvasObjectTypes(
+                name,
+                "actor",
+                ElementTypes.ACTOR,
+            );
             Object.entries(entries).forEach(([key, value]) => {
                 actions[key] = value;
             });

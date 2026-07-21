@@ -88,7 +88,8 @@ export class DomainStoryLabelEditingPreview {
                     dy = context.dy;
 
                 const newElementHeight = Math.max(
-                    (this.element!.height / (this.absoluteElementBBox?.height ?? 1)) *
+                    (this.element!.height /
+                        (this.absoluteElementBBox?.height ?? 1)) *
                         (height + dy),
                     0,
                 );
@@ -118,7 +119,10 @@ export class DomainStoryLabelEditingPreview {
                         activeProvider.element.label || activeProvider.element,
                         MARKER_HIDDEN,
                     );
-                    canvas.removeMarker(this.element as Shape, MARKER_LABEL_HIDDEN);
+                    canvas.removeMarker(
+                        this.element as Shape,
+                        MARKER_LABEL_HIDDEN,
+                    );
                 }
 
                 this.element = undefined;

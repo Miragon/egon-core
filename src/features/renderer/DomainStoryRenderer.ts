@@ -105,7 +105,9 @@ export class DomainStoryRenderer extends BaseRenderer {
             return this.drawGroup(visuals, shape);
         }
 
-        throw new Error("[DomainStoryRenderer] The type of the shape is invalid.");
+        throw new Error(
+            "[DomainStoryRenderer] The type of the shape is invalid.",
+        );
     }
 
     override getShapePath(shape: Shape): string {
@@ -124,7 +126,10 @@ export class DomainStoryRenderer extends BaseRenderer {
         }
     }
 
-    override drawConnection(visuals: SVGElement, connection: Connection): SVGElement {
+    override drawConnection(
+        visuals: SVGElement,
+        connection: Connection,
+    ): SVGElement {
         const type = connection["type"];
 
         this.dirtyFlagService.makeDirty();
@@ -212,7 +217,10 @@ export class DomainStoryRenderer extends BaseRenderer {
 
         const attrs = this.useColorForActivity(element);
 
-        const x = svgAppend(visuals, createLine(element.waypoints, attrs)) as SVGElement;
+        const x = svgAppend(
+            visuals,
+            createLine(element.waypoints, attrs),
+        ) as SVGElement;
         this.renderActivityLabel(visuals, element);
         this.renderExternalNumber(visuals, element);
 
@@ -240,7 +248,10 @@ export class DomainStoryRenderer extends BaseRenderer {
             strokeDasharray: "5, 5",
         });
 
-        return svgAppend(visuals, createLine(element.waypoints, attrs)) as SVGElement;
+        return svgAppend(
+            visuals,
+            createLine(element.waypoints, attrs),
+        ) as SVGElement;
     }
 
     drawAnnotation(parentGfx: SVGElement, element: Shape) {
@@ -403,7 +414,9 @@ export class DomainStoryRenderer extends BaseRenderer {
             } else {
                 dataURL = icon;
                 if (pickedColor && pickedColor !== DEFAULT_COLOR) {
-                    document.dispatchEvent(new CustomEvent("errorColoringOnlySvg"));
+                    document.dispatchEvent(
+                        new CustomEvent("errorColoringOnlySvg"),
+                    );
                 }
             }
             return (
@@ -429,7 +442,9 @@ export class DomainStoryRenderer extends BaseRenderer {
     }
 
     private applyColorToIcon(pickedColor = DEFAULT_COLOR, iconSvg: string) {
-        const match = iconSvg.match(/fill=\s*"(?!none).*?"|fill:\s*[#r]\w*[;\s]{1}/);
+        const match = iconSvg.match(
+            /fill=\s*"(?!none).*?"|fill:\s*[#r]\w*[;\s]{1}/,
+        );
         if (match && match.some((it) => it)) {
             return iconSvg
                 .replaceAll(/fill=\s*"(?!none).*?"/g, `fill="${pickedColor}"`)
@@ -498,7 +513,9 @@ export class DomainStoryRenderer extends BaseRenderer {
         if (angle === 0 || angle === 180) {
             boxWidth = Math.abs(startPoint.x - endPoint.x);
             alignment = "center";
-            xStart = (startPoint.x + endPoint.x) / 2 - calculateTextWidth(semantic.name);
+            xStart =
+                (startPoint.x + endPoint.x) / 2 -
+                calculateTextWidth(semantic.name);
         }
 
         const box = {
@@ -516,12 +533,16 @@ export class DomainStoryRenderer extends BaseRenderer {
                 {
                     box: box,
                     fitBox: true,
-                    style: assign({}, this.domainStoryTextRenderer.getExternalStyle(), {
-                        fill: "black",
-                        wordWrap: "break-word",
-                        overflowWrap: "break-word",
-                        hyphens: "auto",
-                    }),
+                    style: assign(
+                        {},
+                        this.domainStoryTextRenderer.getExternalStyle(),
+                        {
+                            fill: "black",
+                            wordWrap: "break-word",
+                            overflowWrap: "break-word",
+                            hyphens: "auto",
+                        },
+                    ),
                 },
                 element["type"],
             );
@@ -545,7 +566,9 @@ export class DomainStoryRenderer extends BaseRenderer {
         const id = element.id;
         let offset = 0;
 
-        const objects = document.getElementsByClassName("djs-element djs-shape");
+        const objects = document.getElementsByClassName(
+            "djs-element djs-shape",
+        );
         for (let i = 0; i < objects.length; i++) {
             const data_id = objects.item(i)?.getAttribute("data-element-id");
             if (data_id === id) {
@@ -651,7 +674,11 @@ export class DomainStoryRenderer extends BaseRenderer {
     /**
      * Generate the automatic Number for an activity originating from an actor
      */
-    private generateActivityNumber(parentGfx: SVGElement, element: Element, box: Box) {
+    private generateActivityNumber(
+        parentGfx: SVGElement,
+        element: Element,
+        box: Box,
+    ) {
         // whenever we want to edit an activity, it gets redrawn as a new object
         // and the custom information is lost,
         // so we stash it before the editing occurs and set the value here
@@ -677,11 +704,22 @@ export class DomainStoryRenderer extends BaseRenderer {
             this.numberStyle(box),
             element["type"],
         );
-        this.domainStoryNumberingRegistry.add(newRenderedNumber, semantic.number);
+        this.domainStoryNumberingRegistry.add(
+            newRenderedNumber,
+            semantic.number,
+        );
     }
 
-    private renderNumber(parentGfx: any, number: number, options: any, type: string) {
-        const text = this.domainStoryTextRenderer.createText(String(number), options);
+    private renderNumber(
+        parentGfx: any,
+        number: number,
+        options: any,
+        type: string,
+    ) {
+        const text = this.domainStoryTextRenderer.createText(
+            String(number),
+            options,
+        );
 
         svgClasses(text).add("djs-labelNumber");
 
@@ -725,11 +763,16 @@ export class DomainStoryRenderer extends BaseRenderer {
                 element.source["type"] &&
                 element.source["type"].includes(ElementTypes.ACTOR)
             ) {
-                this.domainStoryNumberingRegistry.generateAutomaticNumber(element);
+                this.domainStoryNumberingRegistry.generateAutomaticNumber(
+                    element,
+                );
             }
 
             // render the background for the number
-            if (semantic.number && element.source["type"].includes(ElementTypes.ACTOR)) {
+            if (
+                semantic.number &&
+                element.source["type"].includes(ElementTypes.ACTOR)
+            ) {
                 this.generateActivityNumber(parentGfx, element, box);
             } else {
                 semantic.number = null;
@@ -767,12 +810,22 @@ export class DomainStoryRenderer extends BaseRenderer {
             );
         } else if (/:actor/.test(type)) {
             const h: string =
-                (parentGfx.firstChild as SVGElement)?.getAttribute("height") ?? "";
-            text.innerHTML = this.manipulateInnerHTMLYLabel(text.children, h, 0);
+                (parentGfx.firstChild as SVGElement)?.getAttribute("height") ??
+                "";
+            text.innerHTML = this.manipulateInnerHTMLYLabel(
+                text.children,
+                h,
+                0,
+            );
         } else if (/:workObject/.test(type)) {
             const h: string =
-                (parentGfx.firstChild as SVGElement)?.getAttribute("height") ?? "";
-            text.innerHTML = this.manipulateInnerHTMLYLabel(text.children, h, 26);
+                (parentGfx.firstChild as SVGElement)?.getAttribute("height") ??
+                "";
+            text.innerHTML = this.manipulateInnerHTMLYLabel(
+                text.children,
+                h,
+                26,
+            );
         }
     }
 
@@ -785,7 +838,10 @@ export class DomainStoryRenderer extends BaseRenderer {
         options: any,
         type?: string,
     ) {
-        const text = this.domainStoryTextRenderer.createText(label || "", options);
+        const text = this.domainStoryTextRenderer.createText(
+            label || "",
+            options,
+        );
 
         svgClasses(text).add("djs-label");
         this.setCoordinates(type ?? "", text, options, parentGfx);
@@ -825,7 +881,9 @@ export class DomainStoryRenderer extends BaseRenderer {
         offset: number,
     ) {
         if (!children) {
-            throw new Error("[DomainStoryRenderer] Parameter children is undefined!");
+            throw new Error(
+                "[DomainStoryRenderer] Parameter children is undefined!",
+            );
         }
 
         let result = "";

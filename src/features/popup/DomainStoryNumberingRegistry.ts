@@ -2,7 +2,7 @@ import EventBus from "diagram-js/lib/core/EventBus";
 import { Element } from "diagram-js/lib/model/Types";
 
 import { ElementRegistryService } from "../../domain/service/ElementRegistryService";
-import { ActivityCanvasObject } from "../../domain/entities/activityCanvasObject";
+import { ActivityCanvasObject } from "../../domain/entities/canvasObject";
 import CommandStack from "diagram-js/lib/command/CommandStack";
 import { ActivityBusinessObject } from "../../domain/entities/activityBusinessObject";
 
@@ -48,7 +48,9 @@ export class DomainStoryNumberingRegistry {
         this.multipleNumberRegistry[number] = multi;
     }
 
-    updateMultipleNumberRegistry(activityBusinessObjects: ActivityBusinessObject[]) {
+    updateMultipleNumberRegistry(
+        activityBusinessObjects: ActivityBusinessObject[],
+    ) {
         activityBusinessObjects.forEach(
             (activity) =>
                 (this.multipleNumberRegistry[activity.number ?? 0] =
@@ -100,7 +102,10 @@ export class DomainStoryNumberingRegistry {
             wantedNumber = usedNumbers.length;
         }
 
-        this.updateExistingNumbersAtGeneration(activitiesFromActors, wantedNumber);
+        this.updateExistingNumbersAtGeneration(
+            activitiesFromActors,
+            wantedNumber,
+        );
         semantic.number = wantedNumber;
         return wantedNumber;
     }
@@ -150,12 +155,19 @@ export class DomainStoryNumberingRegistry {
         // set the number of each activity to the next highest number, starting from the number, we overrode
         const oldMultipleNumberRegistry = [...this.multipleNumberRegistry];
         let currentNumber = wantedNumber;
-        for (currentNumber; currentNumber < sortedActivities.length; currentNumber++) {
+        for (
+            currentNumber;
+            currentNumber < sortedActivities.length;
+            currentNumber++
+        ) {
             if (sortedActivities[currentNumber]) {
                 wantedNumber++;
                 this.multipleNumberRegistry[wantedNumber] =
                     oldMultipleNumberRegistry[currentNumber];
-                this.setNumberOfActivity(sortedActivities[currentNumber], wantedNumber);
+                this.setNumberOfActivity(
+                    sortedActivities[currentNumber],
+                    wantedNumber,
+                );
             }
         }
     }

@@ -21,7 +21,11 @@ export default function VersionBox(props: VersionProps) {
             gap: 12px;
             "
         >
-            <img src=${logo} alt="Egon.io Logo" style="height: 32px; width: auto;" />
+            <img
+                src=${logo}
+                alt="Egon.io Logo"
+                style="height: 32px; width: auto;"
+            />
             <span style="font-size: 14px; font-weight: 500; color: #333;">
                 Version ${props.version}
             </span>

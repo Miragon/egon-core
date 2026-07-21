@@ -1,5 +1,13 @@
 import EventBus from "diagram-js/lib/core/EventBus";
-import { forEach, has, isArray, isDefined, isObject, reduce, sortBy } from "min-dash";
+import {
+    forEach,
+    has,
+    isArray,
+    isDefined,
+    isObject,
+    reduce,
+    sortBy,
+} from "min-dash";
 
 type CopiedProperty = boolean | Record<string, any>;
 
@@ -25,7 +33,10 @@ export class DomainStoryPropertyCopy {
         // default check whether property can be copied
         eventBus.on("propertyCopy.canCopyProperty", function (context: any) {
             const propertyName = context.propertyName;
-            return !(propertyName && DISALLOWED_PROPERTIES.indexOf(propertyName) !== -1);
+            return !(
+                propertyName &&
+                DISALLOWED_PROPERTIES.indexOf(propertyName) !== -1
+            );
         });
     }
 
@@ -38,11 +49,14 @@ export class DomainStoryPropertyCopy {
             propertyNames = [propertyNames];
         }
 
-        const canCopyProperties = this.eventBus.fire("propertyCopy.canCopyProperties", {
-            propertyNames: propertyNames,
-            sourceElement: sourceElement,
-            targetElement: targetElement,
-        });
+        const canCopyProperties = this.eventBus.fire(
+            "propertyCopy.canCopyProperties",
+            {
+                propertyNames: propertyNames,
+                sourceElement: sourceElement,
+                targetElement: targetElement,
+            },
+        );
 
         if (canCopyProperties === false) {
             return targetElement;

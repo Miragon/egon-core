@@ -1,4 +1,4 @@
-import { IconDictionaryService } from "@egon/diagram-js-egon-plugin";
+import type { IconDictionaryService } from "./IconDictionaryService";
 import { IconSet } from "../../domain/entities/iconSet";
 import { Dictionary } from "../../domain/entities/dictionary";
 import { sanitizeIconName } from "../../utils/sanitizer";
@@ -17,9 +17,13 @@ export interface IconSetConfigurationForExport {
 export class IconSetImportExportService {
     static $inject: string[] = ["domainStoryIconDictionaryService"];
 
-    constructor(private readonly iconDictionaryService: IconDictionaryService) {}
+    constructor(
+        private readonly iconDictionaryService: IconDictionaryService,
+    ) {}
 
-    public createIconSetConfiguration(fileConfiguration: FileConfiguration): IconSet {
+    public createIconSetConfiguration(
+        fileConfiguration: FileConfiguration,
+    ): IconSet {
         if (fileConfiguration === undefined) {
             return {
                 actors: new Dictionary(),
@@ -78,7 +82,8 @@ export class IconSetImportExportService {
         );
     }
 
-    getCurrentConfigurationForExport(): IconSetConfigurationForExport | undefined {
+    getCurrentConfigurationForExport():
+        IconSetConfigurationForExport | undefined {
         const currentConfiguration = this.getCurrentConfiguration();
 
         if (currentConfiguration) {
@@ -102,7 +107,8 @@ export class IconSetImportExportService {
 
     private getCurrentConfiguration(): IconSet | undefined {
         const actors = this.iconDictionaryService.getActorsDictionary();
-        const workObjects = this.iconDictionaryService.getWorkObjectsDictionary();
+        const workObjects =
+            this.iconDictionaryService.getWorkObjectsDictionary();
 
         let iconSetConfiguration;
 
@@ -126,7 +132,10 @@ export class IconSetImportExportService {
 
         // Fill Configuration from Canvas-Objects
         actorNames.forEach((actor) => {
-            newActors.add(actorsDict.get(actor), actor.replace(ElementTypes.ACTOR, ""));
+            newActors.add(
+                actorsDict.get(actor),
+                actor.replace(ElementTypes.ACTOR, ""),
+            );
         });
         workobjectNames.forEach((workObject) => {
             newWorkobjects.add(

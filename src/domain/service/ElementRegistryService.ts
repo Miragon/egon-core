@@ -1,6 +1,5 @@
-import ElementRegistry from "diagram-js/lib/core/ElementRegistry";
-import { CanvasObject } from "../entities/canvasObject";
-import { ActivityCanvasObject } from "../entities/activityCanvasObject";
+import { ElementRegistryPort } from "../ports/ElementRegistryPort";
+import { ActivityCanvasObject, CanvasObject } from "../entities/canvasObject";
 import { ElementTypes } from "../entities/elementTypes";
 import { GroupCanvasObject } from "../entities/groupCanvasObject";
 import { UsedIconList } from "../entities/UsedIconList";
@@ -10,7 +9,7 @@ export class ElementRegistryService {
 
     private fullyInitialized = false;
 
-    constructor(private readonly registry: ElementRegistry) {}
+    constructor(private readonly registry: ElementRegistryPort) {}
 
     /**
      * Initially, the registry has only the root-Element.
@@ -39,7 +38,11 @@ export class ElementRegistryService {
             const groups = this.getAllGroups();
             const objectList: CanvasObject[] = [];
 
-            this.fillListOfCanvasObjects(allObjectsFromCanvas, objectList, groups);
+            this.fillListOfCanvasObjects(
+                allObjectsFromCanvas,
+                objectList,
+                groups,
+            );
 
             return objectList;
         }
@@ -56,7 +59,7 @@ export class ElementRegistryService {
         });
         return activities;
     }
-    
+
     getAllCanvasObjects(): CanvasObject[] {
         const allObjects: CanvasObject[] = [];
         const groupObjects: GroupCanvasObject[] = [];
@@ -121,8 +124,12 @@ export class ElementRegistryService {
                 activityCanvasA: ActivityCanvasObject,
                 activityCanvasB: ActivityCanvasObject,
             ) => {
-                const activityNumberA = Number(activityCanvasA.businessObject.number);
-                const activityNumberB = Number(activityCanvasB.businessObject.number);
+                const activityNumberA = Number(
+                    activityCanvasA.businessObject.number,
+                );
+                const activityNumberB = Number(
+                    activityCanvasB.businessObject.number,
+                );
 
                 return activityNumberA - activityNumberB;
             },
@@ -132,7 +139,9 @@ export class ElementRegistryService {
     }
 
     getActivityFromActorById(id: string): ActivityCanvasObject | undefined {
-        return this.getActivitiesFromActors().find((activity) => activity.id === id);
+        return this.getActivitiesFromActors().find(
+            (activity) => activity.id === id,
+        );
     }
 
     getUsedIcons(): UsedIconList {
