@@ -12,7 +12,9 @@ permissions:
 
 concurrency:
     group: ci-${{ github.ref }}
-    cancel-in-progress: true
+    # Cancel superseded runs on feature branches, but never on `main` — a push to
+    # `main` must always complete so its status is recorded for branch protection.
+    cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
     lint:
@@ -38,10 +40,20 @@ jobs:
 
     test:
         runs-on: ubuntu-latest
+        # pull-requests: write lets the coverage action post/update its comment.
+        permissions:
+            contents: read
+            pull-requests: write
         steps:
             - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
             - uses: ./.github/actions/setup
-            - run: yarn test
+            - run: yarn test:coverage
+            # if: always() so a failing test run still reports coverage;
+            # continue-on-error so read-only fork tokens can't fail the job.
+            - name: Report coverage on the PR
+              if: always() && github.event_name == 'pull_request'
+              continue-on-error: true
+              uses: davelosert/vitest-coverage-report-action@8b157684c6a6b259b97d45e72b44242865c0f6a5 # v2.12.2
 
     build:
         runs-on: ubuntu-latest
@@ -65,3 +77,39 @@ jobs:
         steps:
             - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
             - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+
+    # Scans the whole dependency tree for known high-severity advisories on every
+    # run; complements dependency-review, which only inspects deps added in a PR.
+    audit:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: ./.github/actions/setup
+            - run: yarn npm audit --all --severity high
+
+    # Single required status check for branch protection. `if: always()` runs it
+    # even when a needed job fails, and the jq gate then fails unless every job
+    # succeeded or was skipped (dependency-review skips on push).
+    ci:
+        if: always()
+        needs:
+            [
+                lint,
+                typecheck,
+                format-check,
+                test,
+                build,
+                pin-check,
+                dependency-review,
+                audit,
+            ]
+        runs-on: ubuntu-latest
+        steps:
+            - name: Check all jobs passed or were skipped
+              run: |
+                  results='${{ toJSON(needs) }}'
+                  echo "$results" | jq -e '
+                    to_entries | all(
+                      .value.result == "success" or .value.result == "skipped"
+                    )
+                  '

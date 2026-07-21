@@ -70,6 +70,9 @@ export default defineConfig({
         environment: "jsdom",
         coverage: {
             reportsDirectory: "coverage",
+            // json-summary + json feed the PR coverage-report action; the v8
+            // default omits them, so name the reporters explicitly.
+            reporter: ["text", "json-summary", "json"],
         },
     },
 });
