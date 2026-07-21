@@ -1,0 +1,104 @@
+name: Bug Report
+description: Report a bug to help us improve
+type: "Bug"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please search
+        [existing issues](https://github.com/Miragon/egon-core/issues) first to
+        avoid duplicates.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Create an `EgonClient` with '...'
+        2. Drag / click on '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: input
+    id: reproduction-link
+    attributes:
+      label: Minimal Reproduction
+      description: >
+        A link to a minimal reproduction (e.g. StackBlitz, CodeSandbox, or a
+        repository). This dramatically speeds up triage.
+      placeholder: https://stackblitz.com/edit/...
+    validations:
+      required: false
+
+  - type: textarea
+    id: console-output
+    attributes:
+      label: Console Output
+      description: >
+        Relevant browser console errors or warnings, if any. This will be
+        automatically formatted as code.
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: egon-core Version
+      description: The version of egon-core you are using.
+      placeholder: e.g. 0.0.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      options:
+        - Chrome / Chromium-based
+        - Firefox
+        - Safari
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: >
+        Add any other context about the problem here, e.g. screenshots, the
+        bundler you use (Vite, webpack, ...), or a `.egn` file that triggers
+        the bug.
+    validations:
+      required: false
