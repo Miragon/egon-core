@@ -16,7 +16,7 @@ export default defineConfig({
         tsconfigPaths(),
         dts({
             entryRoot: "src",
-            outDir: "dist",
+            outDirs: ["dist"],
             include: ["src"],
             tsconfigPath: "./tsconfig.lib.json",
             copyDtsFiles: true,
@@ -24,9 +24,9 @@ export default defineConfig({
     ],
     css: {
         preprocessorOptions: {
-            scss: {
-                api: "modern-compiler",
-            },
+            // Vite 7 uses Sass's modern compiler API by default; the explicit
+            // `api` option was removed, so no scss options are needed here.
+            scss: {},
         },
     },
     build: {
@@ -37,6 +37,9 @@ export default defineConfig({
                 style: "src/styles.scss",
             },
             formats: ["es"],
+            // Vite 7 names library CSS after the package by default; pin it back
+            // to `style.css` to preserve the published `./style.css` export.
+            cssFileName: "style",
         },
         rollupOptions: {
             input: {
