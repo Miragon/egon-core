@@ -53,6 +53,14 @@ Both the runtime (`dist/index.js`) and its type declarations
 | `yarn typecheck`    | Type-check without emitting (`tsc --noEmit`)          |
 | `yarn lint`         | Lint with ESLint                                      |
 
+## Architecture
+
+Significant decisions are recorded as ADRs in [docs/adr](docs/adr/README.md).
+The layout and layering rules from
+[ADR 0005](docs/adr/0005-module-layout-and-architecture-tests.md) are enforced
+by executable architecture tests (`src/architecture.spec.ts`, run as part of
+`yarn test`).
+
 ## License
 
 [GPL-3.0-or-later](LICENSE)
