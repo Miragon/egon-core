@@ -7,7 +7,11 @@ import { ElementTypes } from "../../story/domain/elementTypes";
 import { Dictionary } from "../../story/domain/dictionary";
 
 import { IconPort } from "../application/ports";
-import { IconCategory, IconSet, IconSetData } from "../../iconSet/domain/IconTypes";
+import {
+    IconCategory,
+    IconSet,
+    IconSetData,
+} from "../../iconSet/domain/IconTypes";
 
 const DEFAULT_DEBOUNCE_MS = 100;
 

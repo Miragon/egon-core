@@ -9,8 +9,8 @@ Used by the import-compatibility, normalizer, and round-trip specs.
   compatible. Kept verbatim so the specs assert against exactly what Egon.io
   writes.
 
-| File | Shape | `domain`/`dst` payload |
-| --- | --- | --- |
-| `dst_export_version_1_0_0` … `1_5_0` | legacy `{ domain, dst }` | JSON **strings** (the crash this fixes) |
-| `dst_export_version_2_2_0` | legacy `{ domain, dst }` | JSON objects |
-| `egn_export_version_4_0_0` | new `{ iconSet, domainStory }` | — |
+| File                                 | Shape                          | `domain`/`dst` payload                  |
+| ------------------------------------ | ------------------------------ | --------------------------------------- |
+| `dst_export_version_1_0_0` … `1_5_0` | legacy `{ domain, dst }`       | JSON **strings** (the crash this fixes) |
+| `dst_export_version_2_2_0`           | legacy `{ domain, dst }`       | JSON objects                            |
+| `egn_export_version_4_0_0`           | new `{ iconSet, domainStory }` | —                                       |
