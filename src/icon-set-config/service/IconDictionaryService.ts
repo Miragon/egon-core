@@ -1,8 +1,7 @@
 import { Dictionary } from "../../domain/entities/dictionary";
 import { IconSet } from "../../domain/entities/iconSet";
-import { ElementTypes, getIconId } from "../../domain/entities/elementTypes";
-import { DomainStoryBusinessObject } from "../../domain/entities/domainStoryBusinessObject";
-import { sanitizeIconName } from "../../utils/sanitizer";
+import { ElementTypes } from "../../domain/entities/elementTypes";
+import { sanitizeForCss } from "../../utils/sanitizer";
 
 export const ICON_CSS_CLASS_PREFIX = "icon-domain-story-";
 
@@ -24,51 +23,6 @@ export class IconDictionaryService {
     private iconSetName = "";
 
     constructor() {}
-
-    /** Load Icons from Configuration **/
-    addIconsFromIconSetConfiguration(
-        dictionaryType: ElementTypes,
-        iconTypes: string[],
-    ): void {
-        let collection: Dictionary;
-        if (dictionaryType === ElementTypes.ACTOR) {
-            collection = this.selectedActorsDictionary;
-        } else if (dictionaryType === ElementTypes.WORKOBJECT) {
-            collection = this.selectedWorkObjectsDictionary;
-        }
-
-        const allTypes = new Dictionary();
-        allTypes.appendDict(customIcons);
-
-        iconTypes.forEach((name) => {
-            if (!collection.has(name)) {
-                const src = allTypes.get(name);
-                if (src) {
-                    this.registerIconForType(dictionaryType, name, src);
-                }
-            }
-        });
-    }
-
-    addIconsToTypeDictionary(
-        actorIcons: DomainStoryBusinessObject[],
-        workObjectIcons: DomainStoryBusinessObject[],
-    ) {
-        if (!this.allInTypeDictionary(ElementTypes.ACTOR, actorIcons)) {
-            this.addIconsFromIconSetConfiguration(
-                ElementTypes.ACTOR,
-                actorIcons.map((element) => getIconId(element.type)),
-            );
-        }
-        if (
-            !this.allInTypeDictionary(ElementTypes.WORKOBJECT, workObjectIcons)
-        ) {
-            this.addIconsFromIconSetConfiguration(
-                ElementTypes.WORKOBJECT,
-                workObjectIcons.map((element) => getIconId(element.type)),
-            );
-        }
-    }
 
     registerIconForType(type: ElementTypes, name: string, src: string): void {
         if (name.includes(type)) {
@@ -98,14 +52,7 @@ export class IconDictionaryService {
         collection.delete(name);
     }
 
-    updateIconRegistries(
-        actors: DomainStoryBusinessObject[],
-        workObjects: DomainStoryBusinessObject[],
-        config: IconSet,
-    ): void {
-        // remember the icon set's name so a later export can emit it unchanged
-        this.iconSetName = config.name ?? "";
-
+    updateIconRegistries(config: IconSet): void {
         const newIcons = new Dictionary();
         this.extractCustomIconsFromDictionary(config.actors, newIcons);
         this.extractCustomIconsFromDictionary(config.workObjects, newIcons);
@@ -122,7 +69,9 @@ export class IconDictionaryService {
         allCurrentIcons.appendDict(config.workObjects);
         this.addIconsToCss(allCurrentIcons);
 
-        this.addIconsToTypeDictionary(actors, workObjects);
+        // Import replaces (rather than merges into) the selected icon set:
+        // hard-swap the selected dictionaries + name to the imported config.
+        this.setIconSet(config);
     }
 
     addIMGToIconDictionary(input: string, name: string): void {
@@ -142,7 +91,7 @@ export class IconDictionaryService {
             const base64Src = btoa(src);
 
             const iconStyle = `
-                .${ICON_CSS_CLASS_PREFIX}${sanitizeIconName(key.toLowerCase())}::before {
+                .${ICON_CSS_CLASS_PREFIX}${sanitizeForCss(key)}::before {
                   mask-image: url('data:image/svg+xml;base64,${base64Src}');
                 }
             `;
@@ -187,7 +136,7 @@ export class IconDictionaryService {
     }
 
     getCSSClassOfIcon(name: string): string {
-        return ICON_CSS_CLASS_PREFIX + sanitizeIconName(name.toLowerCase());
+        return ICON_CSS_CLASS_PREFIX + sanitizeForCss(name);
     }
 
     getIconSource(name: string): string {
@@ -217,38 +166,15 @@ export class IconDictionaryService {
         this.selectedWorkObjectsDictionary = iconSet.workObjects;
     }
 
-    private allInTypeDictionary(
-        type: ElementTypes,
-        elements: DomainStoryBusinessObject[],
-    ): boolean {
-        let collection: Dictionary;
-        if (type === ElementTypes.ACTOR) {
-            collection = this.selectedActorsDictionary;
-        } else if (type === ElementTypes.WORKOBJECT) {
-            collection = this.selectedWorkObjectsDictionary;
-        }
-
-        let allIn = true;
-        if (elements) {
-            elements.forEach((element) => {
-                if (!collection.has(getIconId(element.type))) {
-                    allIn = false;
-                }
-            });
-        } else {
-            return false;
-        }
-        return allIn;
-    }
-
     private extractCustomIconsFromDictionary(
         elementDictionary: Dictionary,
         customIcons: Dictionary,
     ) {
+        // Keys are stored verbatim: sanitizing here permanently mutated names
+        // (e.g. "my.icon.v2" → "my.icon"), losing the original on round-trip.
         elementDictionary.keysArray().forEach((name) => {
-            const sanitizedName = sanitizeIconName(name);
-            if (!this.getFullDictionary().has(sanitizedName)) {
-                customIcons.add(elementDictionary.get(name), sanitizedName);
+            if (!this.getFullDictionary().has(name)) {
+                customIcons.add(elementDictionary.get(name), name);
             }
         });
     }
