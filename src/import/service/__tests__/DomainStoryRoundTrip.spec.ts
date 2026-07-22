@@ -6,7 +6,12 @@ import { DomainStoryExportService } from "../../../export/service/DomainStoryExp
 import { DomainStoryPropertiesService } from "../../../domain/service/DomainStoryPropertiesService";
 import { IconDictionaryService } from "../../../iconSet/service/IconDictionaryService";
 import { IconSetImportExportService } from "../../../iconSet/service/IconSetImportExportService";
+import { IconStyleSheetPort } from "../../../iconSet/domain/ports/IconStyleSheetPort";
 import type { ElementRegistryService } from "../../../domain/service/ElementRegistryService";
+
+// The round-trip proves metadata/icon-set-name survival, not CSS injection; a
+// no-op port matches today's jsdom behavior (no #iconsCss sheet → silent no-op).
+const noopStyleSheet: IconStyleSheetPort = { addIconStyle() {} };
 
 /**
  * Open→save round-trip for the v4.0.0 format. Drives the *real* icon and
@@ -24,7 +29,7 @@ describe("v4.0.0 open→save round-trip", () => {
         const { iconSetConfiguration, domainStory } = parseExportFile(fixture);
 
         // --- import side: load the icon set and remember the metadata ---
-        const iconDictionaryService = new IconDictionaryService();
+        const iconDictionaryService = new IconDictionaryService(noopStyleSheet);
         const iconService = new IconSetImportExportService(
             iconDictionaryService,
         );

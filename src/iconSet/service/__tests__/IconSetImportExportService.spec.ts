@@ -4,6 +4,12 @@ import {
     FileConfiguration,
     IconSetImportExportService,
 } from "../IconSetImportExportService";
+import { IconStyleSheetPort } from "../../domain/ports/IconStyleSheetPort";
+
+// This suite exercises import/export, not CSS injection; a no-op port exactly
+// preserves today's jsdom behavior (without an #iconsCss sheet, insertion was
+// already a silent no-op).
+const noopStyleSheet: IconStyleSheetPort = { addIconStyle() {} };
 
 /**
  * Regression cover for issue #4 on the import/export side: dot-containing icon
@@ -26,7 +32,7 @@ describe("IconSetImportExportService dot-named icons", () => {
     let service: IconSetImportExportService;
 
     beforeEach(() => {
-        dictionaryService = new IconDictionaryService();
+        dictionaryService = new IconDictionaryService(noopStyleSheet);
         service = new IconSetImportExportService(dictionaryService);
     });
 

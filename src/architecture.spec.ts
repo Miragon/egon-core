@@ -84,7 +84,7 @@ function readSource(repoRelativePath: string): string {
 /**
  * Every `domain/` layer is innermost, wherever it lives: the shared plugin
  * domain (`src/domain/…`) as well as the per-context domain folders
- * (`src/client/domain/…`, `src/labelDictionary/domain/…`).
+ * (`src/client/domain/…`, `src/labelDictionary/domain/…`, `src/iconSet/domain/…`).
  */
 function isDomainFile(repoRelativePath: string): boolean {
     return repoRelativePath.includes("/domain/");

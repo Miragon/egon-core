@@ -2,6 +2,7 @@ import { Dictionary } from "../../domain/entities/dictionary";
 import { IconSet } from "../../domain/entities/iconSet";
 import { ElementTypes } from "../../domain/entities/elementTypes";
 import { sanitizeForCss } from "../../shared/domain/sanitizer";
+import { IconStyleSheetPort } from "../domain/ports/IconStyleSheetPort";
 
 export const ICON_CSS_CLASS_PREFIX = "icon-domain-story-";
 
@@ -11,7 +12,7 @@ const customIcons = new Dictionary();
  * The dictionaries hold icons (as SVG) and icon names as key-value pairs:
  */
 export class IconDictionaryService {
-    static $inject: string[] = [];
+    static $inject: string[] = ["domainStoryIconStyleSheet"];
 
     // these dictionaries make up the current icon set:
     private selectedActorsDictionary = new Dictionary();
@@ -22,7 +23,10 @@ export class IconDictionaryService {
     // icon-set metadata. Defaults to "" until an icon set is loaded.
     private iconSetName = "";
 
-    constructor() {}
+    // Required (no default): a defaulted port would let a caller silently smuggle
+    // DOM coupling back into this service. The stylesheet is injected from
+    // outside so the service stays free of DOM/CSSOM detail.
+    constructor(private readonly iconStyleSheet: IconStyleSheetPort) {}
 
     registerIconForType(type: ElementTypes, name: string, src: string): void {
         if (name.includes(type)) {
@@ -79,31 +83,14 @@ export class IconDictionaryService {
     }
 
     addIconsToCss(customIcons: Dictionary) {
-        const sheetEl = document.getElementById("iconsCss");
+        // The service owns *which* class an icon maps to (getCSSClassOfIcon —
+        // the issue-#4 regression pins class == published rule); the injected
+        // port owns *how* that class becomes a live stylesheet rule.
         customIcons.keysArray().forEach((key) => {
-            let src = customIcons.get(key);
-
-            // Remove width and height attributes from SVG tag to ensure consistent scaling
-            src = src.replace(/<svg[^>]+>/, (match: string) => {
-                return match.replace(/ (width|height)="[^"]*"/g, "");
-            });
-
-            const base64Src = btoa(src);
-
-            const iconStyle = `
-                .${ICON_CSS_CLASS_PREFIX}${sanitizeForCss(key)}::before {
-                  mask-image: url('data:image/svg+xml;base64,${base64Src}');
-                }
-            `;
-
-            // getElementById types the node as HTMLElement; the "iconsCss"
-            // node is a <style> element, so cast to reach its CSSOM sheet.
-            // Typing it properly (vs. @ts-expect-error) keeps the suppression
-            // from breaking when Prettier wraps this call across lines.
-            const styleSheet = (sheetEl as HTMLStyleElement | null)?.sheet;
-            if (styleSheet) {
-                styleSheet.insertRule(iconStyle, styleSheet.cssRules.length);
-            }
+            this.iconStyleSheet.addIconStyle(
+                this.getCSSClassOfIcon(key),
+                customIcons.get(key),
+            );
         });
     }
 
