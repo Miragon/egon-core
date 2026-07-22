@@ -32,7 +32,7 @@ import { DomainStoryTextRenderer } from "../text-renderer/DomainStoryTextRendere
 import { DomainStoryNumberingRegistry } from "../popup/DomainStoryNumberingRegistry";
 import { ElementRegistryService } from "../../domain/service/ElementRegistryService";
 import { DirtyFlagService } from "../../domain/service/DirtyFlagService";
-import { IconDictionaryService } from "../../icon-set-config/service/IconDictionaryService";
+import { IconDictionaryService } from "../../iconSet/service/IconDictionaryService";
 
 const RENDERER_IDS = new Ids();
 const numbers = [];

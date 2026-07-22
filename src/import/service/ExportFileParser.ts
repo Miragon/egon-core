@@ -1,6 +1,6 @@
 import { DomainStory } from "../../domain/entities/domainStory";
 import { BusinessObject } from "../../domain/entities/businessObject";
-import { FileConfiguration } from "../../icon-set-config/service/IconSetImportExportService";
+import { FileConfiguration } from "../../iconSet/service/IconSetImportExportService";
 
 /**
  * Normalizes the several on-disk EGN shapes into one `{ iconSetConfiguration,

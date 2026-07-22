@@ -1,8 +1,8 @@
 import type Diagram from "diagram-js";
 import type EventBus from "diagram-js/lib/core/EventBus";
 
-import { IconDictionaryService } from "../../icon-set-config/service/IconDictionaryService";
-import { IconSetImportExportService } from "../../icon-set-config/service/IconSetImportExportService";
+import { IconDictionaryService } from "../../iconSet/service/IconDictionaryService";
+import { IconSetImportExportService } from "../../iconSet/service/IconSetImportExportService";
 import { ElementTypes } from "../../domain/entities/elementTypes";
 import { Dictionary } from "../../domain/entities/dictionary";
 

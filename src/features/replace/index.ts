@@ -1,5 +1,5 @@
 import DomainStoryModeling from "../modeling";
-import IconDictionaryService from "../../icon-set-config/service";
+import IconDictionaryService from "../../iconSet/service";
 
 import { DomainStoryReplaceMenuProvider } from "./DomainStoryReplaceMenuProvider";
 import { DomainStoryReplace } from "./DomainStoryReplace";

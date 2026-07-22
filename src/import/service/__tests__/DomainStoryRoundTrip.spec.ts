@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import { parseExportFile } from "../ExportFileParser";
 import { DomainStoryExportService } from "../../../export/service/DomainStoryExportService";
 import { DomainStoryPropertiesService } from "../../../domain/service/DomainStoryPropertiesService";
-import { IconDictionaryService } from "../../../icon-set-config/service/IconDictionaryService";
-import { IconSetImportExportService } from "../../../icon-set-config/service/IconSetImportExportService";
+import { IconDictionaryService } from "../../../iconSet/service/IconDictionaryService";
+import { IconSetImportExportService } from "../../../iconSet/service/IconSetImportExportService";
 import type { ElementRegistryService } from "../../../domain/service/ElementRegistryService";
 
 /**

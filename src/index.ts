@@ -57,5 +57,5 @@ export { DomainStoryExportService } from "./export/service/DomainStoryExportServ
 // Existing original internal services (kept for backward compatibility)
 export { ElementRegistryService } from "./domain/service/ElementRegistryService";
 export { DirtyFlagService } from "./domain/service/DirtyFlagService";
-export { IconDictionaryService } from "./icon-set-config/service/IconDictionaryService";
+export { IconDictionaryService } from "./iconSet/service/IconDictionaryService";
 export { LabelDictionaryService } from "./labelDictionary/service/LabelDictionaryService";

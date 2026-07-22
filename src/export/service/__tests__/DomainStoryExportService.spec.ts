@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DomainStoryExportService } from "../DomainStoryExportService";
 import { DomainStoryPropertiesService } from "../../../domain/service/DomainStoryPropertiesService";
 import type { ElementRegistryService } from "../../../domain/service/ElementRegistryService";
-import type { IconSetImportExportService } from "../../../icon-set-config/service/IconSetImportExportService";
+import type { IconSetImportExportService } from "../../../iconSet/service/IconSetImportExportService";
 
 /** A registry stub that yields the given business objects as canvas objects. */
 function makeRegistry(businessObjects: any[]): ElementRegistryService {

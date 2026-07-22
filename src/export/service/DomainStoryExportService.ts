@@ -2,7 +2,7 @@ import { ElementRegistryService } from "../../domain/service/ElementRegistryServ
 import { DomainStoryPropertiesService } from "../../domain/service/DomainStoryPropertiesService";
 import { BusinessObject } from "../../domain/entities/businessObject";
 import { IconSetExportConfiguration } from "../../domain/entities/iconSet";
-import { IconSetImportExportService } from "../../icon-set-config/service/IconSetImportExportService";
+import { IconSetImportExportService } from "../../iconSet/service/IconSetImportExportService";
 import { EgnExportFile } from "../domain/egnExportFile";
 
 /** The format version this library converges every export on. */
