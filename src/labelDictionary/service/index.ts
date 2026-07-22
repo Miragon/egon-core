@@ -1,4 +1,4 @@
-import IconDictionaryService from "../../icon-set-config/service";
+import IconDictionaryService from "../../iconSet/service";
 import ElementRegistryService from "../../domain/service";
 import { LabelDictionaryService } from "./LabelDictionaryService";
 

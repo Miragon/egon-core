@@ -10,9 +10,9 @@ import { BusinessObject } from "../../domain/entities/businessObject";
 import { DomainStoryElementFactory } from "../../features/element-factory/DomainStoryElementFactory";
 import { ElementTypes } from "../../domain/entities/elementTypes";
 import VersionBox from "../../shared/infrastructure/ui/VersionBox";
-import { IconSetImportExportService } from "../../icon-set-config/service/IconSetImportExportService";
+import { IconSetImportExportService } from "../../iconSet/service/IconSetImportExportService";
 import { IconSet } from "../../domain/entities/iconSet";
-import { IconDictionaryService } from "../../icon-set-config/service/IconDictionaryService";
+import { IconDictionaryService } from "../../iconSet/service/IconDictionaryService";
 import { DomainStoryPropertiesService } from "../../domain/service/DomainStoryPropertiesService";
 
 export class DomainStoryImportService {

@@ -1,5 +1,5 @@
 import ElementRegistryService from "../../domain/service";
-import IconSetImportExportService from "../../icon-set-config/service";
+import IconSetImportExportService from "../../iconSet/service";
 import { DomainStoryExportService } from "./DomainStoryExportService";
 
 export default {

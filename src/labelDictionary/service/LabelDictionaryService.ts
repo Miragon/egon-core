@@ -1,6 +1,6 @@
 import { LabelEntry } from "../domain/labelEntry";
 import { WorkObjectLabelEntry } from "../domain/workObjectLabelEntry";
-import { IconDictionaryService } from "../../icon-set-config/service/IconDictionaryService";
+import { IconDictionaryService } from "../../iconSet/service/IconDictionaryService";
 import { ElementTypes } from "../../domain/entities/elementTypes";
 import { ElementRegistryService } from "../../domain/service/ElementRegistryService";
 
