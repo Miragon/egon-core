@@ -29,6 +29,30 @@ import {
 import { ElementTypes } from "../../domain/entities/elementTypes";
 import { DomainStoryNumberingRegistry } from "../popup/DomainStoryNumberingRegistry";
 
+/**
+ * Positions the replace ("Change type") popup menu just below the open context
+ * pad. Queries the live DOM instead of the deprecated ContextPad#getPad(),
+ * which warns and can create a stray pad element as a side effect
+ * (diagram-js#888). Scoped to the diagram container so multiple modeler
+ * instances on one page cannot cross-match. Returns null when no pad is open,
+ * leaving the caller to fall back to the cursor position.
+ */
+export function computeReplaceMenuPosition(
+    diagramContainer: HTMLElement,
+): { x: number; y: number } | null {
+    const Y_OFFSET = 5;
+    const pad = diagramContainer.querySelector(".djs-context-pad.open");
+    if (!pad) {
+        return null;
+    }
+    const diagramRect = diagramContainer.getBoundingClientRect();
+    const padRect = pad.getBoundingClientRect();
+    return {
+        x: padRect.left - diagramRect.left,
+        y: padRect.top - diagramRect.top + padRect.height + Y_OFFSET,
+    };
+}
+
 export class DomainStoryContextPadProvider implements ContextPadProvider<Element> {
     static $inject: string[] = [
         "elementFactory",
@@ -62,7 +86,10 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         private readonly translate: any,
         private readonly create: Create,
         private readonly canvas: Canvas,
-        private readonly contextPad: ContextPad,
+        // Injected only to wire up the provider and read live pad state in the
+        // constructor; no longer stored, since the deprecated getPad() lookup
+        // that used `this.contextPad` was replaced by a DOM query.
+        contextPad: ContextPad,
         private readonly popupMenu: PopupMenu,
         private readonly commandStack: CommandStack,
         eventBus: EventBus,
@@ -275,7 +302,10 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
                 action: {
                     click: (event: any, element: ContextPadTarget) => {
                         const position = assign(
-                            this.getReplaceMenuPosition(element),
+                            this.getReplaceMenuPosition() ?? {
+                                x: event.x,
+                                y: event.y,
+                            },
                             {
                                 cursor: { x: event.x, y: event.y },
                             },
@@ -386,7 +416,10 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
                 action: {
                     click: (event: any, element: ContextPadTarget) => {
                         const position = assign(
-                            this.getReplaceMenuPosition(element),
+                            this.getReplaceMenuPosition() ?? {
+                                x: event.x,
+                                y: event.y,
+                            },
                             {
                                 cursor: { x: event.x, y: event.y },
                             },
@@ -416,22 +449,8 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         this.commandStack.execute("activity.directionChange", context);
     }
 
-    private getReplaceMenuPosition(element: ContextPadTarget) {
-        const Y_OFFSET = 5;
-
-        const diagramContainer = this.canvas.getContainer(),
-            pad = this.contextPad.getPad(element).html;
-
-        const diagramRect = diagramContainer.getBoundingClientRect(),
-            padRect = pad.getBoundingClientRect();
-
-        const top = padRect.top - diagramRect.top;
-        const left = padRect.left - diagramRect.left;
-
-        return {
-            x: left,
-            y: top + padRect.height + Y_OFFSET,
-        };
+    private getReplaceMenuPosition() {
+        return computeReplaceMenuPosition(this.canvas.getContainer());
     }
 
     private appendAction(
