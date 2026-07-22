@@ -1,6 +1,6 @@
 import CommandStack from "diagram-js/lib/command";
 import DomainStoryModeling from "../modeling";
-import ElementRegistryService from "../../domain/service";
+import ElementRegistryService from "../../service";
 import { DomainStoryUpdateHandler } from "./DomainStoryUpdateHandler";
 
 export default {

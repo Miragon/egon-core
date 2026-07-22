@@ -1,5 +1,5 @@
 import DomainStoryModeling from "../modeling";
-import ElementRegistryService from "../../domain/service";
+import ElementRegistryService from "../../service";
 import { DomainStoryNumberingRegistry } from "./DomainStoryNumberingRegistry";
 import { DomainStoryPopupService } from "./DomainStoryPopupService";
 

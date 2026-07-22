@@ -4,7 +4,7 @@ import CommandStack from "diagram-js/lib/command";
 
 import DomainStoryModeling from "../modeling";
 import DomainStoryTextRenderer from "../text-renderer";
-import LabelDictionaryService from "../../labelDictionary/service";
+import LabelDictionaryService from "../../../labelDictionary/service";
 
 import { DomainStoryLabelEditingProvider } from "./DomainStoryLabelEditingProvider";
 import { DomainStoryLabelEditingPreview } from "./DomainStoryLabelEditingPreview";

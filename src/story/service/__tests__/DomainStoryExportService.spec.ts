@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DomainStoryExportService } from "../DomainStoryExportService";
-import { DomainStoryPropertiesService } from "../../../domain/service/DomainStoryPropertiesService";
-import type { ElementRegistryService } from "../../../domain/service/ElementRegistryService";
+import { DomainStoryPropertiesService } from "../../../modeler/service/DomainStoryPropertiesService";
+import type { ElementRegistryService } from "../../../modeler/service/ElementRegistryService";
 import type { IconSetImportExportService } from "../../../iconSet/service/IconSetImportExportService";
 
 /** A registry stub that yields the given business objects as canvas objects. */

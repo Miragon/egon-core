@@ -1,4 +1,4 @@
-import DomainServiceModule from "../../domain/service";
+import DomainServiceModule from "../../modeler/service";
 import { DomainStoryImportService } from "./DomainStoryImportService";
 
 export default {

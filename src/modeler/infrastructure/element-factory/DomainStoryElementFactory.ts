@@ -1,7 +1,7 @@
 import ElementFactory from "diagram-js/lib/core/ElementFactory";
 import { DomainStoryIdFactory } from "../id-factory/DomainStoryIdFactory";
 import { Connection, Label, Root, Shape } from "diagram-js/lib/model/Types";
-import { ElementTypes } from "../../story/domain/elementTypes";
+import { ElementTypes } from "../../../story/domain/elementTypes";
 import { assign } from "min-dash";
 
 type ElementFactoryType = "shape" | "label" | "connection" | "root";

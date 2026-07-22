@@ -1,5 +1,5 @@
-import { IconDictionaryService } from "../../iconSet/service/IconDictionaryService";
-import { ElementTypes } from "../../story/domain/elementTypes";
+import { IconDictionaryService } from "../../../iconSet/service/IconDictionaryService";
+import { ElementTypes } from "../../../story/domain/elementTypes";
 import { Shape } from "diagram-js/lib/model/Types";
 
 export type ReplaceOption = {

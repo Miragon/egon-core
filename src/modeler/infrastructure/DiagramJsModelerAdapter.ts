@@ -4,11 +4,11 @@ import type Canvas from "diagram-js/lib/core/Canvas";
 import type EventBus from "diagram-js/lib/core/EventBus";
 import type ElementFactory from "diagram-js/lib/core/ElementFactory";
 
-import EgonPlugin from "../../plugin";
+import EgonPlugin from "./plugin";
 import { DomainStoryImportService } from "../../story/service/DomainStoryImportService";
 import { DomainStoryExportService } from "../../story/service/DomainStoryExportService";
 
-import { ModelerPort } from "../application/ports";
+import { ModelerPort } from "../domain/ports";
 import { DomainStoryDocument, ViewportData } from "../domain";
 
 const DEFAULT_DEBOUNCE_MS = 100;

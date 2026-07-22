@@ -17,22 +17,22 @@ import { getNumberStash } from "../labeling/DomainStoryLabelEditingProvider";
 import {
     Box,
     numberBoxDefinitions,
-} from "../../shared/infrastructure/numbering";
-import { ElementTypes, getIconId } from "../../story/domain/elementTypes";
+} from "../../../shared/infrastructure/numbering";
+import { ElementTypes, getIconId } from "../../../story/domain/elementTypes";
 import { Point } from "diagram-js/lib/util/Types";
 import { countLines, labelPosition } from "../labeling/position";
 import { approximateArialSize11TextWidthInPixel } from "../labeling/utils";
-import { angleBetween } from "../../shared/domain/mathExtensions";
+import { angleBetween } from "../../../shared/domain/mathExtensions";
 import {
     getScaledPath,
     isCustomIcon,
     isCustomSvgIcon,
-} from "../../shared/infrastructure/util";
+} from "../../../shared/infrastructure/util";
 import { DomainStoryTextRenderer } from "../text-renderer/DomainStoryTextRenderer";
 import { DomainStoryNumberingRegistry } from "../popup/DomainStoryNumberingRegistry";
-import { ElementRegistryService } from "../../domain/service/ElementRegistryService";
-import { DirtyFlagService } from "../../domain/service/DirtyFlagService";
-import { IconDictionaryService } from "../../iconSet/service/IconDictionaryService";
+import { ElementRegistryService } from "../../service/ElementRegistryService";
+import { DirtyFlagService } from "../../service/DirtyFlagService";
+import { IconDictionaryService } from "../../../iconSet/service/IconDictionaryService";
 
 const RENDERER_IDS = new Ids();
 const numbers = [];

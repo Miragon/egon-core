@@ -2,8 +2,8 @@ import { CommandContext } from "diagram-js/lib/command/CommandStack";
 import EventBus from "diagram-js/lib/core/EventBus";
 import CommandHandler from "diagram-js/lib/command/CommandHandler";
 import { Connection, Element, ElementLike } from "diagram-js/lib/model/Types";
-import { ElementRegistryService } from "../../../domain/service/ElementRegistryService";
-import { ActivityCanvasObject } from "../../../story/domain/canvasObject";
+import { ElementRegistryService } from "../../../service/ElementRegistryService";
+import { ActivityCanvasObject } from "../../../../story/domain/canvasObject";
 import { DomainStoryModeling } from "../../modeling/DomainStoryModeling";
 import { DomainStoryNumberingRegistry } from "../../popup/DomainStoryNumberingRegistry";
 

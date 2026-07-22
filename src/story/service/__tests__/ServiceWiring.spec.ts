@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Injector } from "didi";
-import DomainServiceModule from "../../../domain/service";
+import DomainServiceModule from "../../../modeler/service";
 import IconSetModule from "../../../iconSet/service";
 import ImportModule from "../importModule";
 import ExportModule from "../exportModule";

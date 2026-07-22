@@ -8,7 +8,7 @@ import {
     vi,
 } from "vitest";
 import { EgonClient } from "../EgonClient";
-import { IconPort, ModelerPort } from "../ports";
+import { IconPort, ModelerPort } from "../../domain/ports";
 import { EgonClientConfig } from "../EgonClientConfig";
 import {
     DomainStoryDocument,

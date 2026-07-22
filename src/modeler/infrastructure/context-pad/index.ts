@@ -9,8 +9,8 @@ import SchedulerModule from "diagram-js/lib/features/scheduler";
 import DomainStoryElementFactory from "../element-factory";
 import DomainStoryModeling from "../modeling";
 import DomainStoryReplaceMenuProvider from "../replace";
-import DomainStoryDirtyFlagService from "../../domain/service";
-import DomainStoryIconDictionaryService from "../../iconSet/service";
+import DomainStoryDirtyFlagService from "../../service";
+import DomainStoryIconDictionaryService from "../../../iconSet/service";
 
 import { DomainStoryContextPadProvider } from "./DomainStoryContextPadProvider";
 import { DomainStoryContextPad } from "./DomainStoryContextPad";

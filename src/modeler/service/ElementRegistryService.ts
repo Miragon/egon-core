@@ -1,4 +1,4 @@
-import { ElementRegistryPort } from "../ports/ElementRegistryPort";
+import { ElementRegistryPort } from "../domain/ports/ElementRegistryPort";
 import {
     ActivityCanvasObject,
     CanvasObject,

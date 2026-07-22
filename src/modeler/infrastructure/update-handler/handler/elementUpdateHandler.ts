@@ -2,11 +2,11 @@ import EventBus from "diagram-js/lib/core/EventBus";
 import CommandHandler from "diagram-js/lib/command/CommandHandler";
 import { CommandContext } from "diagram-js/lib/command/CommandStack";
 import { Element, ElementLike, Shape } from "diagram-js/lib/model/Types";
-import { ElementTypes } from "../../../story/domain/elementTypes";
+import { ElementTypes } from "../../../../story/domain/elementTypes";
 import {
     reworkGroupElements,
     undoGroupRework,
-} from "../../../shared/infrastructure/util";
+} from "../../../../shared/infrastructure/util";
 
 export class ElementColorChangeHandler implements CommandHandler {
     static $inject: string[] = ["eventBus"];

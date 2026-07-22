@@ -3,11 +3,11 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseExportFile } from "../ExportFileParser";
 import { DomainStoryExportService } from "../DomainStoryExportService";
-import { DomainStoryPropertiesService } from "../../../domain/service/DomainStoryPropertiesService";
+import { DomainStoryPropertiesService } from "../../../modeler/service/DomainStoryPropertiesService";
 import { IconDictionaryService } from "../../../iconSet/service/IconDictionaryService";
 import { IconSetImportExportService } from "../../../iconSet/service/IconSetImportExportService";
 import { IconStyleSheetPort } from "../../../iconSet/domain/ports/IconStyleSheetPort";
-import type { ElementRegistryService } from "../../../domain/service/ElementRegistryService";
+import type { ElementRegistryService } from "../../../modeler/service/ElementRegistryService";
 
 // The round-trip proves metadata/icon-set-name survival, not CSS injection; a
 // no-op port matches today's jsdom behavior (no #iconsCss sheet → silent no-op).

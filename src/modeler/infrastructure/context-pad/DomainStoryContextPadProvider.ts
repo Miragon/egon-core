@@ -19,14 +19,14 @@ import Rules from "diagram-js/lib/features/rules/Rules";
 import { DomainStoryElementFactory } from "../element-factory/DomainStoryElementFactory";
 import { DomainStoryModeling } from "../modeling/DomainStoryModeling";
 import { DomainStoryReplaceMenuProvider } from "../replace/DomainStoryReplaceMenuProvider";
-import { DirtyFlagService } from "../../domain/service/DirtyFlagService";
-import { IconDictionaryService } from "../../iconSet/service/IconDictionaryService";
+import { DirtyFlagService } from "../../service/DirtyFlagService";
+import { IconDictionaryService } from "../../../iconSet/service/IconDictionaryService";
 import {
     hexToRGBA,
     isHexWithAlpha,
     rgbaToHex,
-} from "../../shared/domain/colorConverter";
-import { ElementTypes } from "../../story/domain/elementTypes";
+} from "../../../shared/domain/colorConverter";
+import { ElementTypes } from "../../../story/domain/elementTypes";
 import { DomainStoryNumberingRegistry } from "../popup/DomainStoryNumberingRegistry";
 
 /**

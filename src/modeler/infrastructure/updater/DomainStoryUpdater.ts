@@ -9,8 +9,8 @@ import {
 import { Point } from "diagram-js/lib/util/Types";
 import { assign, pick } from "min-dash";
 import { Connection, Shape } from "diagram-js/lib/model/Types";
-import { ElementTypes } from "../../story/domain/elementTypes";
-import { reworkGroupElements } from "../../shared/infrastructure/util";
+import { ElementTypes } from "../../../story/domain/elementTypes";
+import { reworkGroupElements } from "../../../shared/infrastructure/util";
 import { isBackground, isGroup } from "../rules/DomainStoryRules";
 
 export class DomainStoryUpdater extends CommandInterceptor {

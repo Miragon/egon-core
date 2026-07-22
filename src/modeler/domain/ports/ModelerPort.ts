@@ -1,5 +1,5 @@
 import { DomainStoryDocument } from "../../../story/domain/DomainStoryDocument";
-import { ViewportData } from "../../domain/model/Viewport";
+import { ViewportData } from "../model/Viewport";
 
 /**
  * Port interface for diagram modeler operations.

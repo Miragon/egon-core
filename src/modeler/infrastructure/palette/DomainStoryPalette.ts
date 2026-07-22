@@ -9,8 +9,8 @@ import ElementFactory from "diagram-js/lib/core/ElementFactory";
 import SpaceTool from "diagram-js/lib/features/space-tool/SpaceTool";
 import LassoTool from "diagram-js/lib/features/lasso-tool/LassoTool";
 import Palette from "diagram-js/lib/features/palette/Palette";
-import { IconDictionaryService } from "../../iconSet/service/IconDictionaryService";
-import { ElementTypes } from "../../story/domain/elementTypes";
+import { IconDictionaryService } from "../../../iconSet/service/IconDictionaryService";
+import { ElementTypes } from "../../../story/domain/elementTypes";
 import EventBus from "diagram-js/lib/core/EventBus";
 
 export class DomainStoryPaletteProvider implements PaletteProvider {

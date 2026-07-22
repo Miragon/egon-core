@@ -1,7 +1,7 @@
 import DomainStoryTextRenderer from "../text-renderer";
-import ElementRegistryService from "../../domain/service";
-import DirtyFlagService from "../../domain/service";
-import IconDictionaryService from "../../iconSet/service";
+import ElementRegistryService from "../../service";
+import DirtyFlagService from "../../service";
+import IconDictionaryService from "../../../iconSet/service";
 
 import { DomainStoryRenderer } from "./DomainStoryRenderer";
 import CommandStack from "diagram-js/lib/command";

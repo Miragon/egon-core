@@ -8,19 +8,19 @@ import BendpointsModule from "diagram-js/lib/features/bendpoints";
 import ConnectionPreviewModule from "diagram-js/lib/features/connection-preview";
 import SnappingModule from "diagram-js/lib/features/snapping";
 
-import DomainStoryElementFactory from "./features/element-factory";
-import DomainStoryRenderer from "./features/renderer";
-import DomainStoryModeling from "./features/modeling";
-import DomainStoryUpdater from "./features/updater";
-import DomainStoryPaletteProvider from "./features/palette";
-import DomainStoryContextPadProvider from "./features/context-pad";
-import DomainStoryLabelEditing from "./features/labeling";
-import DomainStoryUpdateHandler from "./features/update-handler";
-import DomainStoryCopyPaste from "./features/copy-paste";
-import DomainStoryKeyboardBindings from "./features/keyboard";
-import DomainStoryPopupService from "./features/popup";
-import DomainStoryExportService from "./story/service/exportModule";
-import DomainStoryImportService from "./story/service/importModule";
+import DomainStoryElementFactory from "./element-factory";
+import DomainStoryRenderer from "./renderer";
+import DomainStoryModeling from "./modeling";
+import DomainStoryUpdater from "./updater";
+import DomainStoryPaletteProvider from "./palette";
+import DomainStoryContextPadProvider from "./context-pad";
+import DomainStoryLabelEditing from "./labeling";
+import DomainStoryUpdateHandler from "./update-handler";
+import DomainStoryCopyPaste from "./copy-paste";
+import DomainStoryKeyboardBindings from "./keyboard";
+import DomainStoryPopupService from "./popup";
+import DomainStoryExportService from "../../story/service/exportModule";
+import DomainStoryImportService from "../../story/service/importModule";
 
 const buildInModules = [
     EditorActionsModule,

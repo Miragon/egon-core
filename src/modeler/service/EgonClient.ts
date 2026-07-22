@@ -1,7 +1,7 @@
 import type { ModuleDeclaration } from "didi";
 
 import { EgonClientConfig } from "./EgonClientConfig";
-import { IconPort, ModelerPort } from "./ports";
+import { IconPort, ModelerPort } from "../domain/ports";
 
 import type {
     DomainStoryDocument,

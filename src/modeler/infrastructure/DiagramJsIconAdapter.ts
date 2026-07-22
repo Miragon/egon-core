@@ -6,7 +6,7 @@ import { IconSetImportExportService } from "../../iconSet/service/IconSetImportE
 import { ElementTypes } from "../../story/domain/elementTypes";
 import { Dictionary } from "../../story/domain/dictionary";
 
-import { IconPort } from "../application/ports";
+import { IconPort } from "../domain/ports";
 import {
     IconCategory,
     IconSet,

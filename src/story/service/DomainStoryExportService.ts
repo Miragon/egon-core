@@ -1,5 +1,5 @@
-import { ElementRegistryService } from "../../domain/service/ElementRegistryService";
-import { DomainStoryPropertiesService } from "../../domain/service/DomainStoryPropertiesService";
+import { ElementRegistryService } from "../../modeler/service/ElementRegistryService";
+import { DomainStoryPropertiesService } from "../../modeler/service/DomainStoryPropertiesService";
 import { BusinessObject } from "../domain/businessObject";
 import { IconSetExportConfiguration } from "../domain/iconSet";
 import { IconSetImportExportService } from "../../iconSet/service/IconSetImportExportService";

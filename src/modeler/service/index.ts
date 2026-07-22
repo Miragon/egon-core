@@ -2,6 +2,10 @@ import { ElementRegistryService } from "./ElementRegistryService";
 import { DirtyFlagService } from "./DirtyFlagService";
 import { DomainStoryPropertiesService } from "./DomainStoryPropertiesService";
 
+export * from "./EgonClient";
+export * from "./EgonClientConfig";
+export * from "../domain/ports";
+
 export default {
     __init__: [
         "domainStoryElementRegistryService",

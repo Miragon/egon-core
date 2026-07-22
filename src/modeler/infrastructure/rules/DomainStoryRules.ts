@@ -2,8 +2,8 @@ import { assign, every, reduce } from "min-dash";
 import { Connection, Element, Label, Shape } from "diagram-js/lib/model/Types";
 import EventBus from "diagram-js/lib/core/EventBus";
 import RuleProvider from "diagram-js/lib/features/rules/RuleProvider";
-import { ElementTypes } from "../../story/domain/elementTypes";
-import { is } from "../../shared/infrastructure/util";
+import { ElementTypes } from "../../../story/domain/elementTypes";
+import { is } from "../../../shared/infrastructure/util";
 
 const HIGH_PRIORITY = 1500;
 const MIN_SIZE = 125;
