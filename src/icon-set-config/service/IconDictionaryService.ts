@@ -1,7 +1,7 @@
 import { Dictionary } from "../../domain/entities/dictionary";
 import { IconSet } from "../../domain/entities/iconSet";
 import { ElementTypes } from "../../domain/entities/elementTypes";
-import { sanitizeForCss } from "../../utils/sanitizer";
+import { sanitizeForCss } from "../../shared/domain/sanitizer";
 
 export const ICON_CSS_CLASS_PREFIX = "icon-domain-story-";
 

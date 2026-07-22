@@ -9,12 +9,12 @@ import CommandStack from "diagram-js/lib/command/CommandStack";
 
 import { DomainStoryModeling } from "../modeling/DomainStoryModeling";
 import { DomainStoryTextRenderer } from "../text-renderer/DomainStoryTextRenderer";
-import { LabelDictionaryService } from "../../label-dictionary/service/LabelDictionaryService";
+import { LabelDictionaryService } from "../../labelDictionary/service/LabelDictionaryService";
 import { ElementTypes } from "../../domain/entities/elementTypes";
 import { DomainStoryUpdateLabelHandler } from "./handler/DomainStoryUpdateLabelHandler";
 import { isBackground } from "../rules/DomainStoryRules";
-import { is } from "../../utils/util";
-import { sanitizeTextForSVGExport } from "../../utils/sanitizer";
+import { is } from "../../shared/infrastructure/util";
+import { sanitizeTextForSVGExport } from "../../shared/domain/sanitizer";
 import { createAutocompleteForEdit, getLabel } from "./utils";
 
 let numberStash = 0;

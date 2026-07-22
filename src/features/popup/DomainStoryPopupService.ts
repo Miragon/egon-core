@@ -1,7 +1,7 @@
 import EventBus from "diagram-js/lib/core/EventBus";
 import { ElementTypes } from "../../domain/entities/elementTypes";
 import { html, render } from "diagram-js/lib/ui";
-import PopupMenu from "../../ui/PopupMenu";
+import PopupMenu from "../../shared/infrastructure/ui/PopupMenu";
 import { DomainStoryNumberingRegistry } from "./DomainStoryNumberingRegistry";
 import { ActivityCanvasObject } from "../../domain/entities/canvasObject";
 import CommandStack from "diagram-js/lib/command/CommandStack";

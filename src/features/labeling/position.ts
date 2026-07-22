@@ -1,5 +1,5 @@
 import { selectPartOfActivity } from "./utils";
-import { angleBetween } from "../../utils/mathExtensions";
+import { angleBetween } from "../../shared/domain/mathExtensions";
 import { Point } from "diagram-js/lib/util/Types";
 
 export function countLines(str: string) {

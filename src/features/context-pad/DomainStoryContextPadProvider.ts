@@ -25,7 +25,7 @@ import {
     hexToRGBA,
     isHexWithAlpha,
     rgbaToHex,
-} from "../../utils/colorConverter";
+} from "../../shared/domain/colorConverter";
 import { ElementTypes } from "../../domain/entities/elementTypes";
 import { DomainStoryNumberingRegistry } from "../popup/DomainStoryNumberingRegistry";
 

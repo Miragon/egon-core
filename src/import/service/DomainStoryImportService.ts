@@ -9,7 +9,7 @@ import { parseExportFile } from "./ExportFileParser";
 import { BusinessObject } from "../../domain/entities/businessObject";
 import { DomainStoryElementFactory } from "../../features/element-factory/DomainStoryElementFactory";
 import { ElementTypes } from "../../domain/entities/elementTypes";
-import VersionBox from "../../ui/VersionBox";
+import VersionBox from "../../shared/infrastructure/ui/VersionBox";
 import { IconSetImportExportService } from "../../icon-set-config/service/IconSetImportExportService";
 import { IconSet } from "../../domain/entities/iconSet";
 import { IconDictionaryService } from "../../icon-set-config/service/IconDictionaryService";
