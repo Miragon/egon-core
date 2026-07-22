@@ -1,4 +1,4 @@
-# 0008 — Icon-set import replaces the selected icon set instead of merging
+# 0009 — Icon-set import replaces the selected icon set instead of merging
 
 - Status: accepted
 - Date: 2026-07-22

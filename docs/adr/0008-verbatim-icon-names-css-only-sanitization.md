@@ -1,4 +1,4 @@
-# 0007 — Store icon names verbatim; sanitize only at the CSS boundary
+# 0008 — Store icon names verbatim; sanitize only at the CSS boundary
 
 - Status: accepted
 - Date: 2026-07-22
