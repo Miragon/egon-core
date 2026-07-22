@@ -1,7 +1,7 @@
 import { Element } from "diagram-js/lib/model/Types";
 
 import { ElementTypes } from "../../domain/entities/elementTypes";
-import { is } from "../../utils/util";
+import { is } from "../../shared/infrastructure/util";
 import EventBus from "diagram-js/lib/core/EventBus";
 
 function getLabelAttr(semantic: any) {

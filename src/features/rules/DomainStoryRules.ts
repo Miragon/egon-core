@@ -3,7 +3,7 @@ import { Connection, Element, Label, Shape } from "diagram-js/lib/model/Types";
 import EventBus from "diagram-js/lib/core/EventBus";
 import RuleProvider from "diagram-js/lib/features/rules/RuleProvider";
 import { ElementTypes } from "../../domain/entities/elementTypes";
-import { is } from "../../utils/util";
+import { is } from "../../shared/infrastructure/util";
 
 const HIGH_PRIORITY = 1500;
 const MIN_SIZE = 125;

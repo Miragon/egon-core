@@ -8,7 +8,7 @@ import {
 } from "tiny-svg";
 import { translate } from "diagram-js/lib/util/SvgTransformUtil";
 import { Shape } from "diagram-js/lib/model/Types";
-import { getScaledPath, is } from "../../utils/util";
+import { getScaledPath, is } from "../../shared/infrastructure/util";
 import { ElementTypes } from "../../domain/entities/elementTypes";
 import { Rect } from "diagram-js/lib/util/Types";
 

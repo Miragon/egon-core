@@ -5,7 +5,7 @@ import { DomainStoryTextRenderer } from "../../text-renderer/DomainStoryTextRend
 import { DomainStoryModeling } from "../../modeling/DomainStoryModeling";
 import { ElementTypes } from "../../../domain/entities/elementTypes";
 import { getLabel, getNumber, setLabel, setNumber } from "../utils";
-import { getBusinessObject, is } from "../../../utils/util";
+import { getBusinessObject, is } from "../../../shared/infrastructure/util";
 
 const NULL_DIMENSIONS = {
     width: 0,

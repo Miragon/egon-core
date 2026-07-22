@@ -8,7 +8,7 @@ import {
 } from "min-dash";
 import EventBus from "diagram-js/lib/core/EventBus";
 import { DomainStoryPropertyCopy } from "./DomainStoryPropertyCopy";
-import { getBusinessObject } from "../../utils/util";
+import { getBusinessObject } from "../../shared/infrastructure/util";
 import { isLabel } from "diagram-js/lib/util/ModelUtil";
 
 const LOW_PRIORITY = 750;

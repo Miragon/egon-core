@@ -14,13 +14,20 @@ import {
 import { query as domQuery } from "min-dom";
 import { assign, isObject } from "min-dash";
 import { getNumberStash } from "../labeling/DomainStoryLabelEditingProvider";
-import { Box, numberBoxDefinitions } from "../../utils/numbering";
+import {
+    Box,
+    numberBoxDefinitions,
+} from "../../shared/infrastructure/numbering";
 import { ElementTypes, getIconId } from "../../domain/entities/elementTypes";
 import { Point } from "diagram-js/lib/util/Types";
 import { countLines, labelPosition } from "../labeling/position";
 import { approximateArialSize11TextWidthInPixel } from "../labeling/utils";
-import { angleBetween } from "../../utils/mathExtensions";
-import { getScaledPath, isCustomIcon, isCustomSvgIcon } from "../../utils/util";
+import { angleBetween } from "../../shared/domain/mathExtensions";
+import {
+    getScaledPath,
+    isCustomIcon,
+    isCustomSvgIcon,
+} from "../../shared/infrastructure/util";
 import { DomainStoryTextRenderer } from "../text-renderer/DomainStoryTextRenderer";
 import { DomainStoryNumberingRegistry } from "../popup/DomainStoryNumberingRegistry";
 import { ElementRegistryService } from "../../domain/service/ElementRegistryService";

@@ -1,5 +1,5 @@
 import { html } from "diagram-js/lib/ui";
-import logo from "../assets/logo/egon-io-logo.png";
+import logo from "../../../assets/logo/egon-io-logo.png";
 
 interface VersionProps {
     version: string;

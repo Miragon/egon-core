@@ -1,4 +1,4 @@
-import { angleBetween } from "./mathExtensions";
+import { angleBetween } from "../domain/mathExtensions";
 import { Connection } from "diagram-js/lib/model/Types";
 
 export interface Box {
