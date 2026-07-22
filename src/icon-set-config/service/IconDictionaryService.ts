@@ -18,6 +18,11 @@ export class IconDictionaryService {
     private selectedActorsDictionary = new Dictionary();
     private selectedWorkObjectsDictionary = new Dictionary();
 
+    // the imported icon set's name, kept here (next to the dictionaries it
+    // belongs to) so export can round-trip it — the element registry holds no
+    // icon-set metadata. Defaults to "" until an icon set is loaded.
+    private iconSetName = "";
+
     constructor() {}
 
     /** Load Icons from Configuration **/
@@ -98,6 +103,9 @@ export class IconDictionaryService {
         workObjects: DomainStoryBusinessObject[],
         config: IconSet,
     ): void {
+        // remember the icon set's name so a later export can emit it unchanged
+        this.iconSetName = config.name ?? "";
+
         const newIcons = new Dictionary();
         this.extractCustomIconsFromDictionary(config.actors, newIcons);
         this.extractCustomIconsFromDictionary(config.workObjects, newIcons);
@@ -199,7 +207,12 @@ export class IconDictionaryService {
         return this.selectedWorkObjectsDictionary;
     }
 
+    getIconSetName(): string {
+        return this.iconSetName;
+    }
+
     setIconSet(iconSet: IconSet): void {
+        this.iconSetName = iconSet.name ?? "";
         this.selectedActorsDictionary = iconSet.actors;
         this.selectedWorkObjectsDictionary = iconSet.workObjects;
     }

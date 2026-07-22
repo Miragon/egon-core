@@ -1,21 +1,19 @@
-import { assign, isArray } from "min-dash";
+import { assign } from "min-dash";
 import Canvas from "diagram-js/lib/core/Canvas";
 import { Connection, ElementLike, Shape } from "diagram-js/lib/model/Types";
 import { html, render } from "diagram-js/lib/ui";
 import EventBus from "diagram-js/lib/core/EventBus";
 import ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import { ImportRepairService } from "./ImportRepairService";
+import { parseExportFile } from "./ExportFileParser";
 import { BusinessObject } from "../../domain/entities/businessObject";
 import { DomainStoryElementFactory } from "../../features/element-factory/DomainStoryElementFactory";
-import { ConfigAndDST } from "../../export/domain/configAndDst";
 import { ElementTypes } from "../../domain/entities/elementTypes";
 import VersionBox from "../../ui/VersionBox";
-import {
-    FileConfiguration,
-    IconSetImportExportService,
-} from "../../icon-set-config/service/IconSetImportExportService";
+import { IconSetImportExportService } from "../../icon-set-config/service/IconSetImportExportService";
 import { IconSet } from "../../domain/entities/iconSet";
 import { IconDictionaryService } from "../../icon-set-config/service/IconDictionaryService";
+import { DomainStoryPropertiesService } from "../../domain/service/DomainStoryPropertiesService";
 
 export class DomainStoryImportService {
     static $inject: string[] = [
@@ -25,6 +23,7 @@ export class DomainStoryImportService {
         "elementFactory",
         "domainStoryIconDictionaryService",
         "domainStoryIconSetImportExportService",
+        "domainStoryPropertiesService",
     ];
 
     private readonly elements: ElementLike[] = [];
@@ -40,22 +39,28 @@ export class DomainStoryImportService {
         private readonly elementFactory: DomainStoryElementFactory,
         private readonly iconDictionaryService: IconDictionaryService,
         private readonly iconSetImportExportService: IconSetImportExportService,
+        private readonly propertiesService: DomainStoryPropertiesService,
     ) {}
 
     /**
+     * Imports a serialized EGN file (any historical shape) onto the canvas.
+     * The parser normalizes v4/legacy/string payloads up front so this method
+     * only ever deals with a clean `{ iconSet, businessObjects, metadata }`.
+     *
      * @throws Error if import fails
-     * @param story
+     * @param story serialized `{ iconSet, domainStory }` (or a legacy shape)
      */
     import(story: string) {
-        const configAndDST: ConfigAndDST = JSON.parse(story);
+        const parsed = JSON.parse(story);
 
-        let domainStoryElements = configAndDST.dst;
-        const domainStoryIcons: FileConfiguration = configAndDST.domain;
+        const { iconSetConfiguration, domainStory } = parseExportFile(parsed);
 
         const iconSet: IconSet =
             this.iconSetImportExportService.createIconSetConfiguration(
-                domainStoryIcons,
+                iconSetConfiguration,
             );
+
+        let domainStoryElements = domainStory.businessObjects;
 
         this.importRepairService.removeWhitespacesFromIcons(
             domainStoryElements,
@@ -69,31 +74,13 @@ export class DomainStoryImportService {
 
         this.eventBus.fire("diagram.clear", {});
 
-        if (!isArray(domainStoryElements)) {
-            throw new Error("argument must be an array");
-        }
-
-        // files downloaded from the web version include objects that are not
-        // part of the domain story but are used for the web version.
-        // We need to filter them out.
-        let lastElement = domainStoryElements[domainStoryElements.length - 1];
-        if (!lastElement.id) {
-            lastElement = domainStoryElements.pop();
-            let importVersionNumber = lastElement;
-
-            // if the last element has the tag 'version',
-            // then there exists another tag 'info' for the description
-            if (importVersionNumber.version) {
-                lastElement = domainStoryElements.pop();
-                importVersionNumber = importVersionNumber.version as string;
-            } else {
-                importVersionNumber = "?";
-            }
-            domainStoryElements = this.handleVersionNumber(
-                importVersionNumber,
-                domainStoryElements,
-            );
-        }
+        // The normalizer already stripped web-only trailers; the version now
+        // lives on the story. Feed it through so pre-v0.5.0 files still get the
+        // custom-element repair and the version box renders as before.
+        domainStoryElements = this.handleVersionNumber(
+            domainStory.version,
+            domainStoryElements,
+        );
 
         const connections: Connection[] = [],
             groups: Shape[] = [],
@@ -117,6 +104,16 @@ export class DomainStoryImportService {
         groups.forEach(this.createElementFromBusinessObject, this);
         otherElementTypes.forEach(this.createElementFromBusinessObject, this);
         connections.forEach(this.addConnection, this);
+
+        // Persist story-level metadata: the element registry keeps only diagram
+        // elements, so without this the title/description/scope would be lost
+        // on the next export.
+        this.propertiesService.setProperties(
+            domainStory.title,
+            domainStory.description,
+            domainStory.scope,
+            domainStory.version,
+        );
     }
 
     private createElementFromBusinessObject(businessObject: any) {

@@ -22,6 +22,11 @@ export interface IconSet {
 
 /** Partial icon set for loading operations */
 export type IconSetData = {
+    /**
+     * Icon-set name written to EGN v4 exports. Optional so icon-only callers
+     * need not care; when omitted, the currently loaded name is kept.
+     */
+    readonly name?: string;
     readonly actors?: IconMap;
     readonly workObjects?: IconMap;
 };

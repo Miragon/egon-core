@@ -111,8 +111,13 @@ describe("EgonClient (Application Service)", () => {
     describe("document operations", () => {
         it("should delegate import to modeler port", () => {
             const doc: DomainStoryDocument = {
-                domain: { name: "", actors: {}, workObjects: {} },
-                dst: [],
+                iconSet: { name: "", actors: {}, workObjects: {} },
+                domainStory: {
+                    businessObjects: [],
+                    title: "",
+                    description: "",
+                    version: "4.0.0",
+                },
             };
             client.import(doc);
 
@@ -121,8 +126,13 @@ describe("EgonClient (Application Service)", () => {
 
         it("should delegate export to modeler port", () => {
             const doc: DomainStoryDocument = {
-                domain: { name: "", actors: {}, workObjects: {} },
-                dst: [],
+                iconSet: { name: "", actors: {}, workObjects: {} },
+                domainStory: {
+                    businessObjects: [],
+                    title: "",
+                    description: "",
+                    version: "4.0.0",
+                },
             };
             (mockModelerPort.export as Mock).mockReturnValue(doc);
 

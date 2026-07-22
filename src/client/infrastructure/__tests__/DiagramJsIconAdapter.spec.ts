@@ -51,6 +51,7 @@ function createMockDiagramServices() {
         registerIconForType: vi.fn(),
         unregisterIconForType: vi.fn(),
         addIconsToCss: vi.fn(),
+        getIconSetName: vi.fn(() => ""),
     };
 
     const mockIconSetImportExportService = {
@@ -110,12 +111,40 @@ describe("DiagramJsIconAdapter", () => {
             expect(
                 mocks.mockIconSetImportExportService.createIconSetConfiguration,
             ).toHaveBeenCalledWith({
+                name: "",
                 actors: icons.actors,
                 workObjects: {},
             });
             expect(
                 mocks.mockIconSetImportExportService.loadConfiguration,
             ).toHaveBeenCalled();
+        });
+
+        it("should keep the currently loaded icon-set name when none is given", () => {
+            // e.g. a host reloading icons after importing a named icon set
+            mocks.mockIconDictionaryService.getIconSetName.mockReturnValue(
+                "default",
+            );
+
+            adapter.loadIcons({ actors: { Test: "<svg>test</svg>" } });
+
+            expect(
+                mocks.mockIconSetImportExportService.createIconSetConfiguration,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({ name: "default" }),
+            );
+        });
+
+        it("should pass an explicit icon-set name through", () => {
+            mocks.mockIconDictionaryService.getIconSetName.mockReturnValue(
+                "default",
+            );
+
+            adapter.loadIcons({ name: "custom", actors: {} });
+
+            expect(
+                mocks.mockIconSetImportExportService.createIconSetConfiguration,
+            ).toHaveBeenCalledWith(expect.objectContaining({ name: "custom" }));
         });
 
         it("should fire dst.config.changed event after loading icons", () => {

@@ -18,9 +18,18 @@ export type { IconPort } from "./client/application/ports/IconPort";
 // Domain Layer - Value Objects & Types (for consumers who need type information)
 export type {
     DomainStoryDocument,
-    DomainConfiguration,
-    DomainStoryElement, // Assuming this was meant to be exported from DomainStoryDocument.ts
+    DomainStoryContent,
+    DomainStoryElement,
 } from "./client/domain/model/DomainStoryDocument";
+// v4.0.0 wire-format types, re-exported so consumers can build/read documents.
+export type { IconSetExportConfiguration } from "./domain/entities/iconSet";
+export type { Scope } from "./domain/entities/scope";
+export {
+    PointInTime,
+    DomainPurity,
+    Granularity_Grain,
+    Granularity_Goal,
+} from "./domain/entities/scope";
 export type { ViewportData } from "./client/domain/model/Viewport";
 export type {
     IconSet,
