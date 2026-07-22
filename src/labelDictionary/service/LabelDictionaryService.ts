@@ -1,8 +1,8 @@
 import { LabelEntry } from "../domain/labelEntry";
 import { WorkObjectLabelEntry } from "../domain/workObjectLabelEntry";
-import { IconDictionaryService } from "../../iconSet/service/IconDictionaryService";
+import { IconDictionaryService } from "../../iconSet/service";
 import { ElementTypes } from "../../story/domain/elementTypes";
-import { ElementRegistryService } from "../../modeler/service/ElementRegistryService";
+import { ElementRegistryService } from "../../modeler/service";
 
 export class LabelDictionaryService {
     static $inject: string[] = [

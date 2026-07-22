@@ -1,4 +1,4 @@
-import { IconDictionaryService } from "../../../iconSet/service/IconDictionaryService";
+import { IconDictionaryService } from "../../../iconSet/service";
 import { ElementTypes } from "../../../story/domain/elementTypes";
 import { Shape } from "diagram-js/lib/model/Types";
 

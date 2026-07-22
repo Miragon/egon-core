@@ -20,7 +20,7 @@ import { DomainStoryElementFactory } from "../element-factory/DomainStoryElement
 import { DomainStoryModeling } from "../modeling/DomainStoryModeling";
 import { DomainStoryReplaceMenuProvider } from "../replace/DomainStoryReplaceMenuProvider";
 import { DirtyFlagService } from "../../service/DirtyFlagService";
-import { IconDictionaryService } from "../../../iconSet/service/IconDictionaryService";
+import { IconDictionaryService } from "../../../iconSet/service";
 import {
     hexToRGBA,
     isHexWithAlpha,
