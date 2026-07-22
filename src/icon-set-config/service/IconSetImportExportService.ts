@@ -4,7 +4,6 @@ import {
     IconSetExportConfiguration,
 } from "../../domain/entities/iconSet";
 import { Dictionary } from "../../domain/entities/dictionary";
-import { sanitizeIconName } from "../../utils/sanitizer";
 import { ElementTypes } from "../../domain/entities/elementTypes";
 
 export type { IconSetExportConfiguration };
@@ -44,7 +43,7 @@ export class IconSetImportExportService {
             const icon = fileConfiguration.actors[key];
             if (icon) {
                 // make sure the actor has an icon
-                actorsDict.add(icon, sanitizeIconName(key));
+                actorsDict.add(icon, key);
             }
         });
 
@@ -52,7 +51,7 @@ export class IconSetImportExportService {
             const icon = fileConfiguration.workObjects[key];
             if (icon) {
                 // make sure the work object has an icon
-                workObjectsDict.add(icon, sanitizeIconName(key));
+                workObjectsDict.add(icon, key);
             }
         });
 
@@ -67,6 +66,8 @@ export class IconSetImportExportService {
         let actorDict = new Dictionary();
         let workObjectDict = new Dictionary();
 
+        // Normalize: a config may arrive as real Dictionaries or as plain
+        // name→SVG objects; either way build Dictionaries to hand downstream.
         if (customConfig.actors.keysArray()) {
             actorDict = customConfig.actors;
             workObjectDict = customConfig.workObjects;
@@ -75,19 +76,12 @@ export class IconSetImportExportService {
             workObjectDict.addEach(customConfig.workObjects);
         }
 
-        const actorKeys = actorDict.keysArray();
-        const workObjectKeys = workObjectDict.keysArray();
-
-        this.iconDictionaryService.updateIconRegistries([], [], customConfig);
-
-        this.iconDictionaryService.addIconsFromIconSetConfiguration(
-            ElementTypes.ACTOR,
-            actorKeys,
-        );
-        this.iconDictionaryService.addIconsFromIconSetConfiguration(
-            ElementTypes.WORKOBJECT,
-            workObjectKeys,
-        );
+        // Import replaces the selected icon set with the incoming one.
+        this.iconDictionaryService.updateIconRegistries({
+            name: customConfig.name,
+            actors: actorDict,
+            workObjects: workObjectDict,
+        });
     }
 
     getCurrentConfigurationForExport(): IconSetExportConfiguration | undefined {
