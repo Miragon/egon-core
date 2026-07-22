@@ -1,4 +1,4 @@
-import ElementRegistryService from "../../domain/service";
+import ElementRegistryService from "../../modeler/service";
 import IconSetImportExportService from "../../iconSet/service";
 import { DomainStoryExportService } from "./DomainStoryExportService";
 

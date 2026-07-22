@@ -7,13 +7,13 @@ import ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import { ImportRepairService } from "./ImportRepairService";
 import { parseExportFile } from "./ExportFileParser";
 import { BusinessObject } from "../domain/businessObject";
-import { DomainStoryElementFactory } from "../../features/element-factory/DomainStoryElementFactory";
+import { DomainStoryElementFactory } from "../../modeler/infrastructure/element-factory/DomainStoryElementFactory";
 import { ElementTypes } from "../domain/elementTypes";
 import VersionBox from "../../shared/infrastructure/ui/VersionBox";
 import { IconSetImportExportService } from "../../iconSet/service/IconSetImportExportService";
 import { IconSet } from "../domain/iconSet";
 import { IconDictionaryService } from "../../iconSet/service/IconDictionaryService";
-import { DomainStoryPropertiesService } from "../../domain/service/DomainStoryPropertiesService";
+import { DomainStoryPropertiesService } from "../../modeler/service/DomainStoryPropertiesService";
 
 export class DomainStoryImportService {
     static $inject: string[] = [

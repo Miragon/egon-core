@@ -82,10 +82,9 @@ function readSource(repoRelativePath: string): string {
 }
 
 /**
- * Every `domain/` layer is innermost, wherever it lives: the shared plugin
- * domain (`src/domain/…`) as well as the per-context domain folders
- * (`src/client/domain/…`, `src/story/domain/…`, `src/labelDictionary/domain/…`,
- * `src/iconSet/domain/…`).
+ * Every `domain/` layer is innermost, wherever it lives: the per-feature
+ * domain folders (`src/modeler/domain/…`, `src/story/domain/…`,
+ * `src/labelDictionary/domain/…`, `src/iconSet/domain/…`).
  */
 function isDomainFile(repoRelativePath: string): boolean {
     return repoRelativePath.includes("/domain/");
@@ -168,32 +167,32 @@ describe("architecture", () => {
         });
     });
 
-    // ─── D. Client hexagon ───────────────────────────────────────────────────
+    // ─── D. Modeler hexagon ──────────────────────────────────────────────────
     //
-    // `src/client` is a ports-and-adapters context: `application` talks to the
-    // outside world only through its `ports`, and `infrastructure` implements
-    // them. `EgonClient` doubles as the composition root (ADR 0005) — it alone
-    // may reference `infrastructure`, and only via dynamic `import()` so the
-    // static layering stays intact.
-    describe("client hexagon", () => {
-        it("application does not statically depend on infrastructure", async () => {
+    // `src/modeler` is a ports-and-adapters context: `service` talks to the
+    // outside world only through its `domain/ports`, and `infrastructure`
+    // implements them. `EgonClient` doubles as the composition root (ADR 0005) —
+    // it alone may reference `infrastructure`, and only via dynamic `import()`
+    // so the static layering stays intact.
+    describe("modeler hexagon", () => {
+        it("service does not statically depend on infrastructure", async () => {
             const violations = await projectFiles(TSCONFIG)
-                .inFolder("src/client/application/**")
+                .inFolder("src/modeler/service/**")
                 .shouldNot()
                 .dependOnFiles()
-                .inFolder("src/client/infrastructure/**")
+                .inFolder("src/modeler/infrastructure/**")
                 .check();
             expect(violations).toEqual([]);
         });
 
         // The graph rule above cannot see dynamic imports, so a second
-        // application file adopting the composition root's `import()` trick
+        // service file adopting the composition root's `import()` trick
         // would slip through it — this text scan closes that hole.
         it("only the EgonClient composition root references infrastructure", () => {
             const offenders = listSourceFiles()
                 .filter(
                     (file) =>
-                        file.startsWith("src/client/application/") &&
+                        file.startsWith("src/modeler/service/") &&
                         !file.endsWith("/EgonClient.ts"),
                 )
                 .flatMap((file) =>
@@ -206,9 +205,9 @@ describe("architecture", () => {
             expect(offenders).toEqual([]);
         });
 
-        it("application imports no framework module except didi types in the composition root", () => {
+        it("service imports no framework module except didi types in the composition root", () => {
             const offenders = listSourceFiles()
-                .filter((file) => file.startsWith("src/client/application/"))
+                .filter((file) => file.startsWith("src/modeler/service/"))
                 .flatMap((file) => {
                     const allowed = file.endsWith("/EgonClient.ts")
                         ? ["didi"] // type-only DI surface of EgonClientConfig's additionalModules

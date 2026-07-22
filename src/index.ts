@@ -8,12 +8,12 @@ export {
     type EgonEventMap,
     type EgonEventName,
     type EgonClientPorts,
-} from "./client/application/EgonClient";
-export type { EgonClientConfig } from "./client/application/EgonClientConfig";
+} from "./modeler/service/EgonClient";
+export type { EgonClientConfig } from "./modeler/service/EgonClientConfig";
 
 // Port interfaces (for testing via constructor injection)
-export type { ModelerPort } from "./client/application/ports/ModelerPort";
-export type { IconPort } from "./client/application/ports/IconPort";
+export type { ModelerPort } from "./modeler/domain/ports/ModelerPort";
+export type { IconPort } from "./modeler/domain/ports/IconPort";
 
 // Domain Layer - Value Objects & Types (for consumers who need type information)
 export type {
@@ -30,7 +30,7 @@ export {
     Granularity_Grain,
     Granularity_Goal,
 } from "./story/domain/scope";
-export type { ViewportData } from "./client/domain/model/Viewport";
+export type { ViewportData } from "./modeler/domain/model/Viewport";
 export type {
     IconSet,
     IconSetData,
@@ -41,7 +41,7 @@ export type {
 // =============================================================================
 // Plugin module (for advanced usage / custom integrations)
 // =============================================================================
-export { default as EgonPlugin } from "./plugin";
+export { default as EgonPlugin } from "./modeler/infrastructure/plugin";
 
 // =============================================================================
 // Internal services (deprecated - use EgonClient instead)
@@ -55,7 +55,7 @@ export { DomainStoryImportService } from "./story/service/DomainStoryImportServi
 export { DomainStoryExportService } from "./story/service/DomainStoryExportService";
 
 // Existing original internal services (kept for backward compatibility)
-export { ElementRegistryService } from "./domain/service/ElementRegistryService";
-export { DirtyFlagService } from "./domain/service/DirtyFlagService";
+export { ElementRegistryService } from "./modeler/service/ElementRegistryService";
+export { DirtyFlagService } from "./modeler/service/DirtyFlagService";
 export { IconDictionaryService } from "./iconSet/service/IconDictionaryService";
 export { LabelDictionaryService } from "./labelDictionary/service/LabelDictionaryService";

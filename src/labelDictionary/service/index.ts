@@ -1,5 +1,5 @@
 import IconDictionaryService from "../../iconSet/service";
-import ElementRegistryService from "../../domain/service";
+import ElementRegistryService from "../../modeler/service";
 import { LabelDictionaryService } from "./LabelDictionaryService";
 
 export default {
