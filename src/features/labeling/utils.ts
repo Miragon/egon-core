@@ -92,185 +92,211 @@ export function selectPartOfActivity(waypoints: any, angleActivity: any) {
     return selectedActivity;
 }
 
-// approximate the width of the label text, standard fontsize: 11
-export function calculateTextWidth(text: string) {
+/**
+ * The direct-editing box is a recycled contenteditable <div>, not an <input>,
+ * yet upstream reads and writes a `.value` on it to normalise the stale
+ * recycled text before filtering. Model that access narrowly so the port keeps
+ * the behaviour without pretending the element is a real form control.
+ */
+type EditingBoxElement = HTMLElement & { value?: string };
+
+/**
+ * Approximate the rendered width (in px) of a label at font-size 11 in Arial.
+ * 5.1 is the median glyph width at that size; the renderer adds its own layout
+ * offset at the call site. Returns 0 for empty/undefined so blank labels
+ * contribute no width.
+ */
+export function approximateArialSize11TextWidthInPixel(text: string) {
     if (!text) {
         return 0;
     }
-
-    let fontsize = text.length * 5.1;
-    fontsize = fontsize / 2;
-
-    // add an initial offset to the absolute middle of the activity
-    fontsize += 20;
-    return fontsize;
+    return text.length * 5.1;
 }
 
 /**
- * copied from https://www.w3schools.com/howto/howto_js_autocomplete.asp on 18.09.2018
+ * Wire the work-object autocomplete onto a direct-editing box. Ported from
+ * upstream egon.io (dsLabelUtil.js @ e7ce503d), whose rewrite of the original
+ * w3schools snippet fixed six bugs — no autocomplete on actors, input-listener
+ * cleanup, click-to-select, null-safe DOM access, correct search-term handling,
+ * and Shift+Enter linebreaks. This TS port additionally revives keyboard
+ * navigation, which the earlier local conversion silently killed by turning
+ * `keyCode === 40/38/13` checks into `e.key` cases comparing against the
+ * numeric strings "40"/"38"/"13" (e.key is "ArrowDown"/"ArrowUp"/"Enter").
+ *
+ * Suggestions only make sense for work objects — actors are meant to be unique
+ * — so the function early-returns for non-work-objects. The check is repeated
+ * inside the input and keydown handlers because the editing box is recycled
+ * across elements and can otherwise fire with a stale businessElement.
  */
-export function autocomplete(
-    input: HTMLInputElement,
+export function createAutocompleteForEdit(
+    editingBox: HTMLElement,
     workObjectNames: string[],
-    element: Element,
+    businessElement: Element,
     eventBus: EventBus,
 ) {
-    closeAllLists();
+    clearOldAutocompleteList();
+    if (
+        !businessElement ||
+        !businessElement["type"].includes(ElementTypes.WORKOBJECT)
+    ) {
+        return;
+    }
 
-    // the autocomplete function takes three arguments,
-    // the text field element and an array of possible autocompleted values and
-    // an optional element to which it is appended:
-    let currentFocus: number, filteredWorkObjectNames: string[];
+    let currentFocus: number;
+    let workObjectNamesFilteredBySearchterm: string[];
 
-    // execute a function when someone writes in the text field:
-    input.addEventListener("input", function () {
-        if (workObjectNames.length === 0) {
+    editingBox.addEventListener("input", inputFunction);
+
+    /**
+     * Rebuild the suggestion list on every keystroke. Registered by name so it
+     * can be removed again once a suggestion is committed or the list closes —
+     * the stale-listener fix, since the box is reused for the next element.
+     */
+    function inputFunction(this: EditingBoxElement) {
+        if (
+            !workObjectNames ||
+            workObjectNames.length === 0 ||
+            !businessElement ||
+            !businessElement["type"].includes(ElementTypes.WORKOBJECT)
+        ) {
             return;
         }
 
-        // the direct editing field of actors and workobjects is a recycled
-        // html-element and has old values that need to be overridden
-        if (element["type"].includes(ElementTypes.WORKOBJECT)) {
+        // the recycled direct-editing element carries an old value that must be
+        // overridden with its current text before we filter against it
+        if (businessElement["type"].includes(ElementTypes.WORKOBJECT)) {
             this.value = this.innerHTML;
         }
 
-        const val = this.value;
-        let autocompleteItem;
-
-        // close any already open lists of autocompleted values
-        closeAllLists();
+        const searchterm = this.value?.toUpperCase() ?? "";
         currentFocus = -1;
 
-        // create a DIV element that will contain the items (values):
+        clearOldAutocompleteList();
+
         const autocompleteList = document.createElement("DIV");
         autocompleteList.setAttribute("id", "autocomplete-list");
         autocompleteList.setAttribute("class", "autocomplete-items");
-
-        // append the DIV element as a child of the autocomplete container:
         this.parentNode?.appendChild(autocompleteList);
 
-        // for each item in the array...
-        filteredWorkObjectNames = [];
+        workObjectNamesFilteredBySearchterm = [];
         for (const name of workObjectNames) {
-            // check if the item starts with the same letters as the text field value:
-            if (val) {
-                if (
-                    name.substring(0, val.length).toUpperCase() ===
-                    val.toUpperCase()
-                ) {
-                    // create a DIV element for each matching element:
-                    autocompleteItem = document.createElement("DIV");
+            // an empty term lists everything; otherwise prefix-match
+            // case-insensitively and drop duplicates
+            if (
+                searchterm.length === 0 ||
+                (name.toUpperCase().startsWith(searchterm) &&
+                    !workObjectNamesFilteredBySearchterm.includes(name))
+            ) {
+                const autocompleteItem = document.createElement("div");
 
-                    // make the matching letters bold:
-                    autocompleteItem.innerHTML =
-                        "<strong>" +
-                        name.substring(0, val.length) +
-                        "</strong>" +
-                        name.substring(val.length);
+                autocompleteItem.innerHTML = name;
+                autocompleteItem.innerHTML +=
+                    "<input type='hidden' value='" + name + "'>";
 
-                    // insert an input field that will hold the current name:
-                    autocompleteItem.innerHTML +=
-                        "<input type='hidden' value='" + name + "'>";
-                    autocompleteList.appendChild(autocompleteItem);
+                autocompleteItem.addEventListener("click", function (e) {
+                    e.preventDefault();
+                    currentFocus =
+                        workObjectNamesFilteredBySearchterm.indexOf(name);
+                    updateFocusOnAutocompleteList();
+                    // keydown events don't reach the item itself, so hand focus
+                    // back to the editing box to keep keyboard control working
+                    editingBox.focus();
+                });
 
-                    filteredWorkObjectNames.push(name);
-                }
+                autocompleteList.appendChild(autocompleteItem);
+                workObjectNamesFilteredBySearchterm.push(name);
             }
         }
+    }
 
-        // if we edit an actor, we do not want auto-complete, since actors generally are unique
-        if (element["type"].includes(ElementTypes.ACTOR)) {
-            autocompleteList.style.visibility = "hidden";
-        }
-    });
-
-    // execute a function presses a key on the keyboard:
-    input.onkeydown = function (e: KeyboardEvent) {
-        let autocompleteList:
-            HTMLElement | HTMLCollectionOf<HTMLDivElement> | null =
-            document.getElementById("autocomplete-list");
-        if (autocompleteList) {
-            autocompleteList = autocompleteList.getElementsByTagName("div");
-        } else {
+    editingBox.onkeydown = function (e: KeyboardEvent) {
+        if (
+            !businessElement ||
+            !businessElement["type"].includes(ElementTypes.WORKOBJECT)
+        ) {
             return;
         }
 
-        switch (e.key) {
-            case "40": {
-                // If the arrow DOWN key is pressed,
-                // increase the currentFocus letiable:
-                currentFocus++;
+        // upstream still branches on the deprecated keyCode 40/38; e.key is the
+        // idiomatic, behaviourally identical replacement and is what fixes the
+        // dead-navigation regression this port targets
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            currentFocus++;
+            updateFocusOnAutocompleteList();
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            currentFocus--;
+            updateFocusOnAutocompleteList();
+        } else if (e.key === "Enter" && !e.shiftKey) {
+            // Shift+Enter is intentionally excluded so it still inserts a
+            // linebreak instead of committing a suggestion
+            e.preventDefault();
+            if (currentFocus > -1) {
+                businessElement.businessObject.name =
+                    workObjectNamesFilteredBySearchterm[currentFocus];
+                eventBus.fire("element.changed", { element: businessElement });
 
-                // and make the current item more visible:
-                addActive(autocompleteList);
-                break;
-            }
-            case "38": {
-                // up
-                // If the arrow UP key is pressed,
-                // decrease the currentFocus letiable:
-                currentFocus--;
-
-                // and make the current item more visible:
-                addActive(autocompleteList);
-                break;
-            }
-            case "13": {
-                e.preventDefault();
-                // If the ENTER key is pressed, prevent the form from being submitted,
-                if (currentFocus > -1) {
-                    element.businessObject.name =
-                        filteredWorkObjectNames[currentFocus];
-                    eventBus.fire("element.changed", { element });
-                }
-                break;
+                // the input listener is re-added whenever the box reopens, so
+                // drop this one to avoid stacking stale handlers
+                editingBox.removeEventListener("input", inputFunction);
             }
         }
     };
 
     /**
-     *  a function to classify an item as "active":
+     * Remove a stale suggestion list, unless the click that triggered the check
+     * landed on the editing box or inside the list itself — those interactions
+     * should keep it open. Returns whether a list was actually removed.
      */
-    function addActive(autocompleteList: HTMLCollectionOf<HTMLDivElement>) {
-        if (!autocompleteList || autocompleteList.length < 1) return false;
-
-        /* start by removing the "active" class on all items:*/
-        removeActive(autocompleteList);
-        if (currentFocus >= autocompleteList.length) currentFocus = 0;
-        if (currentFocus < 0) currentFocus = autocompleteList.length - 1;
-
-        /* add class "autocomplete-active":*/
-        autocompleteList[currentFocus].classList.add("autocomplete-active");
-        return true;
-    }
-
-    /**
-     *  a function to remove the "active" class from all autocomplete items:
-     */
-    function removeActive(autocompleteList: HTMLCollectionOf<HTMLDivElement>) {
-        if (autocompleteList.length > 1) {
-            Array.from(autocompleteList).forEach((item) => {
-                item.classList.remove("autocomplete-active");
-            });
+    function clearOldAutocompleteList(target?: HTMLElement | null) {
+        const oldAutocompleteList =
+            document.getElementById("autocomplete-list");
+        if (
+            oldAutocompleteList &&
+            !(
+                target?.classList.contains("djs-direct-editing-content") ||
+                target?.parentElement?.id === "autocomplete-list"
+            )
+        ) {
+            oldAutocompleteList.remove();
+            return true;
         }
+        return false;
     }
 
     /**
-     *  close all autocomplete lists in the document,
-     *  except the one passed as an argument:
+     * Move the "active" highlight to the item at currentFocus, wrapping around
+     * at both ends. Null-safe: does nothing when the list has already gone.
      */
-    function closeAllLists(survivor?: any) {
-        const autocompleteList =
-            document.getElementsByClassName("autocomplete-items");
-        Array.from(autocompleteList).forEach((item) => {
-            if (survivor != item && survivor != input) {
-                item.parentNode?.removeChild(item);
-            }
+    function updateFocusOnAutocompleteList() {
+        const autocompleteList = document.getElementById("autocomplete-list");
+        const autocompleteListItems =
+            autocompleteList?.getElementsByTagName("div");
+        if (!autocompleteListItems || autocompleteListItems.length < 1) {
+            return;
+        }
+
+        Array.from(autocompleteListItems).forEach((item) => {
+            item.classList.remove("autocomplete-active");
         });
+
+        if (currentFocus >= autocompleteListItems.length) {
+            currentFocus = 0;
+        } else if (currentFocus < 0) {
+            currentFocus = autocompleteListItems.length - 1;
+        }
+
+        autocompleteListItems[currentFocus].classList.add(
+            "autocomplete-active",
+        );
     }
 
-    /* execute a function when someone clicks in the document:*/
+    // an outside click closes the list; when it does, the input listener is now
+    // stale, so remove it too
     document.addEventListener("click", function (e) {
-        closeAllLists(e.target);
+        if (clearOldAutocompleteList(e.target as HTMLElement | null)) {
+            editingBox.removeEventListener("input", inputFunction);
+        }
     });
 }

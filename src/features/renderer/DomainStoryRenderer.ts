@@ -18,7 +18,7 @@ import { Box, numberBoxDefinitions } from "../../utils/numbering";
 import { ElementTypes, getIconId } from "../../domain/entities/elementTypes";
 import { Point } from "diagram-js/lib/util/Types";
 import { countLines, labelPosition } from "../labeling/position";
-import { calculateTextWidth } from "../labeling/utils";
+import { approximateArialSize11TextWidthInPixel } from "../labeling/utils";
 import { angleBetween } from "../../utils/mathExtensions";
 import { getScaledPath, isCustomIcon, isCustomSvgIcon } from "../../utils/util";
 import { DomainStoryTextRenderer } from "../text-renderer/DomainStoryTextRenderer";
@@ -513,9 +513,11 @@ export class DomainStoryRenderer extends BaseRenderer {
         if (angle === 0 || angle === 180) {
             boxWidth = Math.abs(startPoint.x - endPoint.x);
             alignment = "center";
+            const textWidthInPixel = approximateArialSize11TextWidthInPixel(
+                semantic.name,
+            );
             xStart =
-                (startPoint.x + endPoint.x) / 2 -
-                calculateTextWidth(semantic.name);
+                (startPoint.x + endPoint.x) / 2 - (textWidthInPixel / 2 + 20);
         }
 
         const box = {
