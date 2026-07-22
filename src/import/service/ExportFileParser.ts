@@ -14,6 +14,10 @@ import { FileConfiguration } from "../../icon-set-config/service/IconSetImportEx
  *   pass-through of these strings is the live crash this port fixes.
  * - bare legacy array: the top-level JSON is the element array itself.
  *
+ * Anything else is rejected with an Error. The importer clears the canvas only
+ * after parsing succeeds, so failing here keeps the user's current diagram
+ * intact when a host passes a file that is not a domain story at all.
+ *
  * Kept in the import layer (not the framework-free domain) because it is pure
  * parsing/adapter logic, and pure functions so the branch matrix is unit
  * testable without a canvas.
@@ -60,6 +64,9 @@ export function extractIconSetConfiguration(
  * preferring the v4 `domainStory` object over the legacy `dst` array. Title
  * defaults to "" (upstream derives it from the filename, which we do not have
  * at this layer).
+ *
+ * @throws Error when the payload matches none of the known shapes — a silent
+ * empty story would let the importer wipe the current diagram on a wrong file.
  */
 export function extractDomainStory(parsed: any): DomainStory {
     const domainStory: DomainStory = {
@@ -69,8 +76,12 @@ export function extractDomainStory(parsed: any): DomainStory {
         title: "",
     };
 
-    // Neither key present → the top-level JSON is a bare element array.
+    // Neither key present → the only remaining known shape is the bare
+    // element array.
     if (!isPresent(parsed?.dst) && !isPresent(parsed?.domainStory)) {
+        if (!Array.isArray(parsed)) {
+            throw unrecognizedFormatError();
+        }
         return extractFromBareArray(parsed, domainStory);
     }
 
@@ -79,7 +90,7 @@ export function extractDomainStory(parsed: any): DomainStory {
         : parsed.dst;
 
     // v4 object: businessObjects + story metadata live side by side.
-    if (isPresent(content?.businessObjects)) {
+    if (Array.isArray(content?.businessObjects)) {
         domainStory.businessObjects = content.businessObjects;
         if (isPresent(content.version)) {
             domainStory.version = content.version;
@@ -94,14 +105,18 @@ export function extractDomainStory(parsed: any): DomainStory {
             domainStory.scope = content.scope;
         }
         return domainStory;
-    } else if (!Array.isArray(content)) {
+    }
+
+    if (typeof content === "string") {
         // v1.x stored `dst` as a JSON string — decode before iterating.
         content = JSON.parse(content);
     }
 
-    if (Array.isArray(content)) {
-        extractFromElementArray(content, domainStory);
+    if (!Array.isArray(content)) {
+        throw unrecognizedFormatError();
     }
+
+    extractFromElementArray(content, domainStory);
     return domainStory;
 }
 
@@ -133,21 +148,25 @@ function extractFromElementArray(
  * in as sibling entries rather than trailer objects.
  */
 function extractFromBareArray(
-    parsed: any,
+    parsed: any[],
     domainStory: DomainStory,
 ): DomainStory {
-    if (Array.isArray(parsed)) {
-        parsed.forEach((entry: any) => {
-            if (entry?.type) {
-                domainStory.businessObjects.push(entry);
-            } else if (entry?.version) {
-                domainStory.version = entry.version;
-            } else if (entry?.info) {
-                domainStory.description = entry.info;
-            }
-        });
-    }
+    parsed.forEach((entry: any) => {
+        if (entry?.type) {
+            domainStory.businessObjects.push(entry);
+        } else if (entry?.version) {
+            domainStory.version = entry.version;
+        } else if (entry?.info) {
+            domainStory.description = entry.info;
+        }
+    });
     return domainStory;
+}
+
+function unrecognizedFormatError(): Error {
+    return new Error(
+        "Unrecognized domain story file: expected an EGN v4 { iconSet, domainStory } object, a legacy { domain, dst } object, or a bare element array",
+    );
 }
 
 function hasOwn(value: any, key: string): boolean {

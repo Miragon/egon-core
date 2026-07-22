@@ -38,6 +38,10 @@ export class DiagramJsIconAdapter implements IconPort {
     loadIcons(icons: Partial<IconSetData>): void {
         const iconSetConfig =
             this.iconSetImportExportService.createIconSetConfiguration({
+                // fall back to the currently loaded name so reloading icons
+                // after an import does not strip the icon-set name from the
+                // next export
+                name: icons.name ?? this.iconDictionaryService.getIconSetName(),
                 actors: icons.actors ?? {},
                 workObjects: icons.workObjects ?? {},
             });

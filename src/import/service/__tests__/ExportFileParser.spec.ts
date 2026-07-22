@@ -166,13 +166,41 @@ describe("extractDomainStory", () => {
         expect(story.description).toBe("old");
     });
 
-    it("defaults an empty/unknown file to a well-formed empty story", () => {
-        const story = extractDomainStory({});
+    it("yields a well-formed empty story for legitimately empty files", () => {
+        const emptyShapes = [
+            { dst: [] },
+            { domainStory: { businessObjects: [] } },
+            [],
+        ];
 
-        expect(story.businessObjects).toEqual([]);
-        expect(story.version).toBe("?");
-        expect(story.title).toBe("");
-        expect(story.description).toBe("");
+        for (const parsed of emptyShapes) {
+            const story = extractDomainStory(parsed);
+
+            expect(story.businessObjects).toEqual([]);
+            expect(story.version).toBe("?");
+            expect(story.title).toBe("");
+            expect(story.description).toBe("");
+        }
+    });
+
+    it("rejects payloads matching no known shape instead of yielding an empty story", () => {
+        // a silent empty story would let the importer clear the canvas after
+        // a host passes a wrong file
+        const unrecognizedPayloads = [
+            {},
+            { foo: 1 },
+            "not a story",
+            42,
+            null,
+            { domainStory: { title: "businessObjects missing" } },
+            { dst: '{"not":"an array"}' },
+        ];
+
+        for (const parsed of unrecognizedPayloads) {
+            expect(() => extractDomainStory(parsed)).toThrow(
+                /Unrecognized domain story file/,
+            );
+        }
     });
 });
 
