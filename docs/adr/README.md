@@ -13,3 +13,5 @@ and the rules (when to write one, how superseding works).
 | [0005](0005-module-layout-and-architecture-tests.md)   | Module layout, DDD layering, executable arch tests | accepted |
 | [0006](0006-prettier-code-formatting.md)               | Format code with Prettier (existing-style config)  | accepted |
 | [0007](0007-adopt-egn-v4-file-format.md)               | Adopt EGN v4.0.0 as the canonical file format      | accepted |
+| [0008](0008-verbatim-icon-names-css-only-sanitization.md) | Verbatim icon names; sanitize only for CSS      | accepted |
+| [0009](0009-icon-set-import-replaces-selection.md)     | Icon-set import replaces the selection             | accepted |
