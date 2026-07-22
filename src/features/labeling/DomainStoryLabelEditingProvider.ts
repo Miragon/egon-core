@@ -15,7 +15,7 @@ import { DomainStoryUpdateLabelHandler } from "./handler/DomainStoryUpdateLabelH
 import { isBackground } from "../rules/DomainStoryRules";
 import { is } from "../../utils/util";
 import { sanitizeTextForSVGExport } from "../../utils/sanitizer";
-import { autocomplete, getLabel } from "./utils";
+import { createAutocompleteForEdit, getLabel } from "./utils";
 
 let numberStash = 0;
 let stashUse = false;
@@ -291,8 +291,8 @@ export class DomainStoryLabelEditingProvider {
             "djs-direct-editing-content",
         );
         focusElement(editingBox.item(0) as HTMLDivElement);
-        autocomplete(
-            editingBox[0] as HTMLInputElement,
+        createAutocompleteForEdit(
+            editingBox[0] as HTMLElement,
             this.labelDictionaryService.getUniqueWorkObjectNames(),
             element,
             this.eventBus,
