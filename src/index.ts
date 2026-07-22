@@ -38,24 +38,9 @@ export type {
     IconMap,
 } from "./iconSet/domain/IconTypes";
 
-// =============================================================================
-// Plugin module (for advanced usage / custom integrations)
-// =============================================================================
-export { default as EgonPlugin } from "./modeler/infrastructure/plugin";
-
-// =============================================================================
-// Internal services (deprecated - use EgonClient instead)
-// These exports are kept for backward compatibility but should be removed
-// in future versions.
-// =============================================================================
-
-/** @deprecated Use EgonClient.import() instead */
-export { DomainStoryImportService } from "./story/service/DomainStoryImportService";
-/** @deprecated Use EgonClient.export() instead */
-export { DomainStoryExportService } from "./story/service/DomainStoryExportService";
-
-// Existing original internal services (kept for backward compatibility)
-export { ElementRegistryService } from "./modeler/service/ElementRegistryService";
-export { DirtyFlagService } from "./modeler/service/DirtyFlagService";
-export { IconDictionaryService } from "./iconSet/service/IconDictionaryService";
-export { LabelDictionaryService } from "./labelDictionary/service/LabelDictionaryService";
+// The public API is deliberately frozen to EgonClient plus the types above
+// (locked by architecture.spec.ts, rule G / ADR 0010). EgonPlugin and the
+// former internal service exports are gone: EgonClient.create(config,
+// additionalModules) is the advanced-integration escape hatch, and re-adding a
+// named export later is non-breaking. Deep imports here are intentional so this
+// barrel never pulls a feature's didi default module into the package entry.
