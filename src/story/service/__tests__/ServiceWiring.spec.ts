@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { Injector } from "didi";
 import DomainServiceModule from "../../../domain/service";
 import IconSetModule from "../../../iconSet/service";
-import ImportModule from "../index";
-import ExportModule from "../../../export/service";
+import ImportModule from "../importModule";
+import ExportModule from "../exportModule";
 import { DomainStoryImportService } from "../DomainStoryImportService";
-import { DomainStoryExportService } from "../../../export/service/DomainStoryExportService";
+import { DomainStoryExportService } from "../DomainStoryExportService";
 
 /**
  * Guards the DI wiring that ties import and export together: both now inject the

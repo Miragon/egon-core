@@ -2,9 +2,9 @@ import type { IconDictionaryService } from "./IconDictionaryService";
 import {
     IconSet,
     IconSetExportConfiguration,
-} from "../../domain/entities/iconSet";
-import { Dictionary } from "../../domain/entities/dictionary";
-import { ElementTypes } from "../../domain/entities/elementTypes";
+} from "../../story/domain/iconSet";
+import { Dictionary } from "../../story/domain/dictionary";
+import { ElementTypes } from "../../story/domain/elementTypes";
 
 export type { IconSetExportConfiguration };
 

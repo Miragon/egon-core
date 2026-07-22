@@ -1,6 +1,6 @@
-import { Dictionary } from "../../domain/entities/dictionary";
-import { IconSet } from "../../domain/entities/iconSet";
-import { ElementTypes } from "../../domain/entities/elementTypes";
+import { Dictionary } from "../../story/domain/dictionary";
+import { IconSet } from "../../story/domain/iconSet";
+import { ElementTypes } from "../../story/domain/elementTypes";
 import { sanitizeForCss } from "../../shared/domain/sanitizer";
 import { IconStyleSheetPort } from "../domain/ports/IconStyleSheetPort";
 

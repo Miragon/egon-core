@@ -2,7 +2,7 @@ import {
     IconSet,
     IconSetData,
     IconCategory,
-} from "../../domain/model/IconTypes";
+} from "../../../iconSet/domain/IconTypes";
 
 /**
  * Port interface for icon management operations.

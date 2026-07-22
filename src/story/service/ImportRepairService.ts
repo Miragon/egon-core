@@ -1,6 +1,6 @@
-import { BusinessObject } from "../../domain/entities/businessObject";
-import { ActivityBusinessObject } from "../../domain/entities/activityBusinessObject";
-import { ElementTypes } from "../../domain/entities/elementTypes";
+import { BusinessObject } from "../domain/businessObject";
+import { ActivityBusinessObject } from "../domain/activityBusinessObject";
+import { ElementTypes } from "../domain/elementTypes";
 
 export class ImportRepairService {
     checkForUnreferencedElementsInActivitiesAndRepair(

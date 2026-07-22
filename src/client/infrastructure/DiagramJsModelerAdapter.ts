@@ -5,8 +5,8 @@ import type EventBus from "diagram-js/lib/core/EventBus";
 import type ElementFactory from "diagram-js/lib/core/ElementFactory";
 
 import EgonPlugin from "../../plugin";
-import { DomainStoryImportService } from "../../import/service/DomainStoryImportService";
-import { DomainStoryExportService } from "../../export/service/DomainStoryExportService";
+import { DomainStoryImportService } from "../../story/service/DomainStoryImportService";
+import { DomainStoryExportService } from "../../story/service/DomainStoryExportService";
 
 import { ModelerPort } from "../application/ports";
 import { DomainStoryDocument, ViewportData } from "../domain";

@@ -1,5 +1,5 @@
-import { DomainStory } from "../../domain/entities/domainStory";
-import { BusinessObject } from "../../domain/entities/businessObject";
+import { DomainStory } from "../domain/domainStory";
+import { BusinessObject } from "../domain/businessObject";
 import { FileConfiguration } from "../../iconSet/service/IconSetImportExportService";
 
 /**

@@ -1,4 +1,4 @@
-import { CanvasObject } from "../entities/canvasObject";
+import { CanvasObject } from "../../story/domain/canvasObject";
 
 /**
  * Read access to the elements currently present on the canvas, seen through

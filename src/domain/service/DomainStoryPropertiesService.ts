@@ -1,4 +1,4 @@
-import { Scope } from "../entities/scope";
+import { Scope } from "../../story/domain/scope";
 
 /**
  * Session-scoped holder for the story-level metadata that the diagram-js

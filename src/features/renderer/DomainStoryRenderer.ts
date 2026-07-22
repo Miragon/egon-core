@@ -18,7 +18,7 @@ import {
     Box,
     numberBoxDefinitions,
 } from "../../shared/infrastructure/numbering";
-import { ElementTypes, getIconId } from "../../domain/entities/elementTypes";
+import { ElementTypes, getIconId } from "../../story/domain/elementTypes";
 import { Point } from "diagram-js/lib/util/Types";
 import { countLines, labelPosition } from "../labeling/position";
 import { approximateArialSize11TextWidthInPixel } from "../labeling/utils";

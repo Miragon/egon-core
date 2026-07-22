@@ -12,9 +12,9 @@ import {
     IconCategory,
     IconSet,
     IconSetData,
-} from "../../domain/model/IconTypes";
+} from "../../../iconSet/domain/IconTypes";
 import type Diagram from "diagram-js";
-import { ElementTypes } from "../../../domain/entities/elementTypes";
+import { ElementTypes } from "../../../story/domain/elementTypes";
 
 /**
  * Creates mock diagram-js services for testing DiagramJsIconAdapter.
