@@ -1,6 +1,6 @@
 import { Element } from "diagram-js/lib/model/Types";
 
-import { ElementTypes } from "../../domain/entities/elementTypes";
+import { ElementTypes } from "../../story/domain/elementTypes";
 import { is } from "../../shared/infrastructure/util";
 import EventBus from "diagram-js/lib/core/EventBus";
 

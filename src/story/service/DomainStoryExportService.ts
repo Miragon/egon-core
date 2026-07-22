@@ -1,7 +1,7 @@
 import { ElementRegistryService } from "../../domain/service/ElementRegistryService";
 import { DomainStoryPropertiesService } from "../../domain/service/DomainStoryPropertiesService";
-import { BusinessObject } from "../../domain/entities/businessObject";
-import { IconSetExportConfiguration } from "../../domain/entities/iconSet";
+import { BusinessObject } from "../domain/businessObject";
+import { IconSetExportConfiguration } from "../domain/iconSet";
 import { IconSetImportExportService } from "../../iconSet/service/IconSetImportExportService";
 import { EgnExportFile } from "../domain/egnExportFile";
 

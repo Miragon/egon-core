@@ -19,8 +19,8 @@ import DomainStoryUpdateHandler from "./features/update-handler";
 import DomainStoryCopyPaste from "./features/copy-paste";
 import DomainStoryKeyboardBindings from "./features/keyboard";
 import DomainStoryPopupService from "./features/popup";
-import DomainStoryExportService from "./export/service";
-import DomainStoryImportService from "./import/service";
+import DomainStoryExportService from "./story/service/exportModule";
+import DomainStoryImportService from "./story/service/importModule";
 
 const buildInModules = [
     EditorActionsModule,

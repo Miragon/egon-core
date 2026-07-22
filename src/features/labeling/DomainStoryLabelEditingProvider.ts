@@ -10,7 +10,7 @@ import CommandStack from "diagram-js/lib/command/CommandStack";
 import { DomainStoryModeling } from "../modeling/DomainStoryModeling";
 import { DomainStoryTextRenderer } from "../text-renderer/DomainStoryTextRenderer";
 import { LabelDictionaryService } from "../../labelDictionary/service/LabelDictionaryService";
-import { ElementTypes } from "../../domain/entities/elementTypes";
+import { ElementTypes } from "../../story/domain/elementTypes";
 import { DomainStoryUpdateLabelHandler } from "./handler/DomainStoryUpdateLabelHandler";
 import { isBackground } from "../rules/DomainStoryRules";
 import { is } from "../../shared/infrastructure/util";

@@ -1,5 +1,5 @@
-import type { Scope } from "../../../domain/entities/scope";
-import type { IconSetExportConfiguration } from "../../../domain/entities/iconSet";
+import type { Scope } from "./scope";
+import type { IconSetExportConfiguration } from "./iconSet";
 
 /**
  * A complete domain story document in the EGN v4.0.0 shape.

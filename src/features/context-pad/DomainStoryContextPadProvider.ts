@@ -26,7 +26,7 @@ import {
     isHexWithAlpha,
     rgbaToHex,
 } from "../../shared/domain/colorConverter";
-import { ElementTypes } from "../../domain/entities/elementTypes";
+import { ElementTypes } from "../../story/domain/elementTypes";
 import { DomainStoryNumberingRegistry } from "../popup/DomainStoryNumberingRegistry";
 
 /**

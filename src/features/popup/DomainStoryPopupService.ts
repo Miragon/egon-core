@@ -1,9 +1,9 @@
 import EventBus from "diagram-js/lib/core/EventBus";
-import { ElementTypes } from "../../domain/entities/elementTypes";
+import { ElementTypes } from "../../story/domain/elementTypes";
 import { html, render } from "diagram-js/lib/ui";
 import PopupMenu from "../../shared/infrastructure/ui/PopupMenu";
 import { DomainStoryNumberingRegistry } from "./DomainStoryNumberingRegistry";
-import { ActivityCanvasObject } from "../../domain/entities/canvasObject";
+import { ActivityCanvasObject } from "../../story/domain/canvasObject";
 import CommandStack from "diagram-js/lib/command/CommandStack";
 import { ElementRegistryService } from "../../domain/service/ElementRegistryService";
 import Canvas from "diagram-js/lib/core/Canvas";

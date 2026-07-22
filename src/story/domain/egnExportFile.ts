@@ -1,5 +1,5 @@
-import { DomainStory } from "../../domain/entities/domainStory";
-import { IconSetExportConfiguration } from "../../domain/entities/iconSet";
+import { DomainStory } from "./domainStory";
+import { IconSetExportConfiguration } from "./iconSet";
 
 /**
  * The EGN v4.0.0 on-disk envelope: an icon set paired with a story. Replaces

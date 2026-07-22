@@ -1,8 +1,11 @@
 import { ElementRegistryPort } from "../ports/ElementRegistryPort";
-import { ActivityCanvasObject, CanvasObject } from "../entities/canvasObject";
-import { ElementTypes } from "../entities/elementTypes";
-import { GroupCanvasObject } from "../entities/groupCanvasObject";
-import { UsedIconList } from "../entities/UsedIconList";
+import {
+    ActivityCanvasObject,
+    CanvasObject,
+} from "../../story/domain/canvasObject";
+import { ElementTypes } from "../../story/domain/elementTypes";
+import { GroupCanvasObject } from "../../story/domain/groupCanvasObject";
+import { UsedIconList } from "../../story/domain/UsedIconList";
 
 export class ElementRegistryService {
     static $inject: string[] = ["elementRegistry"];

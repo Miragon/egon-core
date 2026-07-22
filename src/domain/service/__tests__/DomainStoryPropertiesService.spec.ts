@@ -4,7 +4,7 @@ import {
     DomainPurity,
     Granularity_Grain,
     PointInTime,
-} from "../../entities/scope";
+} from "../../../story/domain/scope";
 
 describe("DomainStoryPropertiesService", () => {
     it("defaults to empty metadata before any import", () => {

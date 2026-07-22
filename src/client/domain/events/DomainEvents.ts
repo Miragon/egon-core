@@ -1,5 +1,5 @@
 import { Viewport } from "../model/Viewport";
-import { IconSet } from "../model/IconTypes";
+import { IconSet } from "../../../iconSet/domain/IconTypes";
 
 /**
  * Domain events emitted by the modeler.

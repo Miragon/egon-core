@@ -1,4 +1,4 @@
-import { DomainStoryDocument } from "../../domain/model/DomainStoryDocument";
+import { DomainStoryDocument } from "../../../story/domain/DomainStoryDocument";
 import { ViewportData } from "../../domain/model/Viewport";
 
 /**

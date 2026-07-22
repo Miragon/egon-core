@@ -20,23 +20,23 @@ export type {
     DomainStoryDocument,
     DomainStoryContent,
     DomainStoryElement,
-} from "./client/domain/model/DomainStoryDocument";
+} from "./story/domain/DomainStoryDocument";
 // v4.0.0 wire-format types, re-exported so consumers can build/read documents.
-export type { IconSetExportConfiguration } from "./domain/entities/iconSet";
-export type { Scope } from "./domain/entities/scope";
+export type { IconSetExportConfiguration } from "./story/domain/iconSet";
+export type { Scope } from "./story/domain/scope";
 export {
     PointInTime,
     DomainPurity,
     Granularity_Grain,
     Granularity_Goal,
-} from "./domain/entities/scope";
+} from "./story/domain/scope";
 export type { ViewportData } from "./client/domain/model/Viewport";
 export type {
     IconSet,
     IconSetData,
     IconCategory,
     IconMap,
-} from "./client/domain/model/IconTypes";
+} from "./iconSet/domain/IconTypes";
 
 // =============================================================================
 // Plugin module (for advanced usage / custom integrations)
@@ -50,9 +50,9 @@ export { default as EgonPlugin } from "./plugin";
 // =============================================================================
 
 /** @deprecated Use EgonClient.import() instead */
-export { DomainStoryImportService } from "./import/service/DomainStoryImportService";
+export { DomainStoryImportService } from "./story/service/DomainStoryImportService";
 /** @deprecated Use EgonClient.export() instead */
-export { DomainStoryExportService } from "./export/service/DomainStoryExportService";
+export { DomainStoryExportService } from "./story/service/DomainStoryExportService";
 
 // Existing original internal services (kept for backward compatibility)
 export { ElementRegistryService } from "./domain/service/ElementRegistryService";

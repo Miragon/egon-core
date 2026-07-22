@@ -6,7 +6,7 @@ import {
     approximateArialSize11TextWidthInPixel,
     createAutocompleteForEdit,
 } from "../utils";
-import { ElementTypes } from "../../../domain/entities/elementTypes";
+import { ElementTypes } from "../../../story/domain/elementTypes";
 
 /**
  * Regression tests for the upstream autocomplete port (issue #5). The port

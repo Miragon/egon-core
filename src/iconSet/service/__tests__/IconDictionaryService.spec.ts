@@ -3,7 +3,7 @@ import {
     ICON_CSS_CLASS_PREFIX,
     IconDictionaryService,
 } from "../IconDictionaryService";
-import { Dictionary } from "../../../domain/entities/dictionary";
+import { Dictionary } from "../../../story/domain/dictionary";
 import { IconStyleSheetPort } from "../../domain/ports/IconStyleSheetPort";
 
 /**

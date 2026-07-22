@@ -1,6 +1,6 @@
 import { Shape } from "diagram-js/lib/model/Types";
 import { forEach } from "min-dash";
-import { ElementTypes } from "../../domain/entities/elementTypes";
+import { ElementTypes } from "../../story/domain/elementTypes";
 import { DomainStoryReplace } from "./DomainStoryReplace";
 import {
     DomainStoryReplaceOption,

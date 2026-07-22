@@ -3,7 +3,7 @@ import CommandHandler from "diagram-js/lib/command/CommandHandler";
 import { Element, ElementLike } from "diagram-js/lib/model/Types";
 import { DomainStoryTextRenderer } from "../../text-renderer/DomainStoryTextRenderer";
 import { DomainStoryModeling } from "../../modeling/DomainStoryModeling";
-import { ElementTypes } from "../../../domain/entities/elementTypes";
+import { ElementTypes } from "../../../story/domain/elementTypes";
 import { getLabel, getNumber, setLabel, setNumber } from "../utils";
 import { getBusinessObject, is } from "../../../shared/infrastructure/util";
 
