@@ -58,7 +58,9 @@ function expectPristine(injector: Injector): void {
             .has("onlyInA"),
     ).toBe(false);
     expect(
-        injector.get<DomainStoryIdFactory>("domainStoryIdFactory").getId("actor"),
+        injector
+            .get<DomainStoryIdFactory>("domainStoryIdFactory")
+            .getId("actor"),
     ).toBe("actor_0001");
 }
 
