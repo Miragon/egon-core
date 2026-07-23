@@ -6,8 +6,6 @@ import { IconStyleSheetPort } from "../domain/ports/IconStyleSheetPort";
 
 export const ICON_CSS_CLASS_PREFIX = "icon-domain-story-";
 
-const customIcons = new Dictionary();
-
 /**
  * The dictionaries hold icons (as SVG) and icon names as key-value pairs:
  */
@@ -17,6 +15,11 @@ export class IconDictionaryService {
     // these dictionaries make up the current icon set:
     private selectedActorsDictionary = new Dictionary();
     private selectedWorkObjectsDictionary = new Dictionary();
+
+    // The pool of all known custom icons. Instance-owned (not module scope) so
+    // two EgonClient instances on one page don't share one icon pool — a shared
+    // pool cross-contaminated their icon sets (issue #12).
+    private readonly customIcons = new Dictionary();
 
     // the imported icon set's name, kept here (next to the dictionaries it
     // belongs to) so export can round-trip it — the element registry holds no
@@ -79,17 +82,17 @@ export class IconDictionaryService {
     }
 
     addIMGToIconDictionary(input: string, name: string): void {
-        customIcons.set(name, input);
+        this.customIcons.set(name, input);
     }
 
-    addIconsToCss(customIcons: Dictionary) {
+    addIconsToCss(icons: Dictionary) {
         // The service owns *which* class an icon maps to (getCSSClassOfIcon —
         // the issue-#4 regression pins class == published rule); the injected
         // port owns *how* that class becomes a live stylesheet rule.
-        customIcons.keysArray().forEach((key) => {
+        icons.keysArray().forEach((key) => {
             this.iconStyleSheet.addIconStyle(
                 this.getCSSClassOfIcon(key),
-                customIcons.get(key),
+                icons.get(key),
             );
         });
     }
@@ -98,7 +101,7 @@ export class IconDictionaryService {
 
     getFullDictionary(): Dictionary {
         const fullDictionary = new Dictionary();
-        fullDictionary.appendDict(customIcons);
+        fullDictionary.appendDict(this.customIcons);
         return fullDictionary;
     }
 
@@ -127,8 +130,8 @@ export class IconDictionaryService {
     }
 
     getIconSource(name: string): string {
-        if (customIcons.has(name)) {
-            return customIcons.get(name);
+        if (this.customIcons.has(name)) {
+            return this.customIcons.get(name);
         }
         throw new Error(
             `[IconDictionaryService] Unsupported value name: ${name}`,
@@ -155,13 +158,13 @@ export class IconDictionaryService {
 
     private extractCustomIconsFromDictionary(
         elementDictionary: Dictionary,
-        customIcons: Dictionary,
+        collector: Dictionary,
     ) {
         // Keys are stored verbatim: sanitizing here permanently mutated names
         // (e.g. "my.icon.v2" → "my.icon"), losing the original on round-trip.
         elementDictionary.keysArray().forEach((name) => {
             if (!this.getFullDictionary().has(name)) {
-                customIcons.add(elementDictionary.get(name), name);
+                collector.add(elementDictionary.get(name), name);
             }
         });
     }
