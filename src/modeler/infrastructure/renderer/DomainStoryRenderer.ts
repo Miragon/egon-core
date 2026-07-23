@@ -24,7 +24,7 @@ import { countLines, labelPosition } from "../labeling/position";
 import { approximateArialSize11TextWidthInPixel } from "../labeling/utils";
 import { angleBetween } from "../../../shared/domain/mathExtensions";
 import {
-    getScaledPath,
+    getAnnotationBracketSvg,
     isCustomIcon,
     isCustomSvgIcon,
 } from "../../../shared/infrastructure/util";
@@ -293,16 +293,7 @@ export class DomainStoryRenderer extends BaseRenderer {
             0,
             style,
         );
-        const textPathData = getScaledPath({
-            xScaleFactor: 1,
-            yScaleFactor: 1,
-            containerWidth: element.width,
-            containerHeight: element.height,
-            position: {
-                mx: 0.0,
-                my: 0.0,
-            },
-        });
+        const textPathData = getAnnotationBracketSvg(element.height);
 
         this.drawPath(parentGfx, textPathData, {
             stroke: element.businessObject.pickedColor ?? "black",
