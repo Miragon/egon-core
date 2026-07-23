@@ -7,6 +7,7 @@ import MoveModule from "diagram-js/lib/features/move";
 import BendpointsModule from "diagram-js/lib/features/bendpoints";
 import ConnectionPreviewModule from "diagram-js/lib/features/connection-preview";
 import SnappingModule from "diagram-js/lib/features/snapping";
+import AlignToOrigin from "@bpmn-io/align-to-origin";
 
 import DomainStoryElementFactory from "./element-factory";
 import DomainStoryRenderer from "./renderer";
@@ -31,6 +32,7 @@ const buildInModules = [
     BendpointsModule,
     ConnectionPreviewModule,
     SnappingModule,
+    AlignToOrigin,
 ];
 
 const domainStoryModules = [

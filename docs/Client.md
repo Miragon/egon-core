@@ -80,7 +80,21 @@ client.on("story.changed", () => {
 ```ts
 getViewport(): ViewportData
 setViewport(viewport: ViewportData): void
+alignToOrigin(): void
+fitToScreen(): void
 ```
+
+`alignToOrigin` shifts all diagram contents to positive coordinates (origin plus
+a small offset). Stories with elements at negative coordinates break exports in
+external tools, so call it before a host-side SVG/PNG export. `fitToScreen`
+aligns to origin and then scales the whole story to fit the visible canvas — the
+action to wire to a "fit to screen" UI button.
+
+> **Both may fire `story.changed`.** Aligning runs through the command stack (it
+> is undoable), which fires `story.changed`. Hosts that treat that event as a
+> dirty signal — for example the documented save pattern below — should align
+> _before_ a save/export, not react to it, or every export would re-dirty the
+> document.
 
 ## Icon management
 

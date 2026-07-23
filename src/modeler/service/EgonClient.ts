@@ -177,6 +177,23 @@ export class EgonClient {
         this.modelerPort.setViewport(viewport);
     }
 
+    /**
+     * Shift all diagram contents to positive coordinates so external tools can
+     * export the story. Undoable and may fire `story.changed`; dirty-flag hosts
+     * should call it before a save/export, not on every edit.
+     */
+    alignToOrigin(): void {
+        this.modelerPort.alignToOrigin();
+    }
+
+    /**
+     * Align to origin, then fit the whole story into the visible canvas — for a
+     * "fit to screen" UI action. May fire `story.changed` because it aligns.
+     */
+    fitToScreen(): void {
+        this.modelerPort.fitToScreen();
+    }
+
     // --- Icon Management ---
 
     /**
