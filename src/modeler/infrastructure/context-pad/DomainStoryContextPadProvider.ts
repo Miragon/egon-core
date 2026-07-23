@@ -72,7 +72,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         "eventBus",
     ];
 
-    private selectedElement: Element | undefined;
+    private selectedElement: Element | Element[] | undefined;
 
     constructor(
         private readonly elementFactory: DomainStoryElementFactory,
@@ -121,12 +121,64 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
     }
 
     getContextPadEntries(element: Element): ContextPadEntries {
-        this.selectedElement = element;
+        let entries: Map<string, ContextPadEntry> = new Map();
 
-        let pickedColor = this.selectedElement.businessObject.pickedColor;
+        if (element["type"].includes(ElementTypes.WORKOBJECT)) {
+            entries.set(...this.addDelete([element]));
+            entries.set(...this.addColorChange(element));
+            entries.set(...this.addConnectWithActivity());
+            entries.set(...this.addTextAnnotation());
+            entries = new Map([...entries, ...this.addActors()]);
+            entries = new Map([...entries, ...this.addWorkObjects()]);
+            entries.set(...this.addChangeWorkObjectTypeMenu());
+        } else if (element["type"].includes(ElementTypes.ACTOR)) {
+            entries.set(...this.addDelete([element]));
+            entries.set(...this.addColorChange(element));
+            entries.set(...this.addConnectWithActivity());
+            entries.set(...this.addTextAnnotation());
+            entries = new Map([...entries, ...this.addWorkObjects()]);
+            entries.set(...this.addChangeActorTypeMenu());
+        } else if (element["type"].includes(ElementTypes.GROUP)) {
+            entries.set(...this.addDeleteGroupWithoutChildren());
+            entries.set(...this.addTextAnnotation());
+            entries.set(...this.addColorChange(element));
+        } else if (element["type"].includes(ElementTypes.ACTIVITY)) {
+            entries.set(...this.addDelete([element]));
+            entries.set(...this.addChangeDirection());
+            entries.set(...this.addColorChange(element));
+        } else if (element["type"].includes(ElementTypes.TEXTANNOTATION)) {
+            entries.set(...this.addDelete([element]));
+            entries.set(...this.addColorChange(element));
+        } else if (element["type"].includes(ElementTypes.CONNECTION)) {
+            entries.set(...this.addDelete([element]));
+        }
+
+        this.notifyColorPickerOfCurrentElementColor();
+
+        return Object.fromEntries(entries);
+    }
+
+    getMultiElementContextPadEntries(elements: Element[]): ContextPadEntries {
+        const entries: Map<string, ContextPadEntry> = new Map();
+        entries.set(...this.addDelete(elements));
+        entries.set(...this.addColorChange(elements));
+        return Object.fromEntries(entries);
+    }
+
+    /**
+     * Pre-seeds the host's color picker with the current selection's color so
+     * it opens on the right swatch. Only a single selected element carries a
+     * meaningful color; a multi-select (array) or a stale/absent selection
+     * (e.g. CONNECTION branches never call addColorChange) falls back to black.
+     */
+    private notifyColorPickerOfCurrentElementColor() {
+        let pickedColor: string | undefined;
+        if (this.selectedElement && !isArray(this.selectedElement)) {
+            pickedColor = this.selectedElement.businessObject.pickedColor;
+        }
 
         if (isHexWithAlpha(pickedColor)) {
-            pickedColor = hexToRGBA(pickedColor);
+            pickedColor = hexToRGBA(pickedColor!);
         }
         document.dispatchEvent(
             new CustomEvent("defaultColor", {
@@ -135,69 +187,40 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
                 },
             }),
         );
+    }
 
-        let entries: Map<string, ContextPadEntry> = new Map();
+    private executeCommandStack(colorChangedEvent: any) {
+        const newColor = colorChangedEvent.detail.color;
 
-        if (element["type"].includes(ElementTypes.WORKOBJECT)) {
-            entries.set(...this.addDelete([element]));
-            // entries.set(...this.addColorChange());
-            entries.set(...this.addConnectWithActivity());
-            entries.set(...this.addTextAnnotation());
-            entries = new Map([...entries, ...this.addActors()]);
-            entries = new Map([...entries, ...this.addWorkObjects()]);
-            entries.set(...this.addChangeWorkObjectTypeMenu());
-        } else if (element["type"].includes(ElementTypes.ACTOR)) {
-            entries.set(...this.addDelete([element]));
-            // entries.set(...this.addColorChange());
-            entries.set(...this.addConnectWithActivity());
-            entries.set(...this.addTextAnnotation());
-            entries = new Map([...entries, ...this.addWorkObjects()]);
-            entries.set(...this.addChangeActorTypeMenu());
-        } else if (element["type"].includes(ElementTypes.GROUP)) {
-            entries.set(...this.addDeleteGroupWithoutChildren());
-            entries.set(...this.addTextAnnotation());
-            // entries.set(...this.addColorChange());
-        } else if (element["type"].includes(ElementTypes.ACTIVITY)) {
-            entries.set(...this.addDelete([element]));
-            entries.set(...this.addChangeDirection());
-            // entries.set(...this.addColorChange());
-        } else if (element["type"].includes(ElementTypes.TEXTANNOTATION)) {
-            entries.set(...this.addDelete([element]));
-            // entries.set(...this.addColorChange());
-        } else if (element["type"].includes(ElementTypes.CONNECTION)) {
-            entries.set(...this.addDelete([element]));
+        if (isArray(this.selectedElement)) {
+            // One execute per element keeps each recolor as its own undo step,
+            // matching upstream multi-select behavior.
+            this.selectedElement.forEach((element) => {
+                this.commandStack.execute(
+                    "element.colorChange",
+                    this.getColorChangeDescription(element, newColor),
+                );
+            });
+        } else if (this.selectedElement) {
+            this.commandStack.execute(
+                "element.colorChange",
+                this.getColorChangeDescription(this.selectedElement, newColor),
+            );
         }
 
-        return Object.fromEntries(entries);
-    }
-
-    getMultiElementContextPadEntries(elements: Element[]): ContextPadEntries {
-        const entries: Map<string, ContextPadEntry> = new Map();
-        entries.set(...this.addDelete(elements));
-        return Object.fromEntries(entries);
-    }
-
-    private executeCommandStack(event: any) {
-        const selectedBusinessObject = this.getSelectedBusinessObject(event);
-
-        this.commandStack.execute(
-            "element.colorChange",
-            selectedBusinessObject,
-        );
         this.dirtyFlagService.makeDirty();
     }
 
-    private getSelectedBusinessObject(event: any) {
-        const oldColor = this.selectedElement?.businessObject.pickedColor;
-        let newColor = event.detail.color;
+    private getColorChangeDescription(element: Element, newColor: string) {
+        const oldColor = element.businessObject.pickedColor;
         if (isHexWithAlpha(oldColor)) {
             newColor = rgbaToHex(newColor);
         }
 
         return {
-            businessObject: this.selectedElement?.businessObject,
+            businessObject: element.businessObject,
             newColor: newColor,
-            element: this.selectedElement,
+            element: element,
         };
     }
 
@@ -317,7 +340,12 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         ];
     }
 
-    private addColorChange(): [string, ContextPadEntry<any>] {
+    private addColorChange(
+        elements: Element | Element[],
+    ): [string, ContextPadEntry<any>] {
+        // Record which element(s) the picker acts on; the document-level
+        // "pickedColor" listener reads this back when the host reports a color.
+        this.selectedElement = elements;
         return [
             "colorChange",
             {

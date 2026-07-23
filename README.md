@@ -41,6 +41,24 @@ Both the runtime (`dist/index.js`) and its type declarations
 `dist/style.css`. See [docs/Client.md](docs/Client.md) for the full
 `EgonClient` API.
 
+## Host integration: color picker
+
+Recoloring an element is host-owned: the core dispatches and listens for
+document-level `CustomEvent`s, and the host supplies the actual color picker
+UI. Wire a picker to these events; a host without one still shows the pad's
+color button, but it does nothing.
+
+- **Core dispatches `openColorPicker`** when the pad's color button is clicked.
+  The host should open its picker in response.
+- **Core dispatches `defaultColor`** (`detail.color`) whenever a context pad
+  opens, carrying the current selection's color so the host can pre-select the
+  matching swatch.
+- **Core listens for `pickedColor`** (`detail.color`) and applies the color to
+  the selected element(s) — one undo step per element on a multi-select.
+- **Core dispatches `errorColoringOnlySvg`** when a color is applied to an
+  element whose custom icon is not SVG (raster icons cannot be recolored). The
+  host may surface this as a notification.
+
 ## Scripts
 
 | Script               | Description                                            |
