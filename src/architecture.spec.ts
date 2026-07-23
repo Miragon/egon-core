@@ -185,6 +185,25 @@ const FROZEN_INDEX_RUNTIME_EXPORTS: readonly string[] = [
     "PointInTime",
 ];
 
+/**
+ * Column-0 declarations that introduce mutable state at module scope (rule H).
+ * Class members are indented, so anchoring at `^` (no leading whitespace)
+ * restricts the scan to true module-level bindings. Non-empty literal config
+ * (`DEFAULT_COLOR`, `NULL_DIMENSIONS`, didi module descriptors, `export const`
+ * arrow functions) does not match, so those stay legal.
+ */
+const MODULE_STATE_PATTERNS: readonly RegExp[] = [
+    /^(?:export\s+)?(?:let|var)\s/, // reassignable binding
+    /^(?:export\s+)?const\s+[\w$]+(?:\s*:[^=]+)?\s*=\s*new\s/, // stateful instance
+    /^(?:export\s+)?const\s+[\w$]+(?:\s*:[^=]+)?\s*=\s*\[\s*\]/, // empty-array accumulator
+];
+
+/**
+ * Files permitted to hold module-level mutable state. Empty by design (rule H):
+ * adding an entry is a deliberate, reviewed exception — never an accident.
+ */
+const MODULE_STATE_ALLOWLIST: readonly string[] = [];
+
 describe("architecture", () => {
     let edges: Edge[] = [];
 
@@ -421,6 +440,39 @@ describe("architecture", () => {
                 "./style.css",
             ]);
             expect(packageJson.files).toEqual(["dist"]);
+        });
+    });
+
+    // ─── H. No module-level mutable state ────────────────────────────────────
+    //
+    // Multi-instance safety (issue #12, CLAUDE.md): mutable state must live on
+    // didi-instantiated classes so each EgonClient injector owns its own copy —
+    // module scope is for pure functions and frozen config only. A shared
+    // module-level binding cross-contaminates two clients on one page (e.g. one
+    // custom-icon pool for both). Upstream WPS free-function state must be
+    // converted into an injected service (see DomainStoryNumberStash). A raw
+    // line scan, because the mutation is invisible to archunit's import graph;
+    // only column-0 declarations count, since class members are indented.
+    describe("no module-level mutable state", () => {
+        it("declares no reassignable or stateful binding at module scope", () => {
+            const offenders = listSourceFiles()
+                .filter((file) => !MODULE_STATE_ALLOWLIST.includes(file))
+                .flatMap((file) =>
+                    readSource(file)
+                        .split("\n")
+                        .flatMap((line, index) =>
+                            MODULE_STATE_PATTERNS.some((pattern) =>
+                                pattern.test(line),
+                            )
+                                ? [`${file}:${index + 1} → ${line.trim()}`]
+                                : [],
+                        ),
+                );
+            expect(
+                offenders,
+                `module scope must hold only pure functions and frozen ` +
+                    `config — move mutable state onto a didi-instantiated class`,
+            ).toEqual([]);
         });
     });
 });

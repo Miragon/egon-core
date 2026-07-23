@@ -15,9 +15,9 @@ const noopStyleSheet: IconStyleSheetPort = { addIconStyle() {} };
  * Regression cover for issue #4 on the import/export side: dot-containing icon
  * names must survive createIconSetConfiguration → loadConfiguration → export
  * verbatim (they were previously truncated to "my.icon" and silently dropped
- * on import). Also pins the new replace-on-import semantics. Names are kept
- * distinct per test because IconDictionaryService's `customIcons` is a
- * module-level global shared across the tests in this file.
+ * on import). Also pins the new replace-on-import semantics. The per-test
+ * `beforeEach` builds a fresh IconDictionaryService, so its now instance-owned
+ * `customIcons` pool starts empty for every case (issue #12).
  */
 function iconSet(
     actors: Record<string, string>,

@@ -55,4 +55,26 @@ describe("IconDictionaryService CSS class generation", () => {
             expect(port.calls[0][0]).toBe("icon-domain-story-my_icon_v2");
         });
     });
+
+    /**
+     * Issue #12: the custom-icon pool is instance-owned, so two services on one
+     * page keep separate pools. An icon added to A must be invisible to B — this
+     * fails against the pre-#12 module-level `customIcons` global.
+     */
+    describe("custom-icon isolation between instances", () => {
+        it("keeps an icon added to one service out of another", () => {
+            const serviceA = new IconDictionaryService(
+                new RecordingStyleSheetPort(),
+            );
+            const serviceB = new IconDictionaryService(
+                new RecordingStyleSheetPort(),
+            );
+
+            serviceA.addIMGToIconDictionary("<svg/>", "onlyInA");
+
+            expect(serviceA.getFullDictionary().has("onlyInA")).toBe(true);
+            expect(serviceB.getFullDictionary().has("onlyInA")).toBe(false);
+            expect(() => serviceB.getIconSource("onlyInA")).toThrow();
+        });
+    });
 });

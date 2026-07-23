@@ -1,10 +1,20 @@
+/**
+ * Generates collision-free element ids for one diagram.
+ *
+ * The list of already-used ids lives on the instance (not at module scope) so
+ * that two EgonClient instances sharing the JS module realm keep separate id
+ * pools — a shared pool would let one diagram's ids suppress another's and
+ * cross-contaminate generation (issue #12). Each didi injector owns one factory.
+ */
 export class DomainStoryIdFactory {
+    private readonly idList: string[] = [];
+
     getId(type: string) {
         return this.generateId(type);
     }
 
     registerId(id: string) {
-        idList.push(id);
+        this.idList.push(id);
     }
 
     private generateId(type: string) {
@@ -12,14 +22,18 @@ export class DomainStoryIdFactory {
 
         let id = `${type}_${this.idSuffix(idNumber)}`;
 
-        while (containsId(id)) {
+        while (this.containsId(id)) {
             idNumber += 1;
             id = `${type}_${this.idSuffix(idNumber)}`;
         }
 
-        idList.push(id);
+        this.idList.push(id);
 
         return id;
+    }
+
+    private containsId(id: string) {
+        return this.idList.includes(id);
     }
 
     private fourDigitsId() {
@@ -42,15 +56,3 @@ export class DomainStoryIdFactory {
         return id;
     }
 }
-
-export function containsId(id: string) {
-    let same = false;
-    idList.forEach((element) => {
-        if (id === element) {
-            same = true;
-        }
-    });
-    return same;
-}
-
-const idList: string[] = [];

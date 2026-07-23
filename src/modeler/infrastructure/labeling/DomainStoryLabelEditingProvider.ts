@@ -15,19 +15,7 @@ import { DomainStoryUpdateLabelHandler } from "./handler/DomainStoryUpdateLabelH
 import { isBackground } from "../rules/DomainStoryRules";
 import { is } from "../../../shared/infrastructure/util";
 import { createAutocompleteForEdit, getLabel } from "./utils";
-
-let numberStash = 0;
-let stashUse = false;
-
-export function getNumberStash() {
-    const number = { use: stashUse, number: numberStash };
-    stashUse = false;
-    return number;
-}
-
-export function toggleStashUse(use: boolean) {
-    stashUse = use;
-}
+import { DomainStoryNumberStash } from "../number-stash/DomainStoryNumberStash";
 
 export function focusElement(element: HTMLDivElement) {
     // Opening an Angular Dialog seems to mess with the focus logic somehow.
@@ -46,6 +34,7 @@ export class DomainStoryLabelEditingProvider {
         "directEditing",
         "resizeHandles",
         "commandStack",
+        "domainStoryNumberStash",
     ];
 
     constructor(
@@ -57,6 +46,7 @@ export class DomainStoryLabelEditingProvider {
         private readonly directEditing: DirectEditing,
         resizeHandles: ResizeHandles,
         commandStack: CommandStack,
+        private readonly numberStash: DomainStoryNumberStash,
     ) {
         commandStack.registerHandler(
             "element.updateLabel",
@@ -70,8 +60,9 @@ export class DomainStoryLabelEditingProvider {
             this.activateDirectEdit(event.element);
             if (is(event.element, ElementTypes.ACTIVITY)) {
                 // if we edit an activity, we do not want the standard editing box
-                numberStash = event.element.businessObject.number;
-                stashUse = false;
+                this.numberStash.stashNumber(
+                    event.element.businessObject.number,
+                );
                 this.directEditing.complete();
             }
         });

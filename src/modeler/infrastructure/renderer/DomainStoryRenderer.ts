@@ -13,7 +13,7 @@ import {
 } from "tiny-svg";
 import { query as domQuery } from "min-dom";
 import { assign, isObject } from "min-dash";
-import { getNumberStash } from "../labeling/DomainStoryLabelEditingProvider";
+import { DomainStoryNumberStash } from "../number-stash/DomainStoryNumberStash";
 import {
     Box,
     numberBoxDefinitions,
@@ -34,8 +34,6 @@ import { ElementRegistryService } from "../../service/ElementRegistryService";
 import { DirtyFlagService } from "../../service/DirtyFlagService";
 import { IconDictionaryService } from "../../../iconSet/service";
 
-const RENDERER_IDS = new Ids();
-const numbers = [];
 const DEFAULT_COLOR = "#000000";
 
 export class DomainStoryRenderer extends BaseRenderer {
@@ -48,9 +46,13 @@ export class DomainStoryRenderer extends BaseRenderer {
         "domainStoryElementRegistryService",
         "domainStoryDirtyFlagService",
         "domainStoryIconDictionaryService",
+        "domainStoryNumberStash",
     ];
 
-    private rendererId = RENDERER_IDS.next();
+    // Per-instance so SVG marker ids never collide between two renderers on one
+    // page. The `ids` package draws random ids, so per-instance stays unique
+    // across diagrams too (issue #12; was a module-level `new Ids()`).
+    private rendererId = new Ids().next();
 
     private markers: Record<string, SVGMarkerElement> = {};
 
@@ -63,6 +65,7 @@ export class DomainStoryRenderer extends BaseRenderer {
         private readonly elementRegistryService: ElementRegistryService,
         private readonly dirtyFlagService: DirtyFlagService,
         private readonly iconDictionaryService: IconDictionaryService,
+        private readonly numberStash: DomainStoryNumberStash,
     ) {
         super(eventBus, 2000);
 
@@ -683,14 +686,13 @@ export class DomainStoryRenderer extends BaseRenderer {
         // and the custom information is lost,
         // so we stash it before the editing occurs and set the value here
 
-        const numberStash = getNumberStash();
+        const numberStash = this.numberStash.getNumberStash();
         const semantic = element.businessObject;
 
         if (numberStash.use) {
             semantic.number = numberStash.number;
         }
 
-        numbers[semantic.number] = true;
         box.x -= 26;
         box.y -= 16;
 
