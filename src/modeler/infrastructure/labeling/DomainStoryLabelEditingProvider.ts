@@ -14,7 +14,6 @@ import { ElementTypes } from "../../../story/domain/elementTypes";
 import { DomainStoryUpdateLabelHandler } from "./handler/DomainStoryUpdateLabelHandler";
 import { isBackground } from "../rules/DomainStoryRules";
 import { is } from "../../../shared/infrastructure/util";
-import { sanitizeTextForSVGExport } from "../../../shared/domain/sanitizer";
 import { createAutocompleteForEdit, getLabel } from "./utils";
 
 let numberStash = 0;
@@ -275,11 +274,10 @@ export class DomainStoryLabelEditingProvider {
             };
         }
 
-        this.modeling.updateLabel(
-            element,
-            sanitizeTextForSVGExport(newLabel),
-            newBounds,
-        );
+        // SVG-safety is an export-time concern, so the raw label reaches the
+        // model verbatim (upstream wps/egon.io@e62bd235, issue #7). Sanitizing
+        // here mangled user input on canvas (e.g. "--" → "––").
+        this.modeling.updateLabel(element, newLabel, newBounds);
     }
 
     private activateDirectEdit(element: Element) {
