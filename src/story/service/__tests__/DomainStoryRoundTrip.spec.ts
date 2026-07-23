@@ -80,4 +80,53 @@ describe("v4.0.0 open→save round-trip", () => {
             result.domainStory.businessObjects.every((bo: any) => "type" in bo),
         ).toBe(true);
     });
+
+    // Regression lock for issue #7: SVG-unsafe characters ("--", "<", ">") are a
+    // model concern only at export-to-SVG time, never at JSON export/import. A
+    // name carrying them must survive parse→import→export byte-for-byte — no
+    // "––", no "%3C"/"%3E" escaping creeping into the persisted model.
+    it("round-trips a label with '--', '<', '>' through JSON export/import verbatim", () => {
+        const rawLabel = "a--b <c>";
+        const fixture = loadFixture("egn_export_version_4_0_0.json");
+        const targetId = fixture.domainStory.businessObjects[0].id;
+        fixture.domainStory.businessObjects[0].name = rawLabel;
+
+        const { iconSetConfiguration, domainStory } = parseExportFile(fixture);
+
+        const iconDictionaryService = new IconDictionaryService(noopStyleSheet);
+        const iconService = new IconSetImportExportService(
+            iconDictionaryService,
+        );
+        iconService.loadConfiguration(
+            iconService.createIconSetConfiguration(iconSetConfiguration),
+        );
+
+        const properties = new DomainStoryPropertiesService();
+        properties.setProperties(
+            domainStory.title,
+            domainStory.description,
+            domainStory.scope,
+            domainStory.version,
+        );
+
+        const registry = {
+            createObjectListForDSTDownload: () =>
+                domainStory.businessObjects.map((businessObject) => ({
+                    businessObject,
+                })),
+        } as unknown as ElementRegistryService;
+
+        const result = JSON.parse(
+            new DomainStoryExportService(
+                registry,
+                iconService,
+                properties,
+            ).export(),
+        );
+
+        const exported = result.domainStory.businessObjects.find(
+            (bo: any) => bo.id === targetId,
+        );
+        expect(exported.name).toBe(rawLabel);
+    });
 });
