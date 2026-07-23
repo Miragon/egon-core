@@ -4,6 +4,7 @@ import {
     IconDictionaryService,
 } from "../IconDictionaryService";
 import { Dictionary } from "../../../story/domain/dictionary";
+import { ElementTypes } from "../../../story/domain/elementTypes";
 import { IconStyleSheetPort } from "../../domain/ports/IconStyleSheetPort";
 
 /**
@@ -74,7 +75,37 @@ describe("IconDictionaryService CSS class generation", () => {
 
             expect(serviceA.getFullDictionary().has("onlyInA")).toBe(true);
             expect(serviceB.getFullDictionary().has("onlyInA")).toBe(false);
-            expect(() => serviceB.getIconSource("onlyInA")).toThrow();
+            expect(serviceB.getIconSource("onlyInA")).toBe("");
+        });
+    });
+
+    /**
+     * getIconSource resolves through a fallback chain: custom pool first, then
+     * the selected dictionaries. An icon registered only via registerIconForType
+     * (never added to customIcons) must still be found through that fallback.
+     */
+    describe("getIconSource fallback resolution", () => {
+        it("returns '' for a name that is in no dictionary", () => {
+            const service = new IconDictionaryService(
+                new RecordingStyleSheetPort(),
+            );
+
+            expect(service.getIconSource("missing")).toBe("");
+        });
+
+        it("finds an icon present only in a selected dictionary", () => {
+            const service = new IconDictionaryService(
+                new RecordingStyleSheetPort(),
+            );
+
+            service.registerIconForType(
+                ElementTypes.WORKOBJECT,
+                "onlySelected",
+                "<svg/>",
+            );
+
+            expect(service.getFullDictionary().has("onlySelected")).toBe(false);
+            expect(service.getIconSource("onlySelected")).toBe("<svg/>");
         });
     });
 });

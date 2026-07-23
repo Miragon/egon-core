@@ -158,11 +158,9 @@ export class DomainStoryRenderer extends BaseRenderer {
             width: element.width,
             height: element.height,
         };
-        let iconSRC =
-            this.iconDictionaryService.getTypeIconSRC(
-                ElementTypes.ACTOR,
-                getIconId(element["type"]),
-            ) ?? "";
+        let iconSRC = this.iconDictionaryService.getIconSource(
+            getIconId(element["type"]),
+        );
         iconSRC = this.getIconSvg(iconSRC, element);
         const actor = svgCreate(iconSRC);
 
@@ -180,11 +178,9 @@ export class DomainStoryRenderer extends BaseRenderer {
             x: element.width / 2 - 25,
             y: element.height / 2 - 25,
         };
-        let iconSRC =
-            this.iconDictionaryService.getTypeIconSRC(
-                ElementTypes.WORKOBJECT,
-                getIconId(element["type"]),
-            ) ?? "";
+        let iconSRC = this.iconDictionaryService.getIconSource(
+            getIconId(element["type"]),
+        );
         iconSRC = this.getIconSvg(iconSRC, element);
         const workObject = svgCreate(iconSRC);
 
