@@ -1,5 +1,12 @@
-export class Dictionary {
-    private entries: Entry[];
+/**
+ * Ordered, uniquely-keyed name→value store backing the icon sets and the label
+ * dictionary. Generic over the value type (`T`) so a caller states what it holds
+ * — icon dictionaries hold SVG source strings. The first write for a key wins:
+ * {@link set}/{@link putEntry} never overwrite, so importing an icon set cannot
+ * silently clobber an existing entry.
+ */
+export class Dictionary<T> {
+    private entries: Entry<T>[];
 
     constructor() {
         this.entries = [];
@@ -9,12 +16,8 @@ export class Dictionary {
         return this.entries.length;
     }
 
-    all(): Entry[] {
+    all(): Entry<T>[] {
         return this.entries;
-    }
-
-    size(): number {
-        return this.entries.length;
     }
 
     isEmpty(): boolean {
@@ -22,20 +25,16 @@ export class Dictionary {
     }
 
     has(key: string): boolean {
-        return this.entries.some((entry) => entry.key === key);
+        return this.keysArray().includes(key);
     }
 
-    set(key: string, value: any): void {
+    set(key: string, value: T): void {
         if (!this.has(key)) {
             this.entries.push(new Entry(value, key));
         }
     }
 
-    add(value: any, key: string): void {
-        this.set(key, value);
-    }
-
-    putEntry(entry: Entry): void {
+    putEntry(entry: Entry<T>): void {
         if (!this.has(entry.key)) {
             this.entries.push(entry);
         }
@@ -45,21 +44,7 @@ export class Dictionary {
         return this.entries.map((entry) => entry.key);
     }
 
-    addEach(object: any): void {
-        Object.keys(object).forEach((key) => {
-            this.set(key, object[key]);
-        });
-    }
-
-    addBuiltInIcons(builtInIcons: Dictionary): void {
-        builtInIcons.entries.forEach((entry) => {
-            if (!this.has(entry.key)) {
-                this.entries.push(entry);
-            }
-        });
-    }
-
-    appendDict(dict: Dictionary): void {
+    appendDict(dict: Dictionary<T>): void {
         dict.entries.forEach((entry) => this.putEntry(entry));
     }
 
@@ -71,18 +56,53 @@ export class Dictionary {
         this.entries = this.entries.filter((entry) => entry.key !== key);
     }
 
-    get(key: string): any {
-        const found = this.entries.filter((entry) => entry.key === key);
-        return found[0] ? found[0].value : null;
+    /**
+     * Throws on a missing key rather than returning null, so an absent icon
+     * surfaces at the call site instead of silently rendering nothing. Callers
+     * that legitimately expect an absent key use {@link find} instead.
+     */
+    get(key: string): T {
+        const found = this.find(key);
+        if (!found) {
+            throw new Error(`Key ${key} not found in dictionary`);
+        }
+        return found;
+    }
+
+    find(key: string): T | undefined {
+        return this.entries.find((entry) => entry.key === key)?.value;
+    }
+
+    toRecord(): Record<string, T> {
+        const record: Record<string, T> = {};
+        this.entries.forEach((entry) => {
+            record[entry.key] = entry.value;
+        });
+        return record;
+    }
+
+    /**
+     * Skips `null`/`undefined` values so a sparse file configuration (an actor
+     * or work object missing its icon) does not create a key mapping to nothing.
+     */
+    static fromRecord<T>(record: Record<string, T>): Dictionary<T> {
+        const dictionary = new Dictionary<T>();
+        Object.keys(record).forEach((key) => {
+            const value = record[key];
+            if (value != null) {
+                dictionary.set(key, value);
+            }
+        });
+        return dictionary;
     }
 }
 
-export class Entry {
-    value: any; // ToDo: dh, I think type of any is not a good choice. Try to figur out if we can use typed objects here.
+export class Entry<T> {
+    value: T;
     key: string;
     keyWords: string[];
 
-    constructor(value: any, key: string, keyWords: string[] = []) {
+    constructor(value: T, key: string, keyWords: string[] = []) {
         this.value = value;
         this.key = key;
         this.keyWords = keyWords;

@@ -13,13 +13,13 @@ export class IconDictionaryService {
     static $inject: string[] = ["domainStoryIconStyleSheet"];
 
     // these dictionaries make up the current icon set:
-    private selectedActorsDictionary = new Dictionary();
-    private selectedWorkObjectsDictionary = new Dictionary();
+    private selectedActorsDictionary = new Dictionary<string>();
+    private selectedWorkObjectsDictionary = new Dictionary<string>();
 
     // The pool of all known custom icons. Instance-owned (not module scope) so
     // two EgonClient instances on one page don't share one icon pool — a shared
     // pool cross-contaminated their icon sets (issue #12).
-    private readonly customIcons = new Dictionary();
+    private readonly customIcons = new Dictionary<string>();
 
     // the imported icon set's name, kept here (next to the dictionaries it
     // belongs to) so export can round-trip it — the element registry holds no
@@ -36,13 +36,13 @@ export class IconDictionaryService {
             throw new Error("Name should not include type!");
         }
 
-        let collection = new Dictionary();
+        let collection = new Dictionary<string>();
         if (type === ElementTypes.ACTOR) {
             collection = this.selectedActorsDictionary;
         } else if (type === ElementTypes.WORKOBJECT) {
             collection = this.selectedWorkObjectsDictionary;
         }
-        collection.add(src, name);
+        collection.set(name, src);
     }
 
     unregisterIconForType(type: ElementTypes, name: string): void {
@@ -50,7 +50,7 @@ export class IconDictionaryService {
             throw new Error("Name should not include type!");
         }
 
-        let collection = new Dictionary();
+        let collection = new Dictionary<string>();
         if (type === ElementTypes.ACTOR) {
             collection = this.selectedActorsDictionary;
         } else if (type === ElementTypes.WORKOBJECT) {
@@ -60,7 +60,7 @@ export class IconDictionaryService {
     }
 
     updateIconRegistries(config: IconSet): void {
-        const newIcons = new Dictionary();
+        const newIcons = new Dictionary<string>();
         this.extractCustomIconsFromDictionary(config.actors, newIcons);
         this.extractCustomIconsFromDictionary(config.workObjects, newIcons);
 
@@ -71,7 +71,7 @@ export class IconDictionaryService {
         });
 
         // Generate CSS for ALL custom icons in the current story's config
-        const allCurrentIcons = new Dictionary();
+        const allCurrentIcons = new Dictionary<string>();
         allCurrentIcons.appendDict(config.actors);
         allCurrentIcons.appendDict(config.workObjects);
         this.addIconsToCss(allCurrentIcons);
@@ -85,7 +85,7 @@ export class IconDictionaryService {
         this.customIcons.set(name, input);
     }
 
-    addIconsToCss(icons: Dictionary) {
+    addIconsToCss(icons: Dictionary<string>) {
         // The service owns *which* class an icon maps to (getCSSClassOfIcon —
         // the issue-#4 regression pins class == published rule); the injected
         // port owns *how* that class becomes a live stylesheet rule.
@@ -99,26 +99,26 @@ export class IconDictionaryService {
 
     /** Getter & Setter **/
 
-    getFullDictionary(): Dictionary {
-        const fullDictionary = new Dictionary();
+    getFullDictionary(): Dictionary<string> {
+        const fullDictionary = new Dictionary<string>();
         fullDictionary.appendDict(this.customIcons);
         return fullDictionary;
     }
 
-    getIconsAssignedAs(type: ElementTypes): Dictionary {
+    getIconsAssignedAs(type: ElementTypes): Dictionary<string> {
         if (type === ElementTypes.ACTOR) {
             return this.selectedActorsDictionary;
         } else if (type === ElementTypes.WORKOBJECT) {
             return this.selectedWorkObjectsDictionary;
         }
-        return new Dictionary();
+        return new Dictionary<string>();
     }
 
-    getTypeIconSRC(type: ElementTypes, name: string): string {
+    getTypeIconSRC(type: ElementTypes, name: string): string | undefined {
         if (type === ElementTypes.ACTOR) {
-            return this.selectedActorsDictionary.get(name);
+            return this.selectedActorsDictionary.find(name);
         } else if (type === ElementTypes.WORKOBJECT) {
-            return this.selectedWorkObjectsDictionary.get(name);
+            return this.selectedWorkObjectsDictionary.find(name);
         }
         throw new Error(
             `[IconDictionaryService] Unsupported value type: ${type}`,
@@ -138,11 +138,11 @@ export class IconDictionaryService {
         );
     }
 
-    getActorsDictionary(): Dictionary {
+    getActorsDictionary(): Dictionary<string> {
         return this.selectedActorsDictionary;
     }
 
-    getWorkObjectsDictionary(): Dictionary {
+    getWorkObjectsDictionary(): Dictionary<string> {
         return this.selectedWorkObjectsDictionary;
     }
 
@@ -157,14 +157,14 @@ export class IconDictionaryService {
     }
 
     private extractCustomIconsFromDictionary(
-        elementDictionary: Dictionary,
-        collector: Dictionary,
+        elementDictionary: Dictionary<string>,
+        collector: Dictionary<string>,
     ) {
         // Keys are stored verbatim: sanitizing here permanently mutated names
         // (e.g. "my.icon.v2" → "my.icon"), losing the original on round-trip.
         elementDictionary.keysArray().forEach((name) => {
             if (!this.getFullDictionary().has(name)) {
-                collector.add(elementDictionary.get(name), name);
+                collector.set(name, elementDictionary.get(name));
             }
         });
     }
