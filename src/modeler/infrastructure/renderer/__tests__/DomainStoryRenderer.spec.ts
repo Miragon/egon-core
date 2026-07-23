@@ -19,7 +19,6 @@ function makeRenderer(): DomainStoryRenderer {
         {} as any,
         {} as any,
         {} as any,
-        {} as any,
     );
 }
 
