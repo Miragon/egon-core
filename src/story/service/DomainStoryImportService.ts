@@ -1,19 +1,26 @@
 import { assign } from "min-dash";
 import Canvas from "diagram-js/lib/core/Canvas";
-import { Connection, ElementLike, Shape } from "diagram-js/lib/model/Types";
-import { html, render } from "diagram-js/lib/ui";
+import {
+    Connection,
+    ElementLike,
+    Label,
+    Root,
+    Shape,
+} from "diagram-js/lib/model/Types";
 import EventBus from "diagram-js/lib/core/EventBus";
 import ElementRegistry from "diagram-js/lib/core/ElementRegistry";
+import ElementFactory from "diagram-js/lib/core/ElementFactory";
 import { ImportRepairService } from "./ImportRepairService";
 import { parseExportFile } from "./ExportFileParser";
 import { BusinessObject } from "../domain/businessObject";
-import { DomainStoryElementFactory } from "../../modeler/infrastructure/element-factory/DomainStoryElementFactory";
 import { ElementTypes } from "../domain/elementTypes";
-import VersionBox from "../../shared/infrastructure/ui/VersionBox";
-import { IconSetImportExportService } from "../../iconSet/service/IconSetImportExportService";
+import { VersionBannerPort } from "../domain/ports/VersionBannerPort";
+import {
+    IconDictionaryService,
+    IconSetImportExportService,
+} from "../../iconSet/service";
 import { IconSet } from "../domain/iconSet";
-import { IconDictionaryService } from "../../iconSet/service/IconDictionaryService";
-import { DomainStoryPropertiesService } from "../../modeler/service/DomainStoryPropertiesService";
+import { DomainStoryPropertiesService } from "../../modeler/service";
 
 export class DomainStoryImportService {
     static $inject: string[] = [
@@ -24,6 +31,7 @@ export class DomainStoryImportService {
         "domainStoryIconDictionaryService",
         "domainStoryIconSetImportExportService",
         "domainStoryPropertiesService",
+        "domainStoryVersionBanner",
     ];
 
     private readonly elements: ElementLike[] = [];
@@ -36,10 +44,20 @@ export class DomainStoryImportService {
         private readonly eventBus: EventBus,
         private readonly canvas: Canvas,
         private readonly elementRegistry: ElementRegistry,
-        private readonly elementFactory: DomainStoryElementFactory,
+        // Base diagram-js type, not the concrete DomainStoryElementFactory: didi
+        // still injects the concrete factory, but typing against the base keeps
+        // this service (story) from statically depending on modeler's
+        // infrastructure — a hexagon violation the architecture tests forbid.
+        private readonly elementFactory: ElementFactory<
+            Connection,
+            Label,
+            Root,
+            Shape
+        >,
         private readonly iconDictionaryService: IconDictionaryService,
         private readonly iconSetImportExportService: IconSetImportExportService,
         private readonly propertiesService: DomainStoryPropertiesService,
+        private readonly versionBanner: VersionBannerPort,
     ) {}
 
     /**
@@ -183,13 +201,7 @@ export class DomainStoryImportService {
             // this.showPreviousV050Dialog(versionPrefix);
         }
 
-        const parentElement = document.getElementById("egon-io-container");
-        if (parentElement) {
-            render(
-                html` <${VersionBox} version=${importVersionNumber} />`,
-                parentElement,
-            );
-        }
+        this.versionBanner.show(importVersionNumber);
 
         return elements;
     }
