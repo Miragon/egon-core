@@ -139,11 +139,14 @@ describe("DomainStoryContextPadProvider color change", () => {
         );
 
         expect(commandStack.execute).toHaveBeenCalledTimes(1);
-        expect(commandStack.execute).toHaveBeenCalledWith("element.colorChange", {
-            businessObject: el.businessObject,
-            newColor: "#ff0000",
-            element: el,
-        });
+        expect(commandStack.execute).toHaveBeenCalledWith(
+            "element.colorChange",
+            {
+                businessObject: el.businessObject,
+                newColor: "#ff0000",
+                element: el,
+            },
+        );
         expect(dirtyFlagService.makeDirty).toHaveBeenCalledTimes(1);
     });
 
@@ -161,12 +164,20 @@ describe("DomainStoryContextPadProvider color change", () => {
         expect(commandStack.execute).toHaveBeenNthCalledWith(
             1,
             "element.colorChange",
-            { businessObject: el1.businessObject, newColor: "#00ff00", element: el1 },
+            {
+                businessObject: el1.businessObject,
+                newColor: "#00ff00",
+                element: el1,
+            },
         );
         expect(commandStack.execute).toHaveBeenNthCalledWith(
             2,
             "element.colorChange",
-            { businessObject: el2.businessObject, newColor: "#00ff00", element: el2 },
+            {
+                businessObject: el2.businessObject,
+                newColor: "#00ff00",
+                element: el2,
+            },
         );
         // A single dirty flag for the whole multi-select gesture.
         expect(dirtyFlagService.makeDirty).toHaveBeenCalledTimes(1);
