@@ -28,17 +28,20 @@ only from `src/index.ts`.
 - Domain purity is path-based: every `**/domain/` folder imports only relative
   modules and only other domain files — no diagram-js, no DOM, no packages.
   Framework access goes through ports defined in `domain/`, implemented outside.
-- Restructure in flight: epic #14 (steps #26–#30) migrates to a flat DDD
-  feature layout — `modeler/ story/ iconSet/ labelDictionary/ shared/`, each
-  feature with up to three layers (`domain/`, `service/`, `infrastructure/`).
-  Check those issues before moving files; restructure PRs stay move-only.
+- Flat DDD feature layout (ADR 0010): `modeler/ story/ iconSet/
+  labelDictionary/ shared/`, each feature with up to three layers (`domain/`,
+  `service/`, `infrastructure/`).
 - Multi-instance safety: no new module-level singletons (see #12 — existing
   ones in renderer/labeling are being removed).
 
 ## Upstream sync
 
-This repo mirrors bug fixes from `WPS/egon.io` (epic #13, baseline `65c59291`).
-Where names are arbitrary, match upstream naming so sync diffs stay reviewable.
+This repo mirrors bug fixes from `WPS/egon.io`. The synced-through baseline,
+the upstream→local path mapping, and the round process live in `SYNC.md`.
+Keep it truthful: a PR that renames, moves, or restructures modules must
+update the mapping table in the same PR; bump the recorded baseline after
+each sync round. Where names are arbitrary, match upstream naming so sync
+diffs stay reviewable.
 
 ## Conventions
 
