@@ -109,8 +109,8 @@ export class DiagramJsIconAdapter implements IconPort {
     }
 
     private addIconToCss(name: string, svg: string): void {
-        const dict = new Dictionary();
-        dict.add(svg, name);
+        const dict = new Dictionary<string>();
+        dict.set(name, svg);
         this.iconDictionaryService.addIconsToCss(dict);
     }
 

@@ -32,76 +32,36 @@ export class IconSetImportExportService {
         if (fileConfiguration === undefined) {
             return {
                 name: "",
-                actors: new Dictionary(),
-                workObjects: new Dictionary(),
+                actors: new Dictionary<string>(),
+                workObjects: new Dictionary<string>(),
             };
         }
 
-        const actorsDict = new Dictionary();
-        const workObjectsDict = new Dictionary();
-        Object.keys(fileConfiguration.actors).forEach((key) => {
-            const icon = fileConfiguration.actors[key];
-            if (icon) {
-                // make sure the actor has an icon
-                actorsDict.add(icon, key);
-            }
-        });
-
-        Object.keys(fileConfiguration.workObjects).forEach((key) => {
-            const icon = fileConfiguration.workObjects[key];
-            if (icon) {
-                // make sure the work object has an icon
-                workObjectsDict.add(icon, key);
-            }
-        });
-
+        // fromRecord's null-skip is exactly the old `if (icon)` guard: an actor
+        // or work object arriving without an icon is dropped rather than keyed
+        // to an empty value.
         return {
             name: fileConfiguration.name ?? "",
-            actors: actorsDict,
-            workObjects: workObjectsDict,
+            actors: Dictionary.fromRecord(fileConfiguration.actors),
+            workObjects: Dictionary.fromRecord(fileConfiguration.workObjects),
         };
     }
 
     public loadConfiguration(customConfig: IconSet): void {
-        let actorDict = new Dictionary();
-        let workObjectDict = new Dictionary();
-
-        // Normalize: a config may arrive as real Dictionaries or as plain
-        // name→SVG objects; either way build Dictionaries to hand downstream.
-        if (customConfig.actors.keysArray()) {
-            actorDict = customConfig.actors;
-            workObjectDict = customConfig.workObjects;
-        } else {
-            actorDict.addEach(customConfig.actors);
-            workObjectDict.addEach(customConfig.workObjects);
-        }
-
-        // Import replaces the selected icon set with the incoming one.
-        this.iconDictionaryService.updateIconRegistries({
-            name: customConfig.name,
-            actors: actorDict,
-            workObjects: workObjectDict,
-        });
+        // Import replaces the selected icon set with the incoming one. The
+        // config always carries real Dictionaries (createIconSetConfiguration
+        // builds them), so it is handed downstream verbatim.
+        this.iconDictionaryService.updateIconRegistries(customConfig);
     }
 
     getCurrentConfigurationForExport(): IconSetExportConfiguration | undefined {
         const currentConfiguration = this.getCurrentConfiguration();
 
         if (currentConfiguration) {
-            const actors: any = {};
-            const workObjects: any = {};
-
-            currentConfiguration.actors.all().forEach((entry) => {
-                actors[entry.key] = entry.value;
-            });
-            currentConfiguration.workObjects.all().forEach((entry) => {
-                workObjects[entry.key] = entry.value;
-            });
-
             return {
                 name: currentConfiguration.name,
-                actors: actors,
-                workObjects: workObjects,
+                actors: currentConfiguration.actors.toRecord(),
+                workObjects: currentConfiguration.workObjects.toRecord(),
             };
         }
         return;
@@ -114,7 +74,7 @@ export class IconSetImportExportService {
 
         let iconSetConfiguration;
 
-        if (actors.size() > 0 && workObjects.size() > 0) {
+        if (actors.length > 0 && workObjects.length > 0) {
             iconSetConfiguration = this.createConfigFromDictionaries(
                 actors,
                 workObjects,
@@ -124,25 +84,25 @@ export class IconSetImportExportService {
     }
 
     private createConfigFromDictionaries(
-        actorsDict: Dictionary,
-        workObjectsDict: Dictionary,
+        actorsDict: Dictionary<string>,
+        workObjectsDict: Dictionary<string>,
     ): IconSet {
         const actorNames = actorsDict.keysArray();
         const workobjectNames = workObjectsDict.keysArray();
-        const newActors = new Dictionary();
-        const newWorkobjects = new Dictionary();
+        const newActors = new Dictionary<string>();
+        const newWorkobjects = new Dictionary<string>();
 
         // Fill Configuration from Canvas-Objects
         actorNames.forEach((actor) => {
-            newActors.add(
-                actorsDict.get(actor),
+            newActors.set(
                 actor.replace(ElementTypes.ACTOR, ""),
+                actorsDict.get(actor),
             );
         });
         workobjectNames.forEach((workObject) => {
-            newWorkobjects.add(
-                workObjectsDict.get(workObject),
+            newWorkobjects.set(
                 workObject.replace(ElementTypes.WORKOBJECT, ""),
+                workObjectsDict.get(workObject),
             );
         });
 

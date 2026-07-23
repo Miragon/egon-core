@@ -42,8 +42,8 @@ describe("IconDictionaryService CSS class generation", () => {
         it("delegates each icon to the port under the palette's own class", () => {
             const port = new RecordingStyleSheetPort();
             const service = new IconDictionaryService(port);
-            const icons = new Dictionary();
-            icons.add("<svg/>", "my.icon.v2");
+            const icons = new Dictionary<string>();
+            icons.set("my.icon.v2", "<svg/>");
 
             service.addIconsToCss(icons);
 
