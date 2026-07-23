@@ -114,27 +114,24 @@ export class IconDictionaryService {
         return new Dictionary<string>();
     }
 
-    getTypeIconSRC(type: ElementTypes, name: string): string | undefined {
-        if (type === ElementTypes.ACTOR) {
-            return this.selectedActorsDictionary.find(name);
-        } else if (type === ElementTypes.WORKOBJECT) {
-            return this.selectedWorkObjectsDictionary.find(name);
-        }
-        throw new Error(
-            `[IconDictionaryService] Unsupported value type: ${type}`,
-        );
-    }
-
     getCSSClassOfIcon(name: string): string {
         return ICON_CSS_CLASS_PREFIX + sanitizeForCss(name);
     }
 
+    /**
+     * Resolves an icon by name through a single fallback order: the full custom
+     * pool first, then the two selected dictionaries as a safety net for any
+     * future registration path that bypasses the pool. Returns "" on a miss (not
+     * a throw) so callers can keep their falsy guards live — a story element
+     * whose icon is absent from the current set renders empty instead of
+     * crashing the render pass.
+     */
     getIconSource(name: string): string {
-        if (this.customIcons.has(name)) {
-            return this.customIcons.get(name);
-        }
-        throw new Error(
-            `[IconDictionaryService] Unsupported value name: ${name}`,
+        return (
+            this.customIcons.find(name) ??
+            this.selectedActorsDictionary.find(name) ??
+            this.selectedWorkObjectsDictionary.find(name) ??
+            ""
         );
     }
 
