@@ -11,9 +11,7 @@ import type { ElementRegistryService } from "../../../service/ElementRegistrySer
  * `getActivitiesFromActors` feeds the numbering algorithm, `execute` absorbs the
  * deferred `activity.changed` commands so their timers stay harmless.
  */
-function makeRegistry(
-    activitiesFromActors: unknown[],
-): ElementRegistryService {
+function makeRegistry(activitiesFromActors: unknown[]): ElementRegistryService {
     return {
         getActivitiesFromActors: () => activitiesFromActors,
     } as unknown as ElementRegistryService;
