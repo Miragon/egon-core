@@ -30,7 +30,6 @@ import {
 } from "../../../shared/infrastructure/util";
 import { DomainStoryTextRenderer } from "../text-renderer/DomainStoryTextRenderer";
 import { DomainStoryNumberingRegistry } from "../popup/DomainStoryNumberingRegistry";
-import { ElementRegistryService } from "../../service/ElementRegistryService";
 import { DirtyFlagService } from "../../service/DirtyFlagService";
 import { IconDictionaryService } from "../../../iconSet/service";
 
@@ -43,7 +42,6 @@ export class DomainStoryRenderer extends BaseRenderer {
         "canvas",
         "domainStoryTextRenderer",
         "domainStoryNumberingRegistry",
-        "domainStoryElementRegistryService",
         "domainStoryDirtyFlagService",
         "domainStoryIconDictionaryService",
         "domainStoryNumberStash",
@@ -62,7 +60,6 @@ export class DomainStoryRenderer extends BaseRenderer {
         private readonly canvas: Canvas,
         private readonly domainStoryTextRenderer: DomainStoryTextRenderer,
         private readonly domainStoryNumberingRegistry: DomainStoryNumberingRegistry,
-        private readonly elementRegistryService: ElementRegistryService,
         private readonly dirtyFlagService: DirtyFlagService,
         private readonly iconDictionaryService: IconDictionaryService,
         private readonly numberStash: DomainStoryNumberStash,
@@ -102,7 +99,6 @@ export class DomainStoryRenderer extends BaseRenderer {
         const type = shape["type"];
         shape.businessObject.type = type;
 
-        this.elementRegistryService.correctInitialize();
         this.dirtyFlagService.makeDirty();
 
         if (type.includes(ElementTypes.ACTOR)) {
@@ -700,15 +696,11 @@ export class DomainStoryRenderer extends BaseRenderer {
             box.x += 3;
         }
 
-        const newRenderedNumber = this.renderNumber(
+        this.renderNumber(
             parentGfx,
             semantic.number,
             this.numberStyle(box),
             element["type"],
-        );
-        this.domainStoryNumberingRegistry.add(
-            newRenderedNumber,
-            semantic.number,
         );
     }
 

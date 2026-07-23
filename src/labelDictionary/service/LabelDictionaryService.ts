@@ -111,7 +111,7 @@ export class LabelDictionaryService {
     }
 
     getUniqueWorkObjectNames(): string[] {
-        const workObjects = this.elementRegistryService.getAllWorkobjects();
+        const workObjects = this.elementRegistryService.getAllWorkObjects();
         return [
             ...new Set(
                 workObjects

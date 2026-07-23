@@ -14,11 +14,6 @@ export class DomainStoryNumberingRegistry {
     ];
 
     /**
-     * Specifies the position of the activity in the sequence.
-     */
-    private numberRegistry: SVGElement[] = [];
-
-    /**
      * Specifies whether the index may occur multiple times.
      */
     private multipleNumberRegistry = [false];
@@ -29,19 +24,8 @@ export class DomainStoryNumberingRegistry {
         private readonly domainStoryElementRegistryService: ElementRegistryService,
     ) {}
 
-    /**
-     * @returns copy of registry
-     */
-    getNumberRegistry() {
-        return this.numberRegistry.slice(0);
-    }
-
-    getMultipleNumberRegistry() {
-        return this.multipleNumberRegistry.slice(0);
-    }
-
-    add(renderedNumber: SVGElement, number: number) {
-        this.numberRegistry[number] = renderedNumber;
+    isNumberMultiple(number: number): boolean {
+        return this.multipleNumberRegistry[number] ?? false;
     }
 
     setNumberIsMultiple(number: number, multi: boolean) {
@@ -92,10 +76,8 @@ export class DomainStoryNumberingRegistry {
         });
         for (let i = 0; i < usedNumbers.length; i++) {
             if (!usedNumbers.includes(i)) {
-                if (!usedNumbers.includes(i)) {
-                    wantedNumber = i;
-                    i = usedNumbers.length;
-                }
+                wantedNumber = i;
+                i = usedNumbers.length;
             }
         }
         if (wantedNumber === -1) {
@@ -171,36 +153,6 @@ export class DomainStoryNumberingRegistry {
             }
         }
     }
-
-    /**
-     * Find all gaps in the sequence starting from 1.
-     * @returns Array of missing numbers from 1 to max
-     * @example [1, 4, 5, 7] -> [2, 3, 6]
-     * @example [3, 5, 5, 8] -> [1, 2, 4, 6, 7]
-     */
-    // private findGaps(): number[] {
-    //     const values = Object.keys(this.numberRegistry).map(Number);
-
-    //     if (values.length === 0) {
-    //         return [];
-    //     }
-
-    //     // Get unique values to handle duplicates
-    //     const uniqueValues = new Set(values);
-
-    //     const max = Math.max(...values);
-
-    //     const gaps: number[] = [];
-
-    //     // Check each number from 1 to max
-    //     for (let i = 1; i <= max; i++) {
-    //         if (!uniqueValues.has(i)) {
-    //             gaps.push(i);
-    //         }
-    //     }
-
-    //     return gaps;
-    // }
 
     private setNumberOfActivity(
         elementArray: ActivityCanvasObject[],

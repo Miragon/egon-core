@@ -10,30 +10,7 @@ import { UsedIconList } from "../../story/domain/UsedIconList";
 export class ElementRegistryService {
     static $inject: string[] = ["elementRegistry"];
 
-    private fullyInitialized = false;
-
     constructor(private readonly registry: ElementRegistryPort) {}
-
-    /**
-     * Initially, the registry has only the root-Element.
-     * Once the canvas has bees initialized, we adjust the reference to point to the elements on the canvas for convenience
-     */
-    correctInitialize(): void {
-        if (!this.fullyInitialized) {
-            const root = this.registry.find((element) =>
-                element.id.startsWith("__implicitroot"),
-            );
-            if (root) {
-                // this.registry = this.registry.__implicitroot.element.children;
-                this.fullyInitialized = true;
-            }
-        }
-    }
-
-    clear(): void {
-        // this.registry = null;
-        this.fullyInitialized = false;
-    }
 
     createObjectListForDSTDownload(): CanvasObject[] {
         if (this.registry) {
@@ -149,17 +126,17 @@ export class ElementRegistryService {
 
     getUsedIcons(): UsedIconList {
         const actors = this.getAllActors();
-        const workobjects = this.getAllWorkobjects();
+        const workObjects = this.getAllWorkObjects();
 
         return {
             actors: actors.map((a) => a.type.replace(ElementTypes.ACTOR, "")),
-            workobjects: workobjects.map((w) =>
+            workObjects: workObjects.map((w) =>
                 w.type.replace(ElementTypes.WORKOBJECT, ""),
             ),
         };
     }
 
-    getAllWorkobjects() {
+    getAllWorkObjects() {
         return this.getAllCanvasObjects().filter((co) =>
             co.type.includes(ElementTypes.WORKOBJECT),
         );

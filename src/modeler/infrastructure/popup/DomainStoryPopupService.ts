@@ -167,9 +167,7 @@ export class DomainStoryPopupService {
         if (number) {
             if (element.businessObject.multipleNumberAllowed) {
                 if (
-                    !this.domainStoryNumberingRegistry.getMultipleNumberRegistry()[
-                        number
-                    ]
+                    !this.domainStoryNumberingRegistry.isNumberMultiple(number)
                 ) {
                     this.domainStoryNumberingRegistry.updateExistingNumbersAtEditing(
                         activitiesFromActors,
