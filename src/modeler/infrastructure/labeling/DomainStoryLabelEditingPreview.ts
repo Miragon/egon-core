@@ -8,7 +8,10 @@ import {
 } from "tiny-svg";
 import { translate } from "diagram-js/lib/util/SvgTransformUtil";
 import { Shape } from "diagram-js/lib/model/Types";
-import { getScaledPath, is } from "../../../shared/infrastructure/util";
+import {
+    getAnnotationBracketSvg,
+    is,
+} from "../../../shared/infrastructure/util";
 import { ElementTypes } from "../../../story/domain/elementTypes";
 import { Rect } from "diagram-js/lib/util/Types";
 
@@ -41,16 +44,9 @@ export class DomainStoryLabelEditingPreview {
                 this.absoluteElementBBox = canvas.getAbsoluteBBox(this.element);
                 this.gfx = svgCreate("g");
 
-                const textPathData = getScaledPath({
-                    xScaleFactor: 1,
-                    yScaleFactor: 1,
-                    containerWidth: this.element.width,
-                    containerHeight: this.element.height,
-                    position: {
-                        mx: 0.0,
-                        my: 0.0,
-                    },
-                });
+                const textPathData = getAnnotationBracketSvg(
+                    this.element.height,
+                );
 
                 const path = (this.path = svgCreate("path"));
 
@@ -94,18 +90,9 @@ export class DomainStoryLabelEditingPreview {
                     0,
                 );
 
-                const textPathData = getScaledPath({
-                    xScaleFactor: 1,
-                    yScaleFactor: 1,
-                    containerWidth: this.element!.width,
-                    containerHeight: newElementHeight,
-                    position: {
-                        mx: 0.0,
-                        my: 0.0,
-                    },
+                svgAttr(this.path!, {
+                    d: getAnnotationBracketSvg(newElementHeight),
                 });
-
-                svgAttr(this.path!, textPathData);
             }
         });
 
