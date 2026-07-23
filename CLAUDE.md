@@ -29,7 +29,7 @@ only from `src/index.ts`.
   modules and only other domain files — no diagram-js, no DOM, no packages.
   Framework access goes through ports defined in `domain/`, implemented outside.
 - Flat DDD feature layout (ADR 0010): `modeler/ story/ iconSet/
-  labelDictionary/ shared/`, each feature with up to three layers (`domain/`,
+labelDictionary/ shared/`, each feature with up to three layers (`domain/`,
   `service/`, `infrastructure/`).
 - Multi-instance safety: no new module-level singletons (see #12 — existing
   ones in renderer/labeling are being removed).
