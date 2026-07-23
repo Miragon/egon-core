@@ -1,6 +1,6 @@
 # 0005 — Module layout, DDD layering, and executable architecture tests
 
-- Status: accepted
+- Status: superseded by [0010](0010-flat-ddd-feature-layout-and-frozen-public-api.md)
 - Date: 2026-07-20
 
 ## Context
