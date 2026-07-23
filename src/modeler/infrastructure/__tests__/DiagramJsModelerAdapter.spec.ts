@@ -20,7 +20,9 @@ function createMockDiagramServices() {
     };
 
     const mockCanvas = {
-        viewbox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 100, height: 100 }),
+        viewbox: vi
+            .fn()
+            .mockReturnValue({ x: 0, y: 0, width: 100, height: 100 }),
         setRootElement: vi.fn(),
         zoom: vi.fn(),
     };
