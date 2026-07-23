@@ -30,6 +30,8 @@ function createMockPorts() {
             .fn()
             .mockReturnValue({ x: 0, y: 0, width: 100, height: 100 }),
         setViewport: vi.fn(),
+        alignToOrigin: vi.fn(),
+        fitToScreen: vi.fn(),
         onStoryChanged: vi.fn(),
         onViewportChanged: vi.fn(),
         offStoryChanged: vi.fn(),
@@ -217,6 +219,18 @@ describe("EgonClient (Application Service)", () => {
             expect(mockModelerPort.setViewport).toHaveBeenCalledWith(
                 mockViewport,
             );
+        });
+
+        it("should delegate alignToOrigin to modeler port", () => {
+            client.alignToOrigin();
+
+            expect(mockModelerPort.alignToOrigin).toHaveBeenCalledTimes(1);
+        });
+
+        it("should delegate fitToScreen to modeler port", () => {
+            client.fitToScreen();
+
+            expect(mockModelerPort.fitToScreen).toHaveBeenCalledTimes(1);
         });
     });
 

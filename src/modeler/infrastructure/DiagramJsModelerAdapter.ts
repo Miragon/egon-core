@@ -71,6 +71,18 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         this.canvas.viewbox(viewport);
     }
 
+    alignToOrigin(): void {
+        this.diagram.get<{ align(): void }>("alignToOrigin").align();
+    }
+
+    fitToScreen(): void {
+        this.alignToOrigin();
+        // Public equivalent of upstream fitStoryToScreen's
+        // canvas._fitViewport({ x: 0, y: 0 }): in diagram-js, zoom
+        // "fit-viewport" delegates directly to _fitViewport(center).
+        this.canvas.zoom("fit-viewport", { x: 0, y: 0 });
+    }
+
     onStoryChanged(callback: () => void): void {
         const wrapped = (event: any) =>
             this.createDebouncedCallback(() => callback())(event);

@@ -27,6 +27,22 @@ export interface ModelerPort {
     setViewport(viewport: ViewportData): void;
 
     /**
+     * Shift all diagram contents so they sit at positive coordinates
+     * (origin + offset). Keeps stories exportable by external tools that
+     * choke on negative coordinates. Runs through the command stack, so it is
+     * undoable and fires story-changed — hosts should call it before a visual
+     * export, not on every edit.
+     */
+    alignToOrigin(): void;
+
+    /**
+     * Align to origin, then fit the whole story into the visible canvas.
+     * Upstream `fitStoryToScreen` parity for a UI "fit to screen" button.
+     * Because it aligns first, it too may fire story-changed.
+     */
+    fitToScreen(): void;
+
+    /**
      * Subscribe to internal diagram events.
      */
     onStoryChanged(callback: () => void): void;

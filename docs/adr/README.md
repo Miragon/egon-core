@@ -16,3 +16,4 @@ and the rules (when to write one, how superseding works).
 | [0008](0008-verbatim-icon-names-css-only-sanitization.md)     | Verbatim icon names; sanitize only for CSS         | accepted                                                                    |
 | [0009](0009-icon-set-import-replaces-selection.md)            | Icon-set import replaces the selection             | accepted                                                                    |
 | [0010](0010-flat-ddd-feature-layout-and-frozen-public-api.md) | Flat DDD feature layout + frozen public API        | accepted                                                                    |
+| [0011](0011-adopt-align-to-origin.md)                         | Adopt align-to-origin; expose align/fit-to-screen  | accepted                                                                    |

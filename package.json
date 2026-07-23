@@ -40,6 +40,7 @@
         "prepack": "yarn build"
     },
     "dependencies": {
+        "@bpmn-io/align-to-origin": "0.7.0",
         "diagram-js": "15.22.0",
         "diagram-js-direct-editing": "3.5.1",
         "didi": "10.2.2",

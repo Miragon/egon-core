@@ -57,6 +57,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@bpmn-io/align-to-origin@npm:0.7.0":
+  version: 0.7.0
+  resolution: "@bpmn-io/align-to-origin@npm:0.7.0"
+  checksum: 10c0/f0a2f7e4cca8b9384941a2ab041ce4196e29f36e19f99a98f95d5f01a66b1041f95da3ad193574740ad4dac27784b315033121c0c8ff4c070422a5744bb21d6f
+  languageName: node
+  linkType: hard
+
 "@bpmn-io/diagram-js-ui@npm:^0.2.4":
   version: 0.2.4
   resolution: "@bpmn-io/diagram-js-ui@npm:0.2.4"
@@ -1724,6 +1731,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "egon-core@workspace:."
   dependencies:
+    "@bpmn-io/align-to-origin": "npm:0.7.0"
     "@eslint/js": "npm:9.39.5"
     "@types/node": "npm:22.20.1"
     "@vitest/coverage-v8": "npm:3.2.7"
