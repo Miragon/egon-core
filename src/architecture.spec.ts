@@ -5,11 +5,12 @@ import { extractGraph, projectFiles } from "archunit";
 
 /**
  * Executable architecture tests — the enforcement half of
- * docs/adr/0005-module-layout-and-architecture-tests.md. They turn the layout
- * rules (framework-free domain layers, ports between rings, one sanctioned
- * composition root) into CI gates so regressions break the build instead of
- * rotting silently. All rules are regression locks that must stay green; do
- * not relax a rule to make CI pass — that defeats the gate.
+ * docs/adr/0010-flat-ddd-feature-layout-and-frozen-public-api.md (which
+ * supersedes 0005). They turn the layout rules (framework-free domain layers,
+ * per-feature hexagons, sibling isolation, one sanctioned composition root per
+ * feature, and a frozen public API) into CI gates so regressions break the
+ * build instead of rotting silently. All rules are regression locks that must
+ * stay green; do not relax a rule to make CI pass — that defeats the gate.
  *
  * Two mechanisms are combined deliberately:
  * - archunit's import graph for project-internal rules (cycles, folder
@@ -49,7 +50,12 @@ function importedModules(content: string): string[] {
     );
 }
 
-/** All non-test `.ts` files under `src/`, as repo-relative POSIX paths. */
+/**
+ * All non-test `.ts`/`.tsx` files under `src/`, as repo-relative POSIX paths.
+ * `.tsx` is included so the shared UI components (`shared/infrastructure/ui/*`)
+ * are visible to the raw-source scans below — otherwise a `.tsx` file could
+ * import across boundaries unchecked.
+ */
 function listSourceFiles(): string[] {
     const srcRoot = resolve(REPO_ROOT, "src");
     const files: string[] = [];
@@ -61,8 +67,8 @@ function listSourceFiles(): string[] {
                     walk(absolutePath);
                 }
             } else if (
-                entry.endsWith(".ts") &&
-                !/\.(spec|test)\.ts$/.test(entry)
+                /\.tsx?$/.test(entry) &&
+                !/\.(spec|test)\.tsx?$/.test(entry)
             ) {
                 files.push(
                     `src/${absolutePath
@@ -89,6 +95,95 @@ function readSource(repoRelativePath: string): string {
 function isDomainFile(repoRelativePath: string): boolean {
     return repoRelativePath.includes("/domain/");
 }
+
+/** A file living in some feature's `service/` layer (`src/<F>/service/…`). */
+function isServiceFile(repoRelativePath: string): boolean {
+    return /^src\/[^/]+\/service\//.test(repoRelativePath);
+}
+
+/** The owning feature of a source file: the first path segment under `src/`. */
+function featureOf(repoRelativePath: string): string {
+    return repoRelativePath.split("/")[1] ?? "";
+}
+
+/**
+ * Resolves a relative import `specifier` written in `fromFile` to a normalized
+ * repo-relative `src/…` path (with any trailing `/index` stripped, so a barrel
+ * import and its explicit-`/index` form compare equal). Returns `null` for
+ * package/platform specifiers — those are out of scope for the boundary scans
+ * and handled by the domain-purity and framework rules instead.
+ */
+function resolveSpecifier(fromFile: string, specifier: string): string | null {
+    if (!specifier.startsWith(".")) {
+        return null;
+    }
+    const fromDir = fromFile.split("/").slice(0, -1);
+    const segments = [...fromDir, ...specifier.split("/")];
+    const resolved: string[] = [];
+    for (const segment of segments) {
+        if (segment === "" || segment === ".") {
+            continue;
+        }
+        if (segment === "..") {
+            resolved.pop();
+        } else {
+            resolved.push(segment);
+        }
+    }
+    return resolved.join("/").replace(/\/index$/, "");
+}
+
+/**
+ * The only service-layer files allowed to reference infrastructure: each is a
+ * feature's composition root, wiring adapters that implement domain ports. Any
+ * other service file reaching into infrastructure is a hexagon violation.
+ */
+const COMPOSITION_ROOT_ALLOWLIST: readonly string[] = [
+    "src/modeler/service/EgonClient.ts", // dynamic import() of the diagram-js adapters
+    "src/iconSet/service/index.ts", // wires IconCssInjector (IconStyleSheetPort)
+    "src/story/service/importModule.ts", // wires VersionBoxBanner (VersionBannerPort)
+];
+
+/**
+ * Feature roots that own a bounded context (or, for `shared`, the shared
+ * kernel). Sibling isolation (rule F) is checked for files living under these;
+ * `src/index.ts`, `src/types`, and `src/assets` are not origins — they are the
+ * package barrel and shared-kernel leaves, governed by rules G and F's target
+ * allowances respectively.
+ */
+const FEATURE_ROOTS: readonly string[] = [
+    "modeler",
+    "story",
+    "iconSet",
+    "labelDictionary",
+    "shared",
+];
+
+/**
+ * The frozen public surface. `src/index.ts` may import exactly these specifiers
+ * (rule G1) and re-export exactly these runtime values (rule G2). Changing the
+ * public API is a deliberate act that must update this list and ADR 0010, not an
+ * accident that slips through review.
+ */
+const FROZEN_INDEX_SPECIFIERS: readonly string[] = [
+    "./iconSet/domain/IconTypes",
+    "./modeler/domain/model/Viewport",
+    "./modeler/domain/ports/IconPort",
+    "./modeler/domain/ports/ModelerPort",
+    "./modeler/service/EgonClient",
+    "./modeler/service/EgonClientConfig",
+    "./story/domain/DomainStoryDocument",
+    "./story/domain/iconSet",
+    "./story/domain/scope",
+];
+
+const FROZEN_INDEX_RUNTIME_EXPORTS: readonly string[] = [
+    "DomainPurity",
+    "EgonClient",
+    "Granularity_Goal",
+    "Granularity_Grain",
+    "PointInTime",
+];
 
 describe("architecture", () => {
     let edges: Edge[] = [];
@@ -167,44 +262,16 @@ describe("architecture", () => {
         });
     });
 
-    // ─── D. Modeler hexagon ──────────────────────────────────────────────────
+    // ─── D. Modeler service is framework-free ────────────────────────────────
     //
-    // `src/modeler` is a ports-and-adapters context: `service` talks to the
-    // outside world only through its `domain/ports`, and `infrastructure`
-    // implements them. `EgonClient` doubles as the composition root (ADR 0005) —
-    // it alone may reference `infrastructure`, and only via dynamic `import()`
-    // so the static layering stays intact.
-    describe("modeler hexagon", () => {
-        it("service does not statically depend on infrastructure", async () => {
-            const violations = await projectFiles(TSCONFIG)
-                .inFolder("src/modeler/service/**")
-                .shouldNot()
-                .dependOnFiles()
-                .inFolder("src/modeler/infrastructure/**")
-                .check();
-            expect(violations).toEqual([]);
-        });
-
-        // The graph rule above cannot see dynamic imports, so a second
-        // service file adopting the composition root's `import()` trick
-        // would slip through it — this text scan closes that hole.
-        it("only the EgonClient composition root references infrastructure", () => {
-            const offenders = listSourceFiles()
-                .filter(
-                    (file) =>
-                        file.startsWith("src/modeler/service/") &&
-                        !file.endsWith("/EgonClient.ts"),
-                )
-                .flatMap((file) =>
-                    importedModules(readSource(file))
-                        .filter((specifier) =>
-                            specifier.includes("infrastructure"),
-                        )
-                        .map((specifier) => `${file} → ${specifier}`),
-                );
-            expect(offenders).toEqual([]);
-        });
-
+    // Unlike story/labelDictionary (whose services are didi-registered diagram-js
+    // services by nature), the modeler service layer is the pure use-case surface
+    // behind EgonClient and must name no framework module. The single exception
+    // is the type-only `didi` surface of `EgonClientConfig.additionalModules` in
+    // the composition root. (Service→infrastructure layering is enforced for
+    // every feature by rule E below; this rule only adds the framework ban, and
+    // only for modeler — see ADR 0010's "deferred" note.)
+    describe("modeler service is framework-free", () => {
         it("service imports no framework module except didi types in the composition root", () => {
             const offenders = listSourceFiles()
                 .filter((file) => file.startsWith("src/modeler/service/"))
@@ -223,4 +290,168 @@ describe("architecture", () => {
             expect(offenders).toEqual([]);
         });
     });
+
+    // ─── E. Generalized hexagon (every feature) ──────────────────────────────
+    //
+    // Each feature is a ports-and-adapters context: its `service` layer reaches
+    // the outside world only through `domain/ports`, and `infrastructure`
+    // implements them. Only a feature's composition root may wire adapters — the
+    // COMPOSITION_ROOT_ALLOWLIST. This subsumes the former modeler-only
+    // service→infra rules and applies them to story/iconSet/labelDictionary too.
+    describe("generalized hexagon", () => {
+        // E1 (graph): static service→infrastructure edges, allowlist aside.
+        it("no service layer statically depends on infrastructure outside its composition root", () => {
+            const offenders = edges
+                .filter(
+                    (edge) =>
+                        !edge.external &&
+                        edge.source !== edge.target &&
+                        isServiceFile(edge.source) &&
+                        edge.target.includes("/infrastructure/") &&
+                        !COMPOSITION_ROOT_ALLOWLIST.includes(edge.source),
+                )
+                .map((edge) => `${edge.source} → ${edge.target}`);
+            expect(offenders).toEqual([]);
+        });
+
+        // E2 (raw scan): the graph produces no edge for a dynamic `import()`, so
+        // a service file adopting the composition root's `import()` trick would
+        // slip past E1 — this text scan closes that hole for every feature. The
+        // allowlist keeps the sanctioned dynamic import in EgonClient legal.
+        it("no service file outside a composition root names an infrastructure specifier", () => {
+            const offenders = listSourceFiles()
+                .filter(
+                    (file) =>
+                        isServiceFile(file) &&
+                        !COMPOSITION_ROOT_ALLOWLIST.includes(file),
+                )
+                .flatMap((file) =>
+                    importedModules(readSource(file))
+                        .filter((specifier) =>
+                            specifier.includes("infrastructure"),
+                        )
+                        .map((specifier) => `${file} → ${specifier}`),
+                );
+            expect(offenders).toEqual([]);
+        });
+    });
+
+    // ─── F. Sibling isolation ────────────────────────────────────────────────
+    //
+    // A feature's public surface is its `domain/**` (pure by rule C) plus its
+    // `service` barrel — nothing else. So any relative import that leaves the
+    // owning feature must target another feature's `domain/**` or exactly its
+    // `service` barrel, the `shared/domain` kernel (from any layer), or
+    // `shared/infrastructure`/`assets`/`types` (from an infrastructure file
+    // only). Reaching into a sibling's `service/<file>` or `infrastructure/`, or
+    // importing the package barrel `src/index`, is forbidden. A raw scan (not the
+    // archunit graph) so re-export/default-import edge semantics can't hide a
+    // deep import.
+    describe("sibling isolation", () => {
+        it("features import siblings only via domain or the service barrel", () => {
+            const offenders = listSourceFiles()
+                .filter((file) => FEATURE_ROOTS.includes(featureOf(file)))
+                .flatMap((file) => {
+                    const owningFeature = featureOf(file);
+                    const fromInfrastructure =
+                        file.includes("/infrastructure/");
+                    return importedModules(readSource(file))
+                        .map((specifier) => ({
+                            specifier,
+                            target: resolveSpecifier(file, specifier),
+                        }))
+                        .filter(
+                            ({ target }) =>
+                                target !== null &&
+                                featureOf(target) !== owningFeature,
+                        )
+                        .filter(
+                            ({ target }) =>
+                                !isAllowedCrossFeatureTarget(
+                                    target as string,
+                                    fromInfrastructure,
+                                ),
+                        )
+                        .map(({ specifier }) => `${file} → ${specifier}`);
+                });
+            expect(offenders).toEqual([]);
+        });
+    });
+
+    // ─── G. Public surface freeze ────────────────────────────────────────────
+    //
+    // `src/index.ts` is the package barrel and the whole public API. It is frozen
+    // to EgonClient plus the port/wire-format types (ADR 0010): EgonPlugin and
+    // the former internal service exports are gone, and `additionalModules` is
+    // the advanced-integration escape hatch. Widening the surface must be a
+    // deliberate edit to the frozen lists here, never an accident.
+    describe("public surface freeze", () => {
+        // G1: the barrel imports exactly the frozen specifiers, and never an
+        // infrastructure path (which would pull a didi default module into the
+        // package entry and defeat EgonClient's lazy adapter loading).
+        it("imports exactly the frozen specifiers with no infrastructure path", () => {
+            const specifiers = [
+                ...new Set(importedModules(readSource("src/index.ts"))),
+            ].sort();
+            expect(specifiers).toEqual([...FROZEN_INDEX_SPECIFIERS]);
+            expect(
+                specifiers.filter((specifier) =>
+                    specifier.includes("infrastructure"),
+                ),
+            ).toEqual([]);
+        });
+
+        // G2: the runtime (value) exports are exactly EgonClient and the four
+        // scope enums — every other export is a type, erased at build time.
+        it("re-exports exactly the frozen runtime values", async () => {
+            const module = await import("./index");
+            const runtimeExports = Object.keys(module)
+                .filter((name) => name !== "__esModule")
+                .sort();
+            expect(runtimeExports).toEqual([...FROZEN_INDEX_RUNTIME_EXPORTS]);
+        });
+
+        // G3: the package manifest exposes only the barrel, the stylesheet and
+        // its own manifest, and ships only `dist` — so nothing bypasses index.ts.
+        it("package.json exports and files stay locked to the barrel", () => {
+            const packageJson = JSON.parse(readSource("package.json"));
+            expect(Object.keys(packageJson.exports).sort()).toEqual([
+                ".",
+                "./package.json",
+                "./style.css",
+            ]);
+            expect(packageJson.files).toEqual(["dist"]);
+        });
+    });
 });
+
+/**
+ * Whether a cross-feature import `target` (already resolved to a `src/…` path)
+ * is a legal reach into another feature or the shared kernel. Encodes rule F's
+ * allowances: another feature's `domain/**` or exactly its `service` barrel are
+ * open to anyone; the `shared/domain` kernel is open to any layer; and
+ * `shared/infrastructure`/`assets`/`types` are open only to infrastructure
+ * files. The package barrel `src/index` is never a legal internal target.
+ */
+function isAllowedCrossFeatureTarget(
+    target: string,
+    fromInfrastructure: boolean,
+): boolean {
+    if (target === "src/index") {
+        return false;
+    }
+    if (/^src\/[^/]+\/domain\//.test(target)) {
+        return true;
+    }
+    if (/^src\/[^/]+\/service$/.test(target)) {
+        return true;
+    }
+    if (/^src\/shared\/domain\//.test(target)) {
+        return true;
+    }
+    const isSharedInfraLeaf =
+        /^src\/shared\/infrastructure\//.test(target) ||
+        /^src\/assets\//.test(target) ||
+        /^src\/types\//.test(target);
+    return isSharedInfraLeaf && fromInfrastructure;
+}
