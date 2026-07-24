@@ -13,6 +13,12 @@ import {
     is,
 } from "../../../shared/infrastructure/util";
 import { ElementTypes } from "../../../story/domain/elementTypes";
+import {
+    isActivity,
+    isActor,
+    isGroup,
+    isWorkObject,
+} from "../../../story/domain/elementPredicates";
 import { Rect } from "diagram-js/lib/util/Types";
 
 const MARKER_HIDDEN = "djs-element-hidden",
@@ -68,10 +74,10 @@ export class DomainStoryLabelEditingPreview {
                 ) {
                     canvas.addMarker(this.element, MARKER_HIDDEN);
                 } else if (
-                    this.element["type"].includes(ElementTypes.ACTOR) ||
-                    this.element["type"].includes(ElementTypes.WORKOBJECT) ||
-                    this.element["type"].includes(ElementTypes.ACTIVITY) ||
-                    this.element["type"].includes(ElementTypes.GROUP)
+                    isActor(this.element) ||
+                    isWorkObject(this.element) ||
+                    isActivity(this.element) ||
+                    isGroup(this.element)
                 ) {
                     canvas.addMarker(this.element, MARKER_LABEL_HIDDEN);
                 }

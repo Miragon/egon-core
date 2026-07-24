@@ -1,6 +1,7 @@
 import { BusinessObject } from "../domain/businessObject";
 import { ActivityBusinessObject } from "../domain/activityBusinessObject";
 import { ElementTypes } from "../domain/elementTypes";
+import { isActivity, isConnection } from "../domain/elementPredicates";
 
 export class ImportRepairService {
     checkForUnreferencedElementsInActivitiesAndRepair(
@@ -12,11 +13,7 @@ export class ImportRepairService {
         let complete = true;
 
         elements.forEach((element) => {
-            const type = element.type;
-            if (
-                type === ElementTypes.ACTIVITY ||
-                type === ElementTypes.CONNECTION
-            ) {
+            if (isActivity(element) || isConnection(element)) {
                 activities.push(element as ActivityBusinessObject);
             } else {
                 objectIDs.push(element.id);

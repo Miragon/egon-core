@@ -16,6 +16,12 @@ export class DomainStoryReplaceOption {
         private readonly iconDictionaryService: IconDictionaryService,
     ) {}
 
+    /**
+     * Build the "change to" entries for an actor: every registered actor icon
+     * except the one the element already is. `push` (not index assignment)
+     * keeps the array dense — the current type is filtered out, so an index-keyed
+     * write would leave a hole that renders as an empty menu slot.
+     */
     actorReplaceOptions(name: string) {
         const actors = this.iconDictionaryService.getIconsAssignedAs(
             ElementTypes.ACTOR,
@@ -23,23 +29,29 @@ export class DomainStoryReplaceOption {
 
         const replaceOption: ReplaceOption[] = [];
 
-        actors.keysArray().forEach((actorType, index) => {
+        actors.keysArray().forEach((actorType) => {
             if (!name.includes(actorType)) {
-                const typeName = actorType;
-                replaceOption[index] = {
-                    label: "Change to " + typeName,
-                    actionName: "replace-with-actor-" + typeName.toLowerCase(),
+                replaceOption.push({
+                    label: "Change to " + actorType,
+                    actionName: "replace-with-actor-" + actorType.toLowerCase(),
                     className:
                         this.iconDictionaryService.getCSSClassOfIcon(actorType),
                     target: {
                         type: `${ElementTypes.ACTOR}${actorType}`,
                     },
-                };
+                });
             }
         });
         return replaceOption;
     }
 
+    /**
+     * The work-object counterpart of {@link actorReplaceOptions}. The
+     * `replace-with-workobject-` prefix mirrors the actor branch's shape; the
+     * former `replace-with-actor-` was a copy-paste bug (also present upstream —
+     * see SYNC.md). `actionName` is only used as a menu-entry record key, so the
+     * rename is user-invisible.
+     */
     workObjectReplaceOptions(name: string) {
         const workObjects = this.iconDictionaryService.getIconsAssignedAs(
             ElementTypes.WORKOBJECT,
@@ -47,12 +59,13 @@ export class DomainStoryReplaceOption {
 
         const replaceOption: ReplaceOption[] = [];
 
-        workObjects.keysArray().forEach((workObjectType, index) => {
+        workObjects.keysArray().forEach((workObjectType) => {
             if (!name.includes(workObjectType)) {
-                const typeName = workObjectType;
-                replaceOption[index] = {
-                    label: "Change to " + typeName,
-                    actionName: "replace-with-actor-" + typeName,
+                replaceOption.push({
+                    label: "Change to " + workObjectType,
+                    actionName:
+                        "replace-with-workobject-" +
+                        workObjectType.toLowerCase(),
                     className:
                         this.iconDictionaryService.getCSSClassOfIcon(
                             workObjectType,
@@ -60,7 +73,7 @@ export class DomainStoryReplaceOption {
                     target: {
                         type: `${ElementTypes.WORKOBJECT}${workObjectType}`,
                     },
-                };
+                });
             }
         });
         return replaceOption;

@@ -13,7 +13,7 @@ import ElementFactory from "diagram-js/lib/core/ElementFactory";
 import { ImportRepairService } from "./ImportRepairService";
 import { parseExportFile } from "./ExportFileParser";
 import { BusinessObject } from "../domain/businessObject";
-import { ElementTypes } from "../domain/elementTypes";
+import { isActivity, isConnection, isGroup } from "../domain/elementPredicates";
 import { VersionBannerPort } from "../domain/ports/VersionBannerPort";
 import {
     IconDictionaryService,
@@ -208,12 +208,9 @@ export class DomainStoryImportService {
 }
 
 function isOfTypeConnection(element: BusinessObject) {
-    return (
-        element.type === ElementTypes.ACTIVITY ||
-        element.type === ElementTypes.CONNECTION
-    );
+    return isActivity(element) || isConnection(element);
 }
 
 function isOfTypeGroup(element: BusinessObject | ElementLike) {
-    return element && element.type === ElementTypes.GROUP;
+    return isGroup(element);
 }

@@ -1,5 +1,5 @@
 import EventBus from "diagram-js/lib/core/EventBus";
-import { ElementTypes } from "../../../story/domain/elementTypes";
+import { isActivity } from "../../../story/domain/elementPredicates";
 import { html, render } from "diagram-js/lib/ui";
 import PopupMenu from "../../../shared/infrastructure/ui/PopupMenu";
 import { DomainStoryNumberingRegistry } from "./DomainStoryNumberingRegistry";
@@ -35,7 +35,7 @@ export class DomainStoryPopupService {
     ) {
         this.eventBus.on("element.dblclick", (event: any) => {
             const { element } = event;
-            if (element.type?.includes(ElementTypes.ACTIVITY)) {
+            if (isActivity(element)) {
                 this.open(element);
             }
         });

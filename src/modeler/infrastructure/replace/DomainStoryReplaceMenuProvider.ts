@@ -1,6 +1,6 @@
 import { Shape } from "diagram-js/lib/model/Types";
 import { forEach } from "min-dash";
-import { ElementTypes } from "../../../story/domain/elementTypes";
+import { isActor, isWorkObject } from "../../../story/domain/elementPredicates";
 import { DomainStoryReplace } from "./DomainStoryReplace";
 import {
     DomainStoryReplaceOption,
@@ -39,11 +39,11 @@ export class DomainStoryReplaceMenuProvider implements PopupMenuProvider {
         const el = element as Shape;
 
         let entries: ReplaceOption[] = [];
-        if (el["type"].includes(ElementTypes.ACTOR)) {
+        if (isActor(el)) {
             entries = this.domainStoryReplaceOption.actorReplaceOptions(
                 el["type"],
             );
-        } else if (el["type"].includes(ElementTypes.WORKOBJECT)) {
+        } else if (isWorkObject(el)) {
             entries = this.domainStoryReplaceOption.workObjectReplaceOptions(
                 el["type"],
             );

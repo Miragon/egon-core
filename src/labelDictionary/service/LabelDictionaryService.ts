@@ -1,7 +1,8 @@
 import { LabelEntry } from "../domain/labelEntry";
 import { WorkObjectLabelEntry } from "../domain/workObjectLabelEntry";
 import { IconDictionaryService } from "../../iconSet/service";
-import { ElementTypes } from "../../story/domain/elementTypes";
+import { getIconId } from "../../story/domain/elementTypes";
+import { isActivity, isWorkObject } from "../../story/domain/elementPredicates";
 import { ElementRegistryService } from "../../modeler/service";
 
 export class LabelDictionaryService {
@@ -63,7 +64,7 @@ export class LabelDictionaryService {
             if (
                 name &&
                 name.length > 0 &&
-                element.type.includes(ElementTypes.ACTIVITY) &&
+                isActivity(element) &&
                 !this.activityLabels.map((a) => a.name).includes(name)
             ) {
                 this.activityLabels.push({
@@ -73,13 +74,10 @@ export class LabelDictionaryService {
             } else if (
                 name &&
                 name.length > 0 &&
-                element.type.includes(ElementTypes.WORKOBJECT) &&
+                isWorkObject(element) &&
                 !this.workObjektLabels.map((e) => e.name).includes(name)
             ) {
-                const iconName = element.type.replace(
-                    ElementTypes.WORKOBJECT,
-                    "",
-                );
+                const iconName = getIconId(element.type);
                 let icon = this.iconDictionaryService.getIconSource(iconName);
                 if (!icon) {
                     return;

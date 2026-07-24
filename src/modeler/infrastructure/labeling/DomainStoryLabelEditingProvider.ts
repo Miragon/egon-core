@@ -12,7 +12,11 @@ import { DomainStoryTextRenderer } from "../text-renderer/DomainStoryTextRendere
 import { LabelDictionaryService } from "../../../labelDictionary/service";
 import { ElementTypes } from "../../../story/domain/elementTypes";
 import { DomainStoryUpdateLabelHandler } from "./handler/DomainStoryUpdateLabelHandler";
-import { isBackground } from "../rules/DomainStoryRules";
+import {
+    isActor,
+    isBackground,
+    isWorkObject,
+} from "../../../story/domain/elementPredicates";
 import { is } from "../../../shared/infrastructure/util";
 import { createAutocompleteForEdit, getLabel } from "./utils";
 import { DomainStoryNumberStash } from "../number-stash/DomainStoryNumberStash";
@@ -207,11 +211,7 @@ export class DomainStoryLabelEditingProvider {
             });
         }
 
-        if (
-            // we can't use util's is() function here because the type contains the name of the icon
-            /^domainStory:actor\w*/.test(element["type"]) ||
-            /^domainStory:workObject\w*/.test(element["type"])
-        ) {
+        if (isActor(element) || isWorkObject(element)) {
             assign(bounds, {
                 width: bbox.width,
                 minHeight: 30,

@@ -9,9 +9,8 @@ import {
 import { Point } from "diagram-js/lib/util/Types";
 import { assign, pick } from "min-dash";
 import { Connection, Shape } from "diagram-js/lib/model/Types";
-import { ElementTypes } from "../../../story/domain/elementTypes";
 import { reworkGroupElements } from "../../../shared/infrastructure/util";
-import { isBackground, isGroup } from "../rules/DomainStoryRules";
+import { isBackground, isGroup } from "../../../story/domain/elementPredicates";
 
 export class DomainStoryUpdater extends CommandInterceptor {
     static override $inject: string[] = [
@@ -109,7 +108,7 @@ export class DomainStoryUpdater extends CommandInterceptor {
             // save element position
             assign(businessObject, pick(shape, ["x", "y"]));
 
-            if (shape["type"] === ElementTypes.GROUP) {
+            if (isGroup(shape)) {
                 // save element size if resizable
                 assign(businessObject, pick(shape, ["height", "width"]));
 
@@ -125,12 +124,7 @@ export class DomainStoryUpdater extends CommandInterceptor {
                     }
                 }
             }
-            if (
-                shape &&
-                shape.parent &&
-                "type" in shape.parent &&
-                shape.parent["type"] === ElementTypes.GROUP
-            ) {
+            if (shape && shape.parent && isGroup(shape.parent)) {
                 assign(businessObject, {
                     parent: shape.parent.id,
                 });

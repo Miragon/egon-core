@@ -1,5 +1,5 @@
 import EventBus from "diagram-js/lib/core/EventBus";
-import { ElementTypes } from "../../../story/domain/elementTypes";
+import { isAnnotation } from "../../../story/domain/elementPredicates";
 
 // Run before DomainStoryCopyPaste (default priority 1000) deletes the
 // descriptor's `oldBusinessObject` — that is where the copied color/text/height
@@ -72,7 +72,7 @@ export class DomainStoryPasteRestore {
 
         this.pasteColor.push(oldBusinessObject.pickedColor);
 
-        if (descriptor.type.includes(ElementTypes.TEXTANNOTATION)) {
+        if (isAnnotation(descriptor)) {
             // `text ?? ""` mirrors the renderer, which treats a missing
             // annotation text as empty rather than undefined.
             this.pasteText.push(oldBusinessObject.text ?? "");
@@ -95,7 +95,7 @@ export class DomainStoryPasteRestore {
         for (const elementsKey in event.elements) {
             const element = event.elements[elementsKey];
 
-            if (element.type.includes(ElementTypes.TEXTANNOTATION)) {
+            if (isAnnotation(element)) {
                 element.businessObject.text = this.pasteText[0];
                 // The renderer persists annotation height via `number` because
                 // the `height` keyword is not exported (drawAnnotation contract).
