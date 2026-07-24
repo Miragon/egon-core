@@ -4,6 +4,7 @@ import CommandHandler from "diagram-js/lib/command/CommandHandler";
 import { Connection, Element, ElementLike } from "diagram-js/lib/model/Types";
 import { ElementRegistryService } from "../../../service/ElementRegistryService";
 import { ActivityCanvasObject } from "../../../../story/domain/canvasObject";
+import { restoredNumberAssignments } from "../../../../story/domain/activityNumbering";
 import { DomainStoryModeling } from "../../modeling/DomainStoryModeling";
 import { DomainStoryNumberingRegistry } from "../../popup/DomainStoryNumberingRegistry";
 
@@ -132,21 +133,25 @@ export class ActivityDirectionChangedHandler implements CommandHandler {
     }
 }
 
-// reverts the automatic changed done by the automatic number-generation at editing
+// reverts the automatic changes done by the automatic number-generation at editing
 function revertAutomaticNumberGenerationChange(
-    iDWithNumber: any[],
+    iDWithNumber: { id: string; number?: number }[],
     activities: ActivityCanvasObject[],
     eventBus: EventBus,
 ) {
-    for (let i = activities.length - 1; i >= 0; i--) {
-        for (let j = iDWithNumber.length - 1; j >= 0; j--) {
-            if (iDWithNumber[j].id.includes(activities[i].businessObject.id)) {
-                const element = activities[i];
-                element.businessObject.number = iDWithNumber[j].number;
-                j = -5;
-                eventBus.fire("element.changed", { element });
-                iDWithNumber.splice(j, 1);
-            }
+    const activitiesById = new Map(
+        activities.map((activity) => [activity.businessObject.id, activity]),
+    );
+
+    restoredNumberAssignments(
+        iDWithNumber,
+        activities.map((activity) => activity.businessObject.id),
+    ).forEach(({ id, number }) => {
+        const element = activitiesById.get(id);
+        if (!element) {
+            return;
         }
-    }
+        element.businessObject.number = number;
+        eventBus.fire("element.changed", { element });
+    });
 }
