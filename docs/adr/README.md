@@ -18,3 +18,4 @@ and the rules (when to write one, how superseding works).
 | [0010](0010-flat-ddd-feature-layout-and-frozen-public-api.md) | Flat DDD feature layout + frozen public API        | accepted                                                                    |
 | [0011](0011-adopt-align-to-origin.md)                         | Adopt align-to-origin; expose align/fit-to-screen  | accepted                                                                    |
 | [0012](0012-no-module-level-mutable-state.md)                 | Mutable state on classes; module scope stays pure  | accepted                                                                    |
+| [0013](0013-two-tier-test-architecture.md)                    | Two-tier tests: unit (jsdom) + browser (chromium)  | accepted                                                                    |

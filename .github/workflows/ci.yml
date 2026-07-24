@@ -55,6 +55,19 @@ jobs:
               continue-on-error: true
               uses: davelosert/vitest-coverage-report-action@8b157684c6a6b259b97d45e72b44242865c0f6a5 # v2.12.2
 
+    # Real-browser tier: boots a genuine EgonClient in headless chromium, which
+    # jsdom can't (diagram-js measures SVG via getBBox). Kept a separate job so
+    # the fast unit `test` job still gates coverage without a browser download.
+    test-browser:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: ./.github/actions/setup
+            # --with-deps pulls chromium's apt libraries; the browser version is
+            # pinned via the exact-pinned playwright dependency.
+            - run: yarn playwright install --with-deps chromium
+            - run: yarn test:browser
+
     build:
         runs-on: ubuntu-latest
         steps:
@@ -98,6 +111,7 @@ jobs:
                 typecheck,
                 format-check,
                 test,
+                test-browser,
                 build,
                 pin-check,
                 dependency-review,

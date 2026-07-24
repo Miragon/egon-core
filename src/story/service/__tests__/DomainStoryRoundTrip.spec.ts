@@ -1,7 +1,6 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseExportFile } from "../ExportFileParser";
+import { importFixture } from "../../../__tests__/helpers/importFixture";
 import { DomainStoryExportService } from "../DomainStoryExportService";
 import { DomainStoryPropertiesService } from "../../../modeler/service/DomainStoryPropertiesService";
 import { IconDictionaryService } from "../../../iconSet/service/IconDictionaryService";
@@ -19,13 +18,9 @@ const noopStyleSheet: IconStyleSheetPort = { addIconStyle() {} };
  * registry (which needs a live canvas) is stubbed — so it proves the metadata
  * and icon-set name actually survive the trip rather than merely being echoed.
  */
-function loadFixture(name: string): any {
-    return JSON.parse(readFileSync(join(__dirname, "fixtures", name), "utf8"));
-}
-
 describe("v4.0.0 open→save round-trip", () => {
     it("preserves title/description/scope and the icon-set name, converges on 4.0.0, and emits no trailer", () => {
-        const fixture = loadFixture("egn_export_version_4_0_0.json");
+        const fixture = importFixture<any>("egn_export_version_4_0_0.json");
         const { iconSetConfiguration, domainStory } = parseExportFile(fixture);
 
         // --- import side: load the icon set and remember the metadata ---
@@ -87,7 +82,7 @@ describe("v4.0.0 open→save round-trip", () => {
     // "––", no "%3C"/"%3E" escaping creeping into the persisted model.
     it("round-trips a label with '--', '<', '>' through JSON export/import verbatim", () => {
         const rawLabel = "a--b <c>";
-        const fixture = loadFixture("egn_export_version_4_0_0.json");
+        const fixture = importFixture<any>("egn_export_version_4_0_0.json");
         const targetId = fixture.domainStory.businessObjects[0].id;
         fixture.domainStory.businessObjects[0].name = rawLabel;
 

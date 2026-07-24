@@ -1,16 +1,10 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
     extractDomainStory,
     extractIconSetConfiguration,
     parseExportFile,
 } from "../ExportFileParser";
-
-/** Loads a raw upstream export fixture by filename. */
-function loadFixture(name: string): any {
-    return JSON.parse(readFileSync(join(__dirname, "fixtures", name), "utf8"));
-}
+import { importFixture } from "../../../__tests__/helpers/importFixture";
 
 /**
  * Legacy `.dst` fixtures. `stringPayload` marks the v1.x files whose `domain`
@@ -59,7 +53,7 @@ describe("import compatibility across historical formats", () => {
         "normalizes legacy $file into 13 objects, version $version, and a decoded icon set",
         ({ file, version }) => {
             const { domainStory, iconSetConfiguration } = parseExportFile(
-                loadFixture(file),
+                importFixture(file),
             );
 
             expect(domainStory.businessObjects).toHaveLength(13);
@@ -84,7 +78,7 @@ describe("import compatibility across historical formats", () => {
 
     it("parses the v4.0.0 format including title, description, and scope", () => {
         const { domainStory, iconSetConfiguration } = parseExportFile(
-            loadFixture("egn_export_version_4_0_0.json"),
+            importFixture("egn_export_version_4_0_0.json"),
         );
 
         expect(domainStory.businessObjects).toHaveLength(13);
@@ -101,11 +95,32 @@ describe("import compatibility across historical formats", () => {
         expect(iconSetConfiguration!.name).toBe("default");
     });
 
+    // The hand-authored cinema story is shared harness fixture data; parsing it
+    // here is its executable contract — if the parser ever rejects it, the
+    // browser smoke test that imports it would fail for an unrelated reason.
+    it("accepts the hand-authored cinema story fixture", () => {
+        const { domainStory, iconSetConfiguration } = parseExportFile(
+            importFixture("egn_cinema_story.egn.json"),
+        );
+
+        expect(domainStory.businessObjects).toHaveLength(7);
+        expect(domainStory.version).toBe("4.0.0");
+        expect(domainStory.title).toBe("Cinema");
+        expect(domainStory.scope).toEqual({
+            granularity: "coarse-grained",
+            pointInTime: "to-be",
+            domainPurity: "digitalized",
+        });
+        expect(iconSetConfiguration!.name).toBe("default");
+        expect(Object.keys(iconSetConfiguration!.actors)).toHaveLength(3);
+        expect(Object.keys(iconSetConfiguration!.workObjects)).toHaveLength(6);
+    });
+
     it("no longer throws on v1.x string payloads (regression for the raw-passthrough crash)", () => {
         for (const { file } of LEGACY_FIXTURES.filter(
             (fixture) => fixture.stringPayload,
         )) {
-            expect(() => parseExportFile(loadFixture(file))).not.toThrow();
+            expect(() => parseExportFile(importFixture(file))).not.toThrow();
         }
     });
 });

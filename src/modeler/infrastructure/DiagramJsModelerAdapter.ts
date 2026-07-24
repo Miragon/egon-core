@@ -36,10 +36,12 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     ) {
         this.initializeContainer(container);
 
+        // diagram-js injects `config.canvas` into its Canvas, so container/size
+        // must be nested under `canvas` — passed at the top level they are
+        // silently ignored and the canvas renders into document.body instead of
+        // the host-provided element, breaking multi-instance isolation.
         this.diagram = new Diagram({
-            container,
-            width,
-            height,
+            canvas: { container, width, height },
             modules: [EgonPlugin, ...additionalModules],
         });
 

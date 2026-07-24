@@ -1,5 +1,6 @@
 /// <reference types="vitest" />
 import { defineConfig } from "vite";
+import { configDefaults } from "vitest/config";
 import dts from "vite-plugin-dts";
 import tsconfigPaths from "vite-tsconfig-paths";
 
@@ -65,6 +66,12 @@ export default defineConfig({
             transformMixedEsModules: true,
         },
     },
+    // Two tiers, split by vitest projects (ADR 0013). Root options are shared
+    // via `extends: true`; each project narrows environment and file set.
+    // - `unit`: fast jsdom suite; the default `yarn test`/coverage loop. Ports
+    //   and diagram-js are mocked here.
+    // - `browser`: real chromium via playwright, the only tier where a genuine
+    //   EgonClient boot renders (jsdom can't compute SVG getBBox).
     test: {
         globals: true,
         environment: "jsdom",
@@ -73,6 +80,44 @@ export default defineConfig({
             // json-summary + json feed the PR coverage-report action; the v8
             // default omits them, so name the reporters explicitly.
             reporter: ["text", "json-summary", "json"],
+            // Coverage runs unit-only, so gate just the framework-free domain
+            // model — the layer that must stay well-tested. Ratchet upward as
+            // coverage improves; never lower to make a red build pass.
+            thresholds: {
+                "src/**/domain/**": {
+                    statements: 54,
+                    branches: 91,
+                    functions: 66,
+                    lines: 54,
+                },
+            },
         },
+        projects: [
+            {
+                extends: true,
+                test: {
+                    name: "unit",
+                    // `exclude` replaces vitest's defaults, so re-add them
+                    // before subtracting the browser specs.
+                    exclude: [
+                        ...configDefaults.exclude,
+                        "**/*.browser.spec.ts",
+                    ],
+                },
+            },
+            {
+                extends: true,
+                test: {
+                    name: "browser",
+                    include: ["src/**/*.browser.spec.ts"],
+                    browser: {
+                        enabled: true,
+                        headless: true,
+                        provider: "playwright",
+                        instances: [{ browser: "chromium" }],
+                    },
+                },
+            },
+        ],
     },
 });
