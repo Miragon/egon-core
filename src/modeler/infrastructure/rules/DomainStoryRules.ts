@@ -1,175 +1,38 @@
-import { assign, every, reduce } from "min-dash";
-import { Connection, Element, Label, Shape } from "diagram-js/lib/model/Types";
+import { every, reduce } from "min-dash";
+import { Connection, Element, Shape } from "diagram-js/lib/model/Types";
 import EventBus from "diagram-js/lib/core/EventBus";
 import RuleProvider from "diagram-js/lib/features/rules/RuleProvider";
-import { ElementTypes } from "../../../story/domain/elementTypes";
-import { is } from "../../../shared/infrastructure/util";
+import { isConnection, isGroup } from "../../../story/domain/elementPredicates";
+import {
+    canConnect,
+    canConnectToAnnotation,
+    canCreate,
+    canResize,
+    canStartConnection,
+    clampGroupBounds,
+} from "../../../story/domain/modelingRules";
+import { getBusinessObject } from "../../../shared/infrastructure/util";
 
 const HIGH_PRIORITY = 1500;
-const MIN_SIZE = 125;
-
-export function isGroup(element: Element) {
-    return element && /^domainStory:group/.test(element["type"]);
-}
-
-function isActor(element: Element) {
-    return element && /^domainStory:actor\w*/.test(element["type"]);
-}
-
-function isWorkObject(element: Element) {
-    return element && /^domainStory:workObject/.test(element["type"]);
-}
-
-function isActivity(element: Element) {
-    return element && /^domainStory:activity/.test(element["type"]);
-}
-
-function isConnection(element: Element): element is Connection {
-    return element && /^domainStory:connection/.test(element["type"]);
-}
-
-function isAnnotation(element: Element) {
-    return element && /^domainStory:textAnnotation/.test(element["type"]);
-}
-
-// indirect usage of IMPLICIT_ROOT_ID, constant not used because of Regex
-export function isBackground(element: Element) {
-    return element && /^__implicitroot/.test(element.id);
-}
-
-export function isLabel(element: Element): element is Label {
-    return element && !!element.label?.labelTarget;
-}
-
-function nonExistingOrLabel(element: Element) {
-    return !element || isLabel(element);
-}
-
-function canStartConnection(element: Element) {
-    if (nonExistingOrLabel(element)) {
-        return null;
-    }
-    return false;
-}
 
 /**
- * can source and target be connected?
+ * diagram-js adapter for the Domain Storytelling notation grammar.
+ *
+ * WHY: the grammar itself lives in `story/domain/modelingRules` (pure and
+ * tested); this class only wires it into diagram-js's rule protocol and
+ * preserves the two framework-specific contracts the pure functions cannot
+ * express — the legacy `undefined` tri-state that `elements.move` depends on
+ * (returning `false` would forbid moving a non-group over empty canvas), and the
+ * in-place mutation of `context.newBounds` that diagram-js's resize expects.
  */
-function canConnect(source: Element, target: Element) {
-    // never connect to background; since the direction of the activity can get reversed during dragging, we also have to check if the source
-    if (isBackground(target) || isBackground(source)) {
-        return false;
-    }
 
-    if (isGroup(target)) {
-        return false;
-    }
-
-    // do not allow a connection from one element to itself
-    if (source === target) {
-        return false;
-    }
-
-    // do not allow a connection between two actors
-    if (isActor(source) && isActor(target)) {
-        return false;
-    }
-
-    // do not allow a connection, where the source or target is an activity
-    if (isActivity(source) || isActivity(target)) {
-        return false;
-    }
-
-    // do not allow a connection, where the source or target is an annotation connection
-    if (isConnection(source) || isConnection(target)) {
-        return false;
-    }
-
-    // do not allow a connection to a connection (the special type of connection between an element and a comment box)
-    // when the target is an annotation, the connection type is an annotation connection instead of an activity
-    if (isAnnotation(target)) {
-        return { type: ElementTypes.CONNECTION };
-    }
-
-    return { type: ElementTypes.ACTIVITY };
-}
-
-function canResize(shape: Shape, newBounds: Shape) {
-    if (is(shape, ElementTypes.GROUP)) {
-        if (newBounds) {
-            const lowerLeft = { x: shape.x, y: shape.y + shape.height };
-            const lowerRight = {
-                x: shape.x + shape.width,
-                y: shape.y + shape.height,
-            };
-            const upperRight = { x: shape.x + shape.width, y: shape.y };
-
-            if (newBounds.x !== shape.x && newBounds.y !== shape.y) {
-                // upper left
-                if (newBounds.x > lowerRight.x - MIN_SIZE) {
-                    assign(newBounds, { x: lowerRight.x - MIN_SIZE });
-                }
-                if (newBounds.y > lowerRight.y - MIN_SIZE) {
-                    assign(newBounds, { y: lowerRight.y - MIN_SIZE });
-                }
-            }
-
-            if (newBounds.x !== shape.x && newBounds.y === shape.y) {
-                // lower left
-                if (newBounds.x > upperRight.x - MIN_SIZE) {
-                    assign(newBounds, { x: upperRight.x - MIN_SIZE });
-                }
-            }
-
-            if (newBounds.x === shape.x && newBounds.y !== shape.y) {
-                // upper right
-                if (newBounds.y > lowerLeft.y - MIN_SIZE) {
-                    assign(newBounds, { y: lowerLeft.y - MIN_SIZE });
-                }
-            }
-
-            if (newBounds.height < MIN_SIZE) {
-                assign(newBounds, {
-                    height: MIN_SIZE,
-                });
-            }
-            if (newBounds.width < MIN_SIZE) {
-                assign(newBounds, {
-                    width: MIN_SIZE,
-                });
-            }
-        }
-        return true;
-    }
-
-    return false;
-}
-
-function canConnectToAnnotation(
-    source: Element,
-    target: Element,
-    connection: Element,
-) {
-    // do not allow an activity connecting to an annotation
-    if (isActivity(connection) && isAnnotation(target)) {
-        return false;
-    }
-
-    // do not allow an annotation connection between two annotations
-    if (
-        isConnection(connection) &&
-        isAnnotation(source) &&
-        isAnnotation(target)
-    ) {
-        return false;
-    }
-
-    // do not allow an annotation connection between an actor or workObject and anything except an annotation
-    return !(
-        isConnection(connection) &&
-        !isAnnotation(target) &&
-        (isActor(source) || isWorkObject(source))
-    );
+/**
+ * Narrows to a diagram-js `Connection` for callbacks that then read
+ * `source`/`target`. The domain `isConnection` returns a plain boolean and so
+ * cannot narrow the type; this thin wrapper restores the type guard.
+ */
+function isConnectionShape(element: Element): element is Connection {
+    return isConnection(element);
 }
 
 export class DomainStoryRules extends RuleProvider {
@@ -185,7 +48,7 @@ export class DomainStoryRules extends RuleProvider {
                 target = context.target;
 
             return every(elements, (element: Element) => {
-                if (isConnection(element)) {
+                if (isConnectionShape(element)) {
                     if (!element.source || !element.target) {
                         return false;
                     }
@@ -249,7 +112,19 @@ export class DomainStoryRules extends RuleProvider {
             const shape: Shape = context.shape,
                 newBounds: Shape = context.newBounds;
 
-            return canResize(shape, newBounds);
+            // `getBusinessObject` preserves the historical reading of
+            // `businessObject.type` (falling back to the element itself).
+            if (!canResize(getBusinessObject(shape))) {
+                return false;
+            }
+
+            // diagram-js resizes by mutating `newBounds` in place, so apply the
+            // clamped bounds onto it rather than returning a new object.
+            if (newBounds) {
+                Object.assign(newBounds, clampGroupBounds(shape, newBounds));
+            }
+
+            return true;
         });
 
         this.addRule("connection.start", function (context: any) {
@@ -271,10 +146,16 @@ export class DomainStoryRules extends RuleProvider {
     }
 
     /**
-     * can a shape be created on target?
+     * Bridges the pure `canCreate` to diagram-js's tri-state: with no hover
+     * target the move/create rules must return `undefined` ("keep evaluating"),
+     * not `false`, unless the shape is a group (always allowed). A naive
+     * strict-boolean rewrite here would forbid moving a plain shape over empty
+     * canvas.
      */
     private canCreate(shape: Element, target: Element) {
-        // allow creation on canvas || allow groups on everything || allow everything on groups
-        return isBackground(target) || isGroup(shape) || isGroup(target);
+        if (!target) {
+            return isGroup(shape) ? true : undefined;
+        }
+        return canCreate(shape, target);
     }
 }

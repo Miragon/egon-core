@@ -3,7 +3,14 @@ import {
     ActivityCanvasObject,
     CanvasObject,
 } from "../../story/domain/canvasObject";
-import { ElementTypes } from "../../story/domain/elementTypes";
+import { getIconId } from "../../story/domain/elementTypes";
+import {
+    isActivity,
+    isActor,
+    isAnnotation,
+    isGroup,
+    isWorkObject,
+} from "../../story/domain/elementPredicates";
 import { GroupCanvasObject } from "../../story/domain/groupCanvasObject";
 import { UsedIconList } from "../../story/domain/UsedIconList";
 
@@ -33,7 +40,7 @@ export class ElementRegistryService {
         const activities: ActivityCanvasObject[] = [];
 
         this.getAllCanvasObjects().forEach((element) => {
-            if (element.type.includes(ElementTypes.ACTIVITY)) {
+            if (isActivity(element)) {
                 activities.push(element as ActivityCanvasObject);
             }
         });
@@ -52,8 +59,7 @@ export class ElementRegistryService {
         while (groupObjects.length >= 1) {
             const currentGroup = groupObjects.pop();
             currentGroup?.children?.forEach((child: CanvasObject) => {
-                const type = child.type;
-                if (type.includes(ElementTypes.GROUP)) {
+                if (isGroup(child)) {
                     groupObjects.push(child as GroupCanvasObject);
                 }
             });
@@ -70,7 +76,7 @@ export class ElementRegistryService {
 
         for (const group of groupObjects) {
             group.children?.forEach((child: CanvasObject) => {
-                if (child.type.includes(ElementTypes.GROUP)) {
+                if (isGroup(child)) {
                     groupObjects.push(child as GroupCanvasObject);
                 }
             });
@@ -93,7 +99,7 @@ export class ElementRegistryService {
         const activities = this.getAllActivities();
 
         activities.forEach((activity: ActivityCanvasObject) => {
-            if (activity.source?.type.includes(ElementTypes.ACTOR)) {
+            if (isActor(activity.source)) {
                 activitiesFromActors.push(activity);
             }
         });
@@ -129,17 +135,13 @@ export class ElementRegistryService {
         const workObjects = this.getAllWorkObjects();
 
         return {
-            actors: actors.map((a) => a.type.replace(ElementTypes.ACTOR, "")),
-            workObjects: workObjects.map((w) =>
-                w.type.replace(ElementTypes.WORKOBJECT, ""),
-            ),
+            actors: actors.map((a) => getIconId(a.type)),
+            workObjects: workObjects.map((w) => getIconId(w.type)),
         };
     }
 
     getAllWorkObjects() {
-        return this.getAllCanvasObjects().filter((co) =>
-            co.type.includes(ElementTypes.WORKOBJECT),
-        );
+        return this.getAllCanvasObjects().filter((co) => isWorkObject(co));
     }
 
     private fillListOfCanvasObjects(
@@ -148,13 +150,13 @@ export class ElementRegistryService {
         groups: GroupCanvasObject[],
     ): void {
         allObjectsFromCanvas.forEach((canvasElement) => {
-            if (canvasElement.type === ElementTypes.ACTIVITY) {
+            if (isActivity(canvasElement)) {
                 objectList.push(canvasElement);
             }
 
             // ensure that Activities are always after Actors, Workobjects and Groups in .dst files
             else {
-                if (canvasElement.type === ElementTypes.TEXTANNOTATION) {
+                if (isAnnotation(canvasElement)) {
                     canvasElement.businessObject.width = canvasElement.width;
                     canvasElement.businessObject.height = canvasElement.height;
                 }
@@ -177,7 +179,7 @@ export class ElementRegistryService {
         for (const entry of registryElementNames) {
             if (entry.businessObject) {
                 const type = entry["type"];
-                if (type && type.includes(ElementTypes.GROUP)) {
+                if (isGroup(entry)) {
                     // if it is a group, memorize this for later
                     groupObjects.push(<GroupCanvasObject>entry);
                 } else if (type) {
@@ -188,8 +190,6 @@ export class ElementRegistryService {
     }
 
     private getAllActors() {
-        return this.getAllCanvasObjects().filter((co) =>
-            co.type.includes(ElementTypes.ACTOR),
-        );
+        return this.getAllCanvasObjects().filter((co) => isActor(co));
     }
 }

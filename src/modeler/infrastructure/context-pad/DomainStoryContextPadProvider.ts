@@ -27,6 +27,14 @@ import {
     rgbaToHex,
 } from "../../../shared/domain/colorConverter";
 import { ElementTypes } from "../../../story/domain/elementTypes";
+import {
+    isActivity,
+    isActor,
+    isAnnotation,
+    isConnection,
+    isGroup,
+    isWorkObject,
+} from "../../../story/domain/elementPredicates";
 import { DomainStoryNumberingRegistry } from "../popup/DomainStoryNumberingRegistry";
 
 /**
@@ -123,7 +131,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
     getContextPadEntries(element: Element): ContextPadEntries {
         let entries: Map<string, ContextPadEntry> = new Map();
 
-        if (element["type"].includes(ElementTypes.WORKOBJECT)) {
+        if (isWorkObject(element)) {
             entries.set(...this.addDelete([element]));
             entries.set(...this.addColorChange(element));
             entries.set(...this.addConnectWithActivity());
@@ -131,25 +139,25 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
             entries = new Map([...entries, ...this.addActors()]);
             entries = new Map([...entries, ...this.addWorkObjects()]);
             entries.set(...this.addChangeWorkObjectTypeMenu());
-        } else if (element["type"].includes(ElementTypes.ACTOR)) {
+        } else if (isActor(element)) {
             entries.set(...this.addDelete([element]));
             entries.set(...this.addColorChange(element));
             entries.set(...this.addConnectWithActivity());
             entries.set(...this.addTextAnnotation());
             entries = new Map([...entries, ...this.addWorkObjects()]);
             entries.set(...this.addChangeActorTypeMenu());
-        } else if (element["type"].includes(ElementTypes.GROUP)) {
+        } else if (isGroup(element)) {
             entries.set(...this.addDeleteGroupWithoutChildren());
             entries.set(...this.addTextAnnotation());
             entries.set(...this.addColorChange(element));
-        } else if (element["type"].includes(ElementTypes.ACTIVITY)) {
+        } else if (isActivity(element)) {
             entries.set(...this.addDelete([element]));
             entries.set(...this.addChangeDirection());
             entries.set(...this.addColorChange(element));
-        } else if (element["type"].includes(ElementTypes.TEXTANNOTATION)) {
+        } else if (isAnnotation(element)) {
             entries.set(...this.addDelete([element]));
             entries.set(...this.addColorChange(element));
-        } else if (element["type"].includes(ElementTypes.CONNECTION)) {
+        } else if (isConnection(element)) {
             entries.set(...this.addDelete([element]));
         }
 
@@ -255,11 +263,10 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
                         click: (_event: any, element: Element) => {
                             if (isArray(element)) {
                                 const groups = element.filter((el) =>
-                                    el.type.includes(ElementTypes.GROUP),
+                                    isGroup(el),
                                 );
                                 const otherElements = element.filter(
-                                    (el) =>
-                                        !el.type.includes(ElementTypes.GROUP),
+                                    (el) => !isGroup(el),
                                 );
                                 groups.forEach((group) =>
                                     this.modeling.removeGroup(group),
@@ -464,7 +471,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         const source = element.source;
         let newNumber;
 
-        if (source && source["type"].includes(ElementTypes.ACTOR)) {
+        if (isActor(source)) {
             newNumber = 0;
         } else {
             newNumber = this.numberingRegistry.generateAutomaticNumber(element);

@@ -2,7 +2,7 @@ import EventBus from "diagram-js/lib/core/EventBus";
 import CommandHandler from "diagram-js/lib/command/CommandHandler";
 import { CommandContext } from "diagram-js/lib/command/CommandStack";
 import { Element, ElementLike, Shape } from "diagram-js/lib/model/Types";
-import { ElementTypes } from "../../../../story/domain/elementTypes";
+import { isAnnotation } from "../../../../story/domain/elementPredicates";
 import {
     reworkGroupElements,
     undoGroupRework,
@@ -21,10 +21,7 @@ export class ElementColorChangeHandler implements CommandHandler {
         const semantic = context.businessObject;
         const element: Element = context.element;
 
-        if (
-            semantic.type.includes(ElementTypes.TEXTANNOTATION) &&
-            element.incoming[0]
-        ) {
+        if (isAnnotation(semantic) && element.incoming[0]) {
             element.incoming[0].businessObject.pickedColor = context.newColor;
             this.eventBus.fire("element.changed", {
                 element: element.incoming[0],
@@ -47,10 +44,7 @@ export class ElementColorChangeHandler implements CommandHandler {
         const semantic = context.businessObject;
         const element: Element = context.element;
 
-        if (
-            semantic.type.includes(ElementTypes.TEXTANNOTATION) &&
-            element.incoming[0]
-        ) {
+        if (isAnnotation(semantic) && element.incoming[0]) {
             element.incoming[0].businessObject.pickedColor = context.oldColor;
             this.eventBus.fire("element.changed", {
                 element: element.incoming[0],

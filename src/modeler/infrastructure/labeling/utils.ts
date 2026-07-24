@@ -1,19 +1,26 @@
 import { Element } from "diagram-js/lib/model/Types";
 
 import { ElementTypes } from "../../../story/domain/elementTypes";
+import {
+    isActivity,
+    isActor,
+    isAnnotation,
+    isGroup,
+    isWorkObject,
+} from "../../../story/domain/elementPredicates";
 import { is } from "../../../shared/infrastructure/util";
 import EventBus from "diagram-js/lib/core/EventBus";
 
 function getLabelAttr(semantic: any) {
     if (
-        semantic.type.includes(ElementTypes.ACTOR) ||
-        semantic.type.includes(ElementTypes.WORKOBJECT) ||
-        semantic.type.includes(ElementTypes.ACTIVITY) ||
-        semantic.type.includes(ElementTypes.GROUP)
+        isActor(semantic) ||
+        isWorkObject(semantic) ||
+        isActivity(semantic) ||
+        isGroup(semantic)
     ) {
         return "name";
     }
-    if (semantic.type.includes(ElementTypes.TEXTANNOTATION)) {
+    if (isAnnotation(semantic)) {
         return "text";
     } else {
         return "";
@@ -135,10 +142,7 @@ export function createAutocompleteForEdit(
     eventBus: EventBus,
 ) {
     clearOldAutocompleteList();
-    if (
-        !businessElement ||
-        !businessElement["type"].includes(ElementTypes.WORKOBJECT)
-    ) {
+    if (!businessElement || !isWorkObject(businessElement)) {
         return;
     }
 
@@ -157,14 +161,14 @@ export function createAutocompleteForEdit(
             !workObjectNames ||
             workObjectNames.length === 0 ||
             !businessElement ||
-            !businessElement["type"].includes(ElementTypes.WORKOBJECT)
+            !isWorkObject(businessElement)
         ) {
             return;
         }
 
         // the recycled direct-editing element carries an old value that must be
         // overridden with its current text before we filter against it
-        if (businessElement["type"].includes(ElementTypes.WORKOBJECT)) {
+        if (isWorkObject(businessElement)) {
             this.value = this.innerHTML;
         }
 
@@ -210,10 +214,7 @@ export function createAutocompleteForEdit(
     }
 
     editingBox.onkeydown = function (e: KeyboardEvent) {
-        if (
-            !businessElement ||
-            !businessElement["type"].includes(ElementTypes.WORKOBJECT)
-        ) {
+        if (!businessElement || !isWorkObject(businessElement)) {
             return;
         }
 

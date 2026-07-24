@@ -18,7 +18,16 @@ import {
     Box,
     numberBoxDefinitions,
 } from "../../../shared/infrastructure/numbering";
-import { ElementTypes, getIconId } from "../../../story/domain/elementTypes";
+import { getIconId } from "../../../story/domain/elementTypes";
+import {
+    isActivity,
+    isActor,
+    isAnnotation,
+    isConnection,
+    isDomainStoryElement,
+    isGroup,
+    isWorkObject,
+} from "../../../story/domain/elementPredicates";
 import { Point } from "diagram-js/lib/util/Types";
 import { countLines, labelPosition } from "../labeling/position";
 import { approximateArialSize11TextWidthInPixel } from "../labeling/utils";
@@ -82,7 +91,7 @@ export class DomainStoryRenderer extends BaseRenderer {
     }
 
     override canRender(element: Element): boolean {
-        return /^domainStory:/.test(element["type"]);
+        return isDomainStoryElement(element);
     }
 
     override drawShape(visuals: SVGElement, shape: Shape): SVGElement {
@@ -101,13 +110,13 @@ export class DomainStoryRenderer extends BaseRenderer {
 
         this.dirtyFlagService.makeDirty();
 
-        if (type.includes(ElementTypes.ACTOR)) {
+        if (isActor(shape)) {
             return this.drawActor(visuals, shape);
-        } else if (type.includes(ElementTypes.WORKOBJECT)) {
+        } else if (isWorkObject(shape)) {
             return this.drawWorkObject(visuals, shape);
-        } else if (type.includes(ElementTypes.TEXTANNOTATION)) {
+        } else if (isAnnotation(shape)) {
             return this.drawAnnotation(visuals, shape);
-        } else if (type.includes(ElementTypes.GROUP)) {
+        } else if (isGroup(shape)) {
             return this.drawGroup(visuals, shape);
         }
 
@@ -117,15 +126,13 @@ export class DomainStoryRenderer extends BaseRenderer {
     }
 
     override getShapePath(shape: Shape): string {
-        const type = shape["type"];
-
-        if (type.includes(ElementTypes.ACTOR)) {
+        if (isActor(shape)) {
             return this.getPath(shape);
-        } else if (type.includes(ElementTypes.WORKOBJECT)) {
+        } else if (isWorkObject(shape)) {
             return this.getPath(shape);
-        } else if (type.includes(ElementTypes.GROUP)) {
+        } else if (isGroup(shape)) {
             return this.getPath(shape);
-        } else if (type.includes(ElementTypes.TEXTANNOTATION)) {
+        } else if (isAnnotation(shape)) {
             return this.getPath(shape);
         } else {
             return super.getShapePath(shape);
@@ -144,9 +151,9 @@ export class DomainStoryRenderer extends BaseRenderer {
         if (!connection.businessObject.type) {
             connection.businessObject.type = type;
         }
-        if (type === ElementTypes.ACTIVITY) {
+        if (isActivity(connection)) {
             return this.drawActivity(visuals, connection);
-        } else if (type === ElementTypes.CONNECTION) {
+        } else if (isConnection(connection)) {
             return this.drawDSConnection(visuals, connection);
         } else {
             return super.drawConnection(visuals, connection);
@@ -749,21 +756,14 @@ export class DomainStoryRenderer extends BaseRenderer {
 
             const box = numberBoxDefinitions(element);
 
-            if (
-                semantic.number == null &&
-                element.source["type"] &&
-                element.source["type"].includes(ElementTypes.ACTOR)
-            ) {
+            if (semantic.number == null && isActor(element.source)) {
                 this.domainStoryNumberingRegistry.generateAutomaticNumber(
                     element,
                 );
             }
 
             // render the background for the number
-            if (
-                semantic.number &&
-                element.source["type"].includes(ElementTypes.ACTOR)
-            ) {
+            if (semantic.number && isActor(element.source)) {
                 this.generateActivityNumber(parentGfx, element, box);
             } else {
                 semantic.number = null;
