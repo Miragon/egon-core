@@ -18,5 +18,6 @@ Closes #
 
 - [ ] Tests added or updated (or N/A)
 - [ ] Docs / ADR updated (or N/A)
+- [ ] SYNC.md updated (or N/A)
 - [ ] Self-reviewed the diff
 - [ ] No new architecture-test (archunit) violations
