@@ -186,14 +186,36 @@ describe("DomainStoryRules", () => {
     });
 
     describe("connection.reconnect", () => {
-        it("ignores a forbidden annotation reconnect (returns undefined)", () => {
+        it("denies an annotation connection that does not land on an annotation", () => {
             expect(
                 fireRule("connection.reconnect", {
                     connection: { type: ElementTypes.CONNECTION },
                     source: ACTOR,
                     target: WORK_OBJECT,
                 }),
-            ).toBeUndefined();
+            ).toBe(false);
+        });
+
+        it("denies an activity reconnect onto an annotation", () => {
+            expect(
+                fireRule("connection.reconnect", {
+                    connection: { type: ElementTypes.ACTIVITY },
+                    source: ACTOR,
+                    target: ANNOTATION,
+                }),
+            ).toBe(false);
+        });
+
+        // BendpointMove retries a denied reconnect with the endpoints swapped;
+        // this is the orientation that retry produces.
+        it("denies the swapped orientation BendpointMove retries", () => {
+            expect(
+                fireRule("connection.reconnect", {
+                    connection: { type: ElementTypes.ACTIVITY },
+                    source: ANNOTATION,
+                    target: ACTOR,
+                }),
+            ).toBe(false);
         });
 
         it("re-evaluates an allowed reconnect through canConnect", () => {

@@ -4,11 +4,11 @@ import {
     Bounds,
     GROUP_MIN_SIZE,
     canConnect,
-    canConnectToAnnotation,
     canCreate,
     canResize,
     canStartConnection,
     clampGroupBounds,
+    isForbiddenAnnotationEdge,
 } from "../modelingRules";
 
 /**
@@ -86,62 +86,74 @@ describe("modelingRules", () => {
         });
     });
 
-    describe("canConnectToAnnotation", () => {
+    describe("isForbiddenAnnotationEdge", () => {
         it("denies an activity landing on an annotation", () => {
             expect(
-                canConnectToAnnotation(
+                isForbiddenAnnotationEdge(
                     ELEMENTS.actor,
                     ELEMENTS.annotation,
                     ELEMENTS.activity,
                 ),
-            ).toBe(false);
+            ).toBe(true);
+        });
+
+        // An annotation is only ever an edge target, so the swapped orientation
+        // `BendpointMove` retries must be denied too.
+        it("denies an activity touching an annotation at its source", () => {
+            expect(
+                isForbiddenAnnotationEdge(
+                    ELEMENTS.annotation,
+                    ELEMENTS.actor,
+                    ELEMENTS.activity,
+                ),
+            ).toBe(true);
         });
 
         it("denies an annotation connection between two annotations", () => {
             expect(
-                canConnectToAnnotation(
+                isForbiddenAnnotationEdge(
                     ELEMENTS.annotation,
                     ELEMENTS.annotation,
                     ELEMENTS.connection,
                 ),
-            ).toBe(false);
+            ).toBe(true);
         });
 
         it("denies an annotation connection from an actor/work object to a non-annotation", () => {
             expect(
-                canConnectToAnnotation(
+                isForbiddenAnnotationEdge(
                     ELEMENTS.actor,
                     ELEMENTS.workObject,
                     ELEMENTS.connection,
                 ),
-            ).toBe(false);
+            ).toBe(true);
             expect(
-                canConnectToAnnotation(
+                isForbiddenAnnotationEdge(
                     ELEMENTS.workObject,
                     ELEMENTS.actor,
                     ELEMENTS.connection,
                 ),
-            ).toBe(false);
+            ).toBe(true);
         });
 
         it("allows an annotation connection onto an annotation target", () => {
             expect(
-                canConnectToAnnotation(
+                isForbiddenAnnotationEdge(
                     ELEMENTS.actor,
                     ELEMENTS.annotation,
                     ELEMENTS.connection,
                 ),
-            ).toBe(true);
+            ).toBe(false);
         });
 
         it("allows a non-annotation activity connection", () => {
             expect(
-                canConnectToAnnotation(
+                isForbiddenAnnotationEdge(
                     ELEMENTS.actor,
                     ELEMENTS.workObject,
                     ELEMENTS.activity,
                 ),
-            ).toBe(true);
+            ).toBe(false);
         });
     });
 
