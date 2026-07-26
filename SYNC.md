@@ -70,6 +70,20 @@ future round. Offer the fixes upstream separately.
   prepended in reverse instead of appended. Fixed locally by dropping the third
   argument — diagram-js appends when `parentIndex` is omitted, which is the
   intent.
+- **`copy-paste.service.ts` loses a pasted annotation's height.** It stashes
+  `oldBusinessObject.height`, but nothing on a live canvas ever writes that
+  field for an annotation: `drawAnnotation` persists the height as
+  `businessObject.number` (the documented "the keyword height is not exported"
+  hack) and only the _export_ pass copies it onto `height`. So copy-pasting an
+  annotation drawn in the current session dropped its height; it only worked for
+  one round-tripped through a file, which is why the mock-based spec never saw
+  it. Fixed locally by falling back to `number` in
+  `DomainStoryPasteRestore.pasteElement`. Locked by
+  `CopyPasteIntegration.browser.spec.ts`, which asserts the precondition
+  (`number` set, `height` absent) so the two cannot drift apart again. Note the
+  local port already diverges on the apply side — it assigns `element.height`,
+  where upstream assigns `businessObject.height` and so leaves the shape at its
+  default size.
 - **`util.ts` calls Array-less methods on `element.children`.**
   `reworkGroupElements` did `innerShape.children.remove(shape)` and
   `undoGroupRework` did `parent.children.remove(shape)` /
