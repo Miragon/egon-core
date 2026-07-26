@@ -155,6 +155,25 @@ future round. Offer the fixes upstream separately.
   by `RendererModelPurity.browser.spec.ts` and the byte-strict matrix. Neither
   fix repairs history: a file that already accumulated drift keeps it (the v4.0.0
   fixture's `y: 370` against `original.y: 337`) — this stops the creep.
+- **A forbidden activity↔annotation reconnect was permitted** (issue
+  [#66](https://github.com/Miragon/egon-core/issues/66)). Two defects, both still
+  present upstream, and fixing either alone is not enough:
+  (1) the `connection.reconnect` adapter returned `undefined` on a denial, and
+  diagram-js' `Rules.allowed` maps `undefined` to **`true`** ("no rules
+  objected") — no lower-priority `connection.reconnect` provider exists for that
+  "no opinion" to defer to; (2) the grammar's `canConnectToAnnotation` guarded
+  only the **target**, so a bare `return false` would have handed the same
+  illegal edge back reversed — `false` is precisely what _enters_
+  `BendpointMove`'s swapped-endpoint retry, which would then have been allowed.
+  Fixed locally by renaming that predicate to `isForbiddenAnnotationEdge` with
+  inverted polarity and a symmetric activity clause (either endpoint an
+  annotation), plus `return false` in the adapter. Locked by a real bendpoint
+  drag in `ActivityConnections.browser.spec.ts` — the rule-level assertions go
+  green on the adapter half alone, only the drag catches the swap retry.
+  Side effect worth knowing on a sync: a _pre-existing_ illegal edge in a legacy
+  file now denies in both orientations, so `BendpointMove.start` returns early
+  and its bendpoints can no longer be dragged. The edge stays selectable and
+  deletable.
 
 ### Known, still shared with upstream
 
@@ -165,20 +184,6 @@ silently. Fixing one means inverting its assertions.
 
 Found while building the modeling-command suite (#55):
 
-- **A forbidden activity→annotation reconnect is permitted.** The
-  `connection.reconnect` rule returns `undefined` when `canConnectToAnnotation`
-  denies, and diagram-js' `Rules.allowed` maps `undefined` to **`true`** ("no
-  rules objected"). `BendpointMove` sets `context.allowed` straight from that
-  call, so dragging an activity's endpoint onto a text annotation is accepted and
-  creates an edge the grammar forbids. It should `return false` — no
-  lower-priority `connection.reconnect` provider exists for the `undefined`
-  "no opinion" to defer to. Left as-is here because
-  `rules/__tests__/DomainStoryRules.spec.ts` deliberately records the `undefined`
-  verdict as intended ("ignores a forbidden annotation reconnect"), so reversing
-  it is a maintainer decision; note the pure grammar
-  (`story/domain/modelingRules.ts`) is correct and only the adapter's verdict is
-  wrong. Pinned by `ActivityConnections.browser.spec.ts` ("permits a forbidden
-  activity→annotation reconnect").
 - **Undoing a number edit does not restore the edited activity's own number.**
   `DomainStoryPopupService.handleUpdate` writes
   `element.businessObject.number = number` _before_ executing

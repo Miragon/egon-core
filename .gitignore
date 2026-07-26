@@ -13,3 +13,6 @@ coverage
 !.yarn/sdks
 !.yarn/versions
 .pnp.*
+
+# vitest browser-mode failure artefacts
+**/__screenshots__

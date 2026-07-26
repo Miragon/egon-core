@@ -88,18 +88,26 @@ export function canConnect(
 }
 
 /**
- * Guards a reconnect against the three annotation-connection shapes the grammar
- * forbids: an activity landing on an annotation, an annotation connection
- * between two annotations, and an annotation connection from an actor/work
- * object to anything that is not an annotation.
+ * The three annotation-edge shapes the grammar forbids on a reconnect: an
+ * activity touching an annotation at *either* end, an annotation connection
+ * joining two annotations, and an annotation connection from an actor/work
+ * object that does not land on an annotation.
+ *
+ * WHY both ends are checked for an activity: `BendpointMove` retries a denied
+ * reconnect with the endpoints swapped, so guarding only the target lets the
+ * retry re-create the same illegal edge reversed. An annotation is only ever an
+ * edge target here (its context pad cannot start a connection).
  */
-export function canConnectToAnnotation(
+export function isForbiddenAnnotationEdge(
     source: GrammarElement,
     target: GrammarElement,
     connection: GrammarElement,
 ): boolean {
-    if (isActivity(connection) && isAnnotation(target)) {
-        return false;
+    if (
+        isActivity(connection) &&
+        (isAnnotation(source) || isAnnotation(target))
+    ) {
+        return true;
     }
 
     if (
@@ -107,10 +115,10 @@ export function canConnectToAnnotation(
         isAnnotation(source) &&
         isAnnotation(target)
     ) {
-        return false;
+        return true;
     }
 
-    return !(
+    return (
         isConnection(connection) &&
         !isAnnotation(target) &&
         (isActor(source) || isWorkObject(source))
