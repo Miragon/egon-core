@@ -1,35 +1,36 @@
 import { BusinessObject } from "../domain/businessObject";
-import { ActivityBusinessObject } from "../domain/activityBusinessObject";
-import { ElementTypes } from "../domain/elementTypes";
-import { isActivity, isConnection } from "../domain/elementPredicates";
+import {
+    PrunedStory,
+    normalizeIconNameWhitespace,
+    pruneUnreferencedConnections,
+    renameLegacyWorkObjectTypes,
+    stripBpmnProperties,
+} from "../domain/importRepair";
 
+/**
+ * Service-layer facade over the pure repair rules in
+ * `src/story/domain/importRepair.ts`.
+ *
+ * WHY it still exists after the rules moved to the domain: upstream Egon.io has
+ * an `ImportRepairService` with exactly these four method names, and the import
+ * service calls them in this order. Keeping the seam means a future sync round
+ * can diff upstream's file against this one line for line instead of against a
+ * reshaped call site (see SYNC.md). It holds no state and adds no logic — every
+ * method is one delegation.
+ */
 export class ImportRepairService {
+    /**
+     * Removes edges whose endpoints are not in the story.
+     *
+     * Diverges from upstream deliberately: upstream mutates `elements` and
+     * returns a `boolean` that its only call site discards, which both hid the
+     * `splice`-rebinding bug and threw away the information a host needs to warn
+     * the user. Returning the {@link PrunedStory} makes the loss a value.
+     */
     checkForUnreferencedElementsInActivitiesAndRepair(
-        elements: BusinessObject[],
-    ): boolean {
-        const activities: ActivityBusinessObject[] = [];
-        const objectIDs: string[] = [];
-
-        let complete = true;
-
-        elements.forEach((element) => {
-            if (isActivity(element) || isConnection(element)) {
-                activities.push(element as ActivityBusinessObject);
-            } else {
-                objectIDs.push(element.id);
-            }
-        });
-
-        activities.forEach((activity) => {
-            const source = activity.source;
-            const target = activity.target;
-            if (!objectIDs.includes(source) || !objectIDs.includes(target)) {
-                complete = false;
-                const activityIndex = elements.indexOf(activity);
-                elements = elements.splice(activityIndex, 1);
-            }
-        });
-        return complete;
+        elements: readonly BusinessObject[],
+    ): PrunedStory {
+        return pruneUnreferencedConnections(elements);
     }
 
     /**
@@ -40,43 +41,19 @@ export class ImportRepairService {
     updateCustomElementsPreviousV050(
         elements: BusinessObject[],
     ): BusinessObject[] {
-        for (const element of elements) {
-            if (element.type === ElementTypes.WORKOBJECT) {
-                element.type = ElementTypes.WORKOBJECT + "Document";
-            } else if (element.type === ElementTypes.WORKOBJECT + "Bubble") {
-                element.type = ElementTypes.WORKOBJECT + "Conversation";
-            }
-        }
-        return elements;
+        return renameLegacyWorkObjectTypes(elements);
     }
 
     // Early versions of Egon allowed Whitespaces in Icon names which are now not supported anymore.
     // To find the right icon in the dictionary, they need to be replaced.
-    removeWhitespacesFromIcons(elements: BusinessObject[]) {
-        elements.forEach((bo) => {
-            if (bo.type) {
-                bo.type = bo.type.replace(/ /g, "-");
-            }
-        });
+    removeWhitespacesFromIcons(elements: BusinessObject[]): BusinessObject[] {
+        return normalizeIconNameWhitespace(elements);
     }
 
-    removeUnnecessaryBpmnProperties(elements: BusinessObject[]) {
-        elements.forEach((bo) => {
-            // @ts-expect-error Property $type does exist
-            if (bo.$type) {
-                // @ts-expect-error Property $type does exist
-                bo.$type = undefined;
-            }
-            // @ts-expect-error Property $type does exist
-            if (bo.$descriptor) {
-                // @ts-expect-error Property $type does exist
-                bo.$descriptor = undefined;
-            }
-            // @ts-expect-error Property $type does exist
-            if (bo.di) {
-                // @ts-expect-error Property $type does exist
-                bo.di = undefined;
-            }
-        });
+    /** Drops the BPMN moddle leftovers v1.3.0+ files still carry. */
+    removeUnnecessaryBpmnProperties(
+        elements: BusinessObject[],
+    ): BusinessObject[] {
+        return stripBpmnProperties(elements);
     }
 }

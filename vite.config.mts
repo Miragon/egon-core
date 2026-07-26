@@ -85,10 +85,10 @@ export default defineConfig({
             // coverage improves; never lower to make a red build pass.
             thresholds: {
                 "src/**/domain/**": {
-                    statements: 54,
-                    branches: 91,
-                    functions: 66,
-                    lines: 54,
+                    statements: 80,
+                    branches: 98,
+                    functions: 80,
+                    lines: 80,
                 },
             },
         },
