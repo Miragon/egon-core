@@ -2,7 +2,6 @@ import EventBus from "diagram-js/lib/core/EventBus";
 import { isActivity } from "../../../story/domain/elementPredicates";
 import { html, render } from "diagram-js/lib/ui";
 import PopupMenu from "../../../shared/infrastructure/ui/PopupMenu";
-import { DomainStoryNumberingRegistry } from "./DomainStoryNumberingRegistry";
 import { ActivityCanvasObject } from "../../../story/domain/canvasObject";
 import CommandStack from "diagram-js/lib/command/CommandStack";
 import { ElementRegistryService } from "../../service/ElementRegistryService";
@@ -14,7 +13,6 @@ export class DomainStoryPopupService {
         "eventBus",
         "commandStack",
         "domainStoryElementRegistryService",
-        "domainStoryNumberingRegistry",
     ];
 
     private popupElement: HTMLElement | null = null;
@@ -31,7 +29,6 @@ export class DomainStoryPopupService {
         private readonly eventBus: EventBus,
         private readonly commandStack: CommandStack,
         private readonly elementRegistryService: ElementRegistryService,
-        private readonly domainStoryNumberingRegistry: DomainStoryNumberingRegistry,
     ) {
         this.eventBus.on("element.dblclick", (event: any) => {
             const { element } = event;
@@ -125,62 +122,28 @@ export class DomainStoryPopupService {
         }
     }
 
+    /**
+     * Translates the popup's form values into one `activity.changed` action and
+     * nothing else. **The popup must not touch the model**: every mutation it
+     * used to make ahead of the command (the number, the allowance, the registry
+     * flag) and the cascade it ran after it were invisible to undo and to redo.
+     * The handler owns the whole transaction now.
+     */
     private handleUpdate = (
         element: ActivityCanvasObject,
         label: string,
         number: number | undefined,
         isMultiple: boolean,
     ) => {
-        const activitiesFromActors =
-            this.elementRegistryService.getActivitiesFromActors();
-        const index = activitiesFromActors.indexOf(element);
-
-        activitiesFromActors.splice(index, 1);
-
-        if (number) {
-            element.businessObject.number = number;
-            this.domainStoryNumberingRegistry.setNumberIsMultiple(
-                number,
-                isMultiple,
-            );
-        }
-        element.businessObject.multipleNumberAllowed = isMultiple;
-
-        let options: any;
-        if (number) {
-            options = {
-                businessObject: element.businessObject,
-                newLabel: label,
-                newNumber: number,
-                element,
-            };
-        } else {
-            options = {
-                businessObject: element.businessObject,
-                newLabel: label,
-                element,
-            };
-        }
-
-        this.commandStack.execute("activity.changed", options);
-
-        if (number) {
-            if (element.businessObject.multipleNumberAllowed) {
-                if (
-                    !this.domainStoryNumberingRegistry.isNumberMultiple(number)
-                ) {
-                    this.domainStoryNumberingRegistry.updateExistingNumbersAtEditing(
-                        activitiesFromActors,
-                        number,
-                    );
-                }
-            } else if (!element.businessObject.multipleNumberAllowed) {
-                this.domainStoryNumberingRegistry.updateExistingNumbersAtEditing(
-                    activitiesFromActors,
-                    number,
-                );
-            }
-        }
+        this.commandStack.execute("activity.changed", {
+            businessObject: element.businessObject,
+            element,
+            newLabel: label,
+            // `PopupMenu` reports an empty number field as 0; "no number" has to
+            // reach the handler as undefined, not as a number to cascade from.
+            newNumber: number || undefined,
+            newMultipleNumberAllowed: isMultiple,
+        });
     };
 
     private handleOutsideClick = (event: MouseEvent) => {

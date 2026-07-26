@@ -87,6 +87,7 @@ export default function PopupMenu(props: PopupProps) {
                                   <input
                                       name="multiple"
                                       type="checkbox"
+                                      checked=${isMultiple}
                                       onInput=${handleMultipleChange}
                                   />
                               </div>
@@ -99,6 +100,7 @@ export default function PopupMenu(props: PopupProps) {
                                   <input
                                       name="index"
                                       type="number"
+                                      min="1"
                                       value=${index}
                                       onInput=${handleNumberChange}
                                       style="flex: 1; 

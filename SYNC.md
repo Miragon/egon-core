@@ -155,6 +155,38 @@ future round. Offer the fixes upstream separately.
   by `RendererModelPurity.browser.spec.ts` and the byte-strict matrix. Neither
   fix repairs history: a file that already accumulated drift keeps it (the v4.0.0
   fixture's `y: 370` against `original.y: 337`) — this stops the creep.
+- **The activity number edit is split across three places, so undo and redo both
+  corrupt the sequence.** Upstream still spreads one edit over
+  `DomainStoryPopupService.handleUpdate` (which writes
+  `businessObject.number`/`multipleNumberAllowed` and the registry's
+  "multiple" flag _before_ the command), `ActivityChangedHandler` (whose
+  `preExecute` therefore snapshots an already-mutated model, and whose
+  `modeling.updateNumber` no-ops because the number already matches), and a
+  renumbering cascade run _after_ `commandStack.execute`. Three defects follow:
+  undo does not restore the edited activity's own number — measured with
+  activities 1/2/3 and the third edited to 1, the edit gives `{a3:1, a1:2, a2:3}`
+  but undo gives `{a1:1, a2:2, a3:1}`, **two activities numbered 1**; redo re-runs
+  `execute` only, so the cascade is not re-applied and the duplicates return; and
+  the registry's multiple-number flags are never undone at all. Fixed locally by
+  making `activity.changed` the whole transaction: `preExecute` snapshots (label,
+  number, allowance, `getNumbersAndIDs()`, and a **copy** of the multiple-number
+  registry), `execute` applies the edit _and_ the cascade, `revert` restores all
+  of it. The popup now only builds the command context and touches nothing.
+  Consequently `renumberOnNumberEdit` takes an `ActivityNumberEdit` descriptor
+  (`{ id, number, multipleAllowed }`) and owns the multiple-allowed suppression
+  upstream keeps in the caller — which also kills upstream's
+  `activitiesFromActors.splice(indexOf(element), 1)`, whose `-1` miss removed the
+  _last_ activity when the edited one was not actor-sourced; the domain now
+  excludes it by id instead. One deliberate behaviour change rides along:
+  `multipleAllowedByNumber` is read **pre-edit**, so a shifted activity keeps the
+  allowance it had rather than losing it to the popup's early write. Issue
+  [#68](https://github.com/Miragon/egon-core/issues/68); locked by
+  `ActivityNumbering.browser.spec.ts` (undo→redo→undo end to end),
+  `activityUpdateHandler.spec.ts`, `DomainStoryPopupService.spec.ts` and the
+  domain/registry specs. Two `PopupMenu` attributes were needed to make the
+  round trip exercisable at all: `checked` on the multiple checkbox (it always
+  opened unchecked, so re-saving silently cleared the allowance) and `min="1"` on
+  the number input.
 
 ### Known, still shared with upstream
 
@@ -179,26 +211,6 @@ Found while building the modeling-command suite (#55):
   (`story/domain/modelingRules.ts`) is correct and only the adapter's verdict is
   wrong. Pinned by `ActivityConnections.browser.spec.ts` ("permits a forbidden
   activity→annotation reconnect").
-- **Undoing a number edit does not restore the edited activity's own number.**
-  `DomainStoryPopupService.handleUpdate` writes
-  `element.businessObject.number = number` _before_ executing
-  `activity.changed`. `ActivityChangedHandler.preExecute` then snapshots
-  `getNumbersAndIDs()` and `context.oldNumber` from an already-mutated model, and
-  `modeling.updateNumber` no-ops because the number already matches — so no
-  nested `element.updateLabel` records the old value either. Measured with three
-  activities numbered 1/2/3 and the third edited to 1: the edit yields
-  `{a3:1, a1:2, a2:3}` correctly, but undo yields `{a1:1, a2:2, a3:1}` — the
-  cascade reverts, the edit does not, and two activities end up numbered 1. Fix
-  is to execute the command first and let the handler own the mutation, which
-  changes command semantics and so is left for a focused change.
-  `ActivityNumbering.browser.spec.ts` asserts only the cascade revert (what
-  `restoredNumberAssignments` exists for) and states the gap, deliberately not
-  asserting the buggy value — so a fix will not require editing that spec.
-- **`handleUpdate` mis-splices on an `indexOf` miss.**
-  `activitiesFromActors.splice(indexOf(element), 1)` removes the _last_ entry
-  when `indexOf` returns `-1`, reachable if the edited element is not in
-  `getActivitiesFromActors()` (e.g. a work-object-sourced activity). Latent, not
-  pinned.
 - **Undoing "Remove Group without Child-Elements" throws, and re-adopts
   nothing.** `elementUpdateHandler.js`'s `removeGroupWithoutChildren.revert`
   fires `shape.added` with no `gfx`, and diagram-js' `InteractionEvents`

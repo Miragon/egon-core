@@ -5,6 +5,7 @@ import { ElementRegistryService } from "../../service/ElementRegistryService";
 import { ActivityCanvasObject } from "../../../story/domain/canvasObject";
 import { ActivityBusinessObject } from "../../../story/domain/activityBusinessObject";
 import {
+    ActivityNumberEdit,
     nextAvailableActivityNumber,
     renumberOnNumberEdit,
 } from "../../../story/domain/activityNumbering";
@@ -39,6 +40,29 @@ export class DomainStoryNumberingRegistry {
 
     setNumberIsMultiple(number: number, multi: boolean) {
         this.multipleNumberRegistry[number] = multi;
+    }
+
+    /**
+     * A snapshot an undoable command can hold onto. The **copy is load-bearing**:
+     * `ActivityChangedHandler` keeps it in its command context for the lifetime
+     * of the action, across undo → redo → undo. Handing out the live array would
+     * let the redo's cascade write through the snapshot, so the second undo would
+     * restore post-edit values — silently, with no error anywhere.
+     */
+    snapshotMultipleNumberRegistry(): boolean[] {
+        return [...this.multipleNumberRegistry];
+    }
+
+    /**
+     * Restores a snapshot taken by `snapshotMultipleNumberRegistry`.
+     *
+     * **Replaces rather than merges**, and copies again on the way in. A
+     * per-index write-back would leave behind the slots a cascade added *beyond*
+     * the snapshot's length; copying keeps the caller's snapshot reusable for the
+     * next undo.
+     */
+    restoreMultipleNumberRegistry(snapshot: readonly boolean[]): void {
+        this.multipleNumberRegistry = [...snapshot];
     }
 
     updateMultipleNumberRegistry(
@@ -82,18 +106,24 @@ export class DomainStoryNumberingRegistry {
     }
 
     /**
-     * Update the numbers at the activities when editing an activity
+     * Update the numbers at the activities when editing an activity.
+     *
+     * `activitiesFromActors` may include the edited activity — the domain
+     * excludes it by `edit.id` — and must be read *before* the edit is written
+     * to the model, so the cascade sees the numbers it has to move out of the
+     * way. Applying the allowance updates before the assignments keeps the
+     * pre-edit flags readable inside `renumberOnNumberEdit`.
      */
     updateExistingNumbersAtEditing(
         activitiesFromActors: ActivityCanvasObject[],
-        wantedNumber: number,
+        edit: ActivityNumberEdit,
     ) {
         const { assignments, multipleAllowedUpdates } = renumberOnNumberEdit(
             activitiesFromActors.map((activity) => ({
                 id: activity.businessObject.id,
                 number: activity.businessObject.number,
             })),
-            wantedNumber,
+            edit,
             this.multipleNumberRegistry,
         );
 

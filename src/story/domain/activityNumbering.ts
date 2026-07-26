@@ -29,6 +29,21 @@ export interface NumberAssignment {
 }
 
 /**
+ * The edit the cascade has to make room for: which activity claims which
+ * number, and whether that number may be shared. Passed as one descriptor so
+ * the identity travels with the number — the cascade needs the id to exclude
+ * the edited activity from its own renumbering.
+ *
+ * `number` is assumed positive; the falsy guard lives at the call site, which
+ * can still tell a cleared input field apart from a real number.
+ */
+export interface ActivityNumberEdit {
+    id: string;
+    number: number;
+    multipleAllowed: boolean;
+}
+
+/**
  * The smallest positive integer not yet used as an activity number — deleted
  * activities leave gaps, and the story reads best when those gaps are refilled
  * before the sequence grows.
@@ -56,39 +71,59 @@ export function nextAvailableActivityNumber(
 }
 
 /**
- * Cascade renumbering when an activity is (re-)assigned `editedNumber`: every
- * occupied number ≥ `editedNumber` moves up to the next consecutive slot, so
- * the edited activity claims its number without duplicating it. Gaps above the
+ * Cascade renumbering when an activity is (re-)assigned `edit.number`: every
+ * occupied number ≥ `edit.number` moves up to the next consecutive slot, so the
+ * edited activity claims its number without duplicating it. Gaps above the
  * edited number are compacted as a side effect — occupied numbers are packed
- * consecutively from `editedNumber + 1` upward, preserving their order.
+ * consecutively from `edit.number + 1` upward, preserving their order.
  *
- * Activities sharing one number move together (the multiple-number allowance),
- * and each number's "may occur multiple times" flag travels with it: the
- * returned updates re-index `multipleAllowedByNumber` from old to new slots.
- * The edited activity itself must not be in `activities` — the caller already
- * holds it and excludes it, exactly as the popup edit flow does.
+ * Four things a future reader would otherwise undo:
+ *
+ * 1. `activities` **may** contain the edited activity; it is excluded here by
+ *    `edit.id`. The predecessor asked the caller to exclude it, and the caller
+ *    did so with `splice(indexOf(...), 1)` — which removes the *last* entry on
+ *    a miss. Filtering by id cannot miss.
+ * 2. No assignment is returned for the edited activity. It may be sourced from
+ *    a work object and so absent from `activities` altogether; the caller owns
+ *    writing its number either way.
+ * 3. `edit.multipleAllowed` suppresses the cascade entirely — sharing a number
+ *    is the whole point of the allowance, so nothing must move out of the way.
+ * 4. `multipleAllowedByNumber` is read **pre-edit**: slot `edit.number` still
+ *    holds the *previous* occupant's flag, and that flag travels upward with
+ *    them. The edit's own allowance is emitted separately (always first, and
+ *    every cascade slot is `> edit.number`, so the two cannot collide).
+ *
+ * Activities sharing one number move together, and each number's "may occur
+ * multiple times" flag travels with it: the returned updates re-index
+ * `multipleAllowedByNumber` from old to new slots.
  */
 export function renumberOnNumberEdit(
     activities: readonly NumberedActivity[],
-    editedNumber: number,
+    edit: ActivityNumberEdit,
     multipleAllowedByNumber: readonly boolean[],
 ): {
     assignments: NumberAssignment[];
     multipleAllowedUpdates: { number: number; allowed: boolean }[];
 } {
+    const assignments: NumberAssignment[] = [];
+    const multipleAllowedUpdates: { number: number; allowed: boolean }[] = [
+        { number: edit.number, allowed: edit.multipleAllowed },
+    ];
+
+    if (edit.multipleAllowed) {
+        return { assignments, multipleAllowedUpdates };
+    }
+
     const activitiesByNumber: NumberedActivity[][] = [];
     activities.forEach((activity) => {
-        if (activity.number) {
+        if (activity.number && activity.id !== edit.id) {
             (activitiesByNumber[activity.number] ??= []).push(activity);
         }
     });
 
-    const assignments: NumberAssignment[] = [];
-    const multipleAllowedUpdates: { number: number; allowed: boolean }[] = [];
-
-    let nextNumber = editedNumber;
+    let nextNumber = edit.number;
     for (
-        let currentNumber = editedNumber;
+        let currentNumber = edit.number;
         currentNumber < activitiesByNumber.length;
         currentNumber++
     ) {
