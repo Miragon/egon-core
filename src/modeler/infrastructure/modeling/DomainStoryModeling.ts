@@ -69,11 +69,14 @@ export class DomainStoryModeling extends Modeling {
         }
     }
 
+    /**
+     * Removes a group but keeps its contents. The deletion lives inside the
+     * command's `preExecute`, so lifting the children out and dropping the frame
+     * are one commandStack entry — one Ctrl+Z, not two.
+     */
     removeGroup(element: Element) {
         this.commandStack.execute("shape.removeGroupWithoutChildren", {
             element: element,
         });
-
-        this.removeElements([element]);
     }
 }

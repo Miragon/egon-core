@@ -1,8 +1,5 @@
 import { Element, Shape } from "diagram-js/lib/model/Types";
-import {
-    add as collectionAdd,
-    remove as collectionRemove,
-} from "diagram-js/lib/util/Collections";
+import { remove as collectionRemove } from "diagram-js/lib/util/Collections";
 
 // TODO: this will not work for actors and work objects as the name of the icon is part of the type
 export function is(element: Element | undefined, type: string): boolean {
@@ -50,30 +47,6 @@ export function reworkGroupElements(parent: any, shape: Shape) {
             }
         }
     });
-}
-
-/** Lifts `shape` out of the group `parent` and back onto the group's own parent. */
-export function undoGroupRework(parent: any, shape: Shape) {
-    const superParent = parent.parent;
-
-    // See reworkGroupElements: `children` is an Array, not a moddle collection.
-    collectionRemove(parent.children, shape);
-    collectionAdd(superParent.children, shape);
-
-    shape.parent = superParent;
-
-    const svgShape = document.querySelector(
-        "[data-element-id=" + shape.id + "]",
-    )?.parentElement;
-
-    if (!svgShape) {
-        throw new Error("No element with id " + shape.id + " found.");
-    }
-
-    const svgGroup = svgShape.parentElement;
-    const svgGroupParent = svgGroup?.parentElement?.parentElement;
-    svgGroup?.removeChild(svgShape);
-    svgGroupParent?.appendChild(svgShape);
 }
 
 export function isCustomIcon(icon: string) {
