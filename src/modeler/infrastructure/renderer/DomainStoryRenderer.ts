@@ -199,9 +199,6 @@ export class DomainStoryRenderer extends BaseRenderer {
     }
 
     drawGroup(parentGfx: SVGElement, element: Shape) {
-        if (!element.businessObject.pickedColor) {
-            element.businessObject.pickedColor = DEFAULT_COLOR;
-        }
         const rect = this.drawRect(
             parentGfx,
             element.width,
@@ -211,7 +208,7 @@ export class DomainStoryRenderer extends BaseRenderer {
             assign(
                 {
                     fill: "none",
-                    stroke: element.businessObject.pickedColor,
+                    stroke: element.businessObject.pickedColor ?? DEFAULT_COLOR,
                 },
                 element["attrs"],
             ),
@@ -223,22 +220,21 @@ export class DomainStoryRenderer extends BaseRenderer {
     }
 
     drawActivity(visuals: SVGElement, element: Connection): SVGElement {
-        this.adjustForTextOverlap(element);
+        const waypoints = this.waypointsClearOfSourceLabel(element);
 
         const attrs = this.useColorForActivity(element);
 
         const x = svgAppend(
             visuals,
-            createLine(element.waypoints, attrs),
+            createLine(waypoints, attrs),
         ) as SVGElement;
-        this.renderActivityLabel(visuals, element);
-        this.renderExternalNumber(visuals, element);
+        this.renderActivityLabel(visuals, element, waypoints);
+        this.renderExternalNumber(visuals, element, waypoints);
 
-        // Just adjusting the start- and endpoint of the connection-element moves only the drawn connection,
-        // not the interactive line. This can be fixed by manually overriding the points of the interactive polyline
-        // in the HTML with the points of the drawn one.
-        // This, however, does not adjust the surrounding box of the connection.
-        this.fixConnectionInHTML(visuals.parentElement);
+        // The drawn line deliberately diverges from `element.waypoints` by the
+        // overlap offset; diagram-js' hit path, bendpoint handles and selection
+        // outline follow the model (#65 — inside the ~15px djs-hit-stroke, and
+        // the divergent stretch lies inside the source shape's own hit area).
 
         // changes the color of the moved activity back to original instead of blue
         if (visuals.getAttribute("djs-dragger")) {
@@ -252,7 +248,7 @@ export class DomainStoryRenderer extends BaseRenderer {
     drawDSConnection(visuals: SVGElement, element: Connection): SVGElement {
         let attrs = "";
         attrs = this.styles.computeStyle(attrs, {
-            stroke: element.businessObject.pickedColor ?? "black",
+            stroke: element.businessObject.pickedColor ?? DEFAULT_COLOR,
             strokeWidth: 1.5,
             strokeLinejoin: "round",
             strokeDasharray: "5, 5",
@@ -299,7 +295,7 @@ export class DomainStoryRenderer extends BaseRenderer {
         const textPathData = getAnnotationBracketSvg(element.height);
 
         this.drawPath(parentGfx, textPathData, {
-            stroke: element.businessObject.pickedColor ?? "black",
+            stroke: element.businessObject.pickedColor ?? DEFAULT_COLOR,
         });
 
         this.renderLabel(parentGfx, text, {
@@ -307,7 +303,7 @@ export class DomainStoryRenderer extends BaseRenderer {
             align: "left-top",
             padding: 5,
             style: {
-                fill: element.businessObject.pickedColor ?? "black",
+                fill: element.businessObject.pickedColor ?? DEFAULT_COLOR,
             },
         });
 
@@ -462,49 +458,68 @@ export class DomainStoryRenderer extends BaseRenderer {
         }
     }
 
-    private adjustForTextOverlap(element: Connection) {
+    /**
+     * The waypoints this activity is *drawn* with: the element's own, with
+     * either end nudged clear of the source's label.
+     *
+     * Returns a copy and never writes to the element (#65). Upstream
+     * (`adjustForTextOverlap`) nudged the point in place, and for an imported
+     * story `element.waypoints` *is* `businessObject.waypoints`, so drawing
+     * persisted 5px into the saved file and the next open re-applied it.
+     *
+     * `slice()` suffices: the only write was to `point.y`, and the point-level
+     * helper now returns a fresh point. Untouched interior points are shared
+     * with the element on purpose — the render path only reads x/y.
+     *
+     * Both ends are measured against **`source`**, the end point included.
+     * That is upstream's behaviour and probably a bug of its own; the offset is
+     * only ever non-zero for a point under `source`'s label, so correcting it
+     * here would be an unrelated behaviour change.
+     */
+    private waypointsClearOfSourceLabel(element: Connection): Point[] {
         const source = element.source;
         const target = element.target;
 
-        const waypoints = element.waypoints;
-        const startPoint = waypoints[0];
-        const endPoint = waypoints[waypoints.length - 1];
+        const waypoints = element.waypoints.slice();
+        const lastIndex = waypoints.length - 1;
 
-        if (startPoint && endPoint && source && target) {
-            this.checkIfPointOverlapsText(startPoint, source);
-            this.checkIfPointOverlapsText(endPoint, source);
+        if (waypoints[0] && waypoints[lastIndex] && source && target) {
+            // Assigned back through the array, not via two captured locals:
+            // with a single waypoint both ends are the same entry and the
+            // offset applied twice. Reading the slot back reproduces that.
+            waypoints[0] = this.pointClearOfSourceLabel(waypoints[0], source);
+            waypoints[lastIndex] = this.pointClearOfSourceLabel(
+                waypoints[lastIndex],
+                source,
+            );
         }
+
+        return waypoints;
     }
 
     private useColorForActivity(element: Connection) {
-        if (!element.businessObject.pickedColor) {
-            element.businessObject.pickedColor = "black";
-        }
+        const color = element.businessObject.pickedColor ?? DEFAULT_COLOR;
         const attrs = "";
         return this.styles.computeStyle(attrs, {
-            stroke: element.businessObject.pickedColor,
+            stroke: color,
             fill: "none",
             strokeWidth: 1.5,
             strokeLinejoin: "round",
-            markerEnd: this.marker(
-                "activity",
-                "black",
-                element.businessObject.pickedColor,
-            ),
+            markerEnd: this.marker("activity", "black", color),
         });
     }
 
     private renderActivityLabel(
         parentGfx: SVGElement,
         element: Connection,
+        waypoints: Point[],
     ): SVGElement | undefined {
         const semantic = element.businessObject;
-        const waypoints = element.waypoints;
         const lines = countLines(semantic.name);
 
         const position = labelPosition(waypoints, lines);
-        const startPoint = element.waypoints[position.selected];
-        const endPoint = element.waypoints[position.selected + 1];
+        const startPoint = waypoints[position.selected];
+        const endPoint = waypoints[position.selected + 1];
         const angle = angleBetween(startPoint, endPoint);
         let alignment = "left";
         let boxWidth = 500;
@@ -554,15 +569,29 @@ export class DomainStoryRenderer extends BaseRenderer {
         return undefined;
     }
 
-    private checkIfPointOverlapsText(point: Point, source: Element) {
+    /**
+     * `point`, moved down far enough to clear `source`'s label — or `point`
+     * itself when it does not overlap.
+     *
+     * Never mutates its argument (#65; upstream: `checkIfPointOverlapsText`).
+     * The copy is a spread, so a docking point keeps its `original` anchor even
+     * though diagram-js' `Point` does not declare it — the returned array must
+     * stay substitutable for `element.waypoints`.
+     *
+     * Not pure in the wider sense: `getLineOffset` measures the source's
+     * rendered label out of the DOM, which is why this stays in the renderer
+     * instead of moving to `story/domain`.
+     */
+    private pointClearOfSourceLabel(point: Point, source: Element): Point {
         if (point.y > source["y"] + 60) {
             if (point.x > source["x"] + 3 && point.x < source["x"] + 72) {
                 const lineOffset = this.getLineOffset(source);
                 if (source["y"] + 75 + lineOffset > point.y) {
-                    point.y += lineOffset;
+                    return { ...point, y: point.y + lineOffset };
                 }
             }
         }
+        return point;
     }
 
     private getLineOffset(element: Element) {
@@ -587,23 +616,28 @@ export class DomainStoryRenderer extends BaseRenderer {
         return offset - 70;
     }
 
-    private fixConnectionInHTML(wantedConnection: HTMLElement | null) {
-        if (wantedConnection) {
-            const polylines = wantedConnection.getElementsByTagName("polyline");
-            if (polylines.length > 1) {
-                polylines[1].setAttribute(
-                    "points",
-                    <string>polylines[0].getAttribute("points"),
-                );
-            }
-        }
-    }
-
     /**
      * marker functions ("markers" are arrowheads of activities)
      */
+    /**
+     * The marker's DOM id, with everything a CSS identifier cannot carry folded
+     * to `_`.
+     *
+     * Load-bearing, not cosmetic: colours arrive as `#rrggbbaa`, and diagram-js'
+     * `PreviewSupport` clones a drag preview's arrowhead via
+     * `querySelector("marker#" + id)` — an unescaped `#` makes that throw
+     * `SyntaxError` and the drag dies. Upstream only ever hit this on a
+     * *coloured* activity; since #65 the default colour is `#000000` too, so it
+     * would otherwise break every activity drag.
+     */
+    private markerId(type: string, fill: string, stroke: string) {
+        return [type, fill, stroke, this.rendererId]
+            .join("-")
+            .replace(/[^\w-]/g, "_");
+    }
+
     private marker(type: string, fill: string, stroke: string) {
-        const id = type + "-" + fill + "-" + stroke + "-" + this.rendererId;
+        const id = this.markerId(type, fill, stroke);
 
         if (!this.markers[id]) {
             this.createMarker(type, fill, stroke);
@@ -612,7 +646,7 @@ export class DomainStoryRenderer extends BaseRenderer {
     }
 
     private createMarker(type: string, fill: string, stroke: string) {
-        const id = type + "-" + fill + "-" + stroke + "-" + this.rendererId;
+        const id = this.markerId(type, fill, stroke);
 
         if (type === "activity") {
             const activityArrow = svgCreate("path");
@@ -750,11 +784,15 @@ export class DomainStoryRenderer extends BaseRenderer {
     /**
      * render the number associated with an activity
      */
-    private renderExternalNumber(parentGfx: SVGElement, element: Connection) {
+    private renderExternalNumber(
+        parentGfx: SVGElement,
+        element: Connection,
+        waypoints: Point[],
+    ) {
         if (element && element.source) {
             const semantic = element.businessObject;
 
-            const box = numberBoxDefinitions(element);
+            const box = numberBoxDefinitions(waypoints);
 
             if (semantic.number == null && isActor(element.source)) {
                 this.domainStoryNumberingRegistry.generateAutomaticNumber(

@@ -1,5 +1,5 @@
 import { angleBetween } from "../domain/mathExtensions";
-import { Connection } from "diagram-js/lib/model/Types";
+import { Point } from "diagram-js/lib/util/Types";
 
 export interface Box {
     x: number;
@@ -9,24 +9,28 @@ export interface Box {
     textAlign: string;
 }
 
-// defines the box for activity numbers
-export function numberBoxDefinitions(element: Connection): Box {
+/**
+ * Defines the box for an activity's number, from the waypoints the activity is
+ * *drawn* with — not the element's own since #65: the start point is nudged
+ * clear of the source's label on a copy, and the number must follow the line.
+ */
+export function numberBoxDefinitions(waypoints: Point[]): Box {
     const alignment = "center";
     const boxWidth = 30;
     const boxHeight = 30;
     let angle = 0;
 
-    if (element.waypoints.length > 1) {
+    if (waypoints.length > 1) {
         angle =
             angleBetween(
                 // Start of a first arrow segment
-                element.waypoints[0],
+                waypoints[0],
                 // End of a first arrow segment
-                element.waypoints[1],
+                waypoints[1],
             ) ?? 0;
     }
-    let x = element.waypoints[0].x;
-    let y = element.waypoints[0].y;
+    let x = waypoints[0].x;
+    let y = waypoints[0].y;
 
     let fixedOffsetX = 0;
     let fixedOffsetY = 0;

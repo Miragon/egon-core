@@ -101,6 +101,60 @@ future round. Offer the fixes upstream separately.
   parents new children onto shapes the first import's `diagram.clear` already
   destroyed. Fixed locally with a `Map` cleared at the top of `import()`; the
   write-only `elements` field was deleted outright.
+- **`DomainStoryRenderer.checkIfPointOverlapsText` persists its overlap nudge into the saved file.**
+  `checkIfPointOverlapsText` does `point.y += lineOffset` on a point taken out of
+  `element.waypoints` to keep an activity's start clear of its source actor's
+  label. For an _imported_ story that array **is** `businessObject.waypoints` —
+  `import-domain-story.service.ts` aliases them via
+  `assign({ businessObject: bo }, bo)` and nothing on the import path clones — so
+  merely drawing writes 5px into the persisted model and the next open re-applies
+  it. The fixture family records
+  the creep: `connection_8174`'s start `y` is 172 / 177 / 182 / 187 across
+  v1.1.0→v1.4.0, until the guard's `source.y + 75 + offset` ceiling stops it.
+  Silent, unbounded corruption of the file format caused by rendering. Fixed
+  locally by making overlap avoidance render-time and **copy-based**:
+  `adjustForTextOverlap` → `waypointsClearOfSourceLabel` (returns a `slice()`)
+  and `checkIfPointOverlapsText` → `pointClearOfSourceLabel` (returns a fresh
+  point); the copy is threaded through all three consumers — the line, the label
+  and the number — so the whole activity is drawn on the same geometry. Accepted
+  consequence: the drawn line diverges from `element.waypoints` by the offset, so
+  the hit path, bendpoint handles and selection outline follow the model, not the
+  paint. That is invisible in practice (the divergence is well inside the 15px
+  `djs-hit-stroke`, and the divergent stretch lies inside the source shape's own
+  hit area); aligning them properly needs a `connection.layout` command and is
+  deferred. Upstream's `fixConnectionInHTML` was **deleted, not ported forward**:
+  it re-pointed a second `<polyline>`, and diagram-js has emitted `<path>` for
+  both the drawn line and the hit area for many majors, so it has been dead for
+  years — and re-pointing the hit `<path>` instead would desync it from
+  `Bendpoints`, which positions handles from `connection.waypoints`. The renamed
+  methods keep their upstream names in their doc comments so the next sync round
+  can still pair them. Issue
+  [#65](https://github.com/Miragon/egon-core/issues/65); locked by
+  `RendererModelPurity.browser.spec.ts` and by the now byte-strict
+  `FormatCompatibilityMatrix.browser.spec.ts`.
+- **`DomainStoryRenderer` writes its default colour onto the model.**
+  `drawGroup` assigned `pickedColor = "#000000"` and `useColorForActivity`
+  assigned `pickedColor = "black"` — two writers, disagreeing on the literal — so
+  a colourless pre-v1.1.0 file gained the field on save. Fixed locally by
+  treating `pickedColor` as what it is: **the user's choice, nullable, absent
+  meaning "the renderer decides"**. Both writers now read
+  `pickedColor ?? DEFAULT_COLOR`, and the three remaining bare `?? "black"`
+  fallbacks (DS connection stroke, annotation bracket, annotation label fill)
+  were folded onto the same constant. Consumers already coped with an absent
+  value (`DomainStoryContextPadProvider`, `DomainStoryPasteRestore`). One knock-on
+  had to be fixed with it: `marker()` builds the arrowhead's DOM id from the
+  colour, so the default id now carries a `#`, and diagram-js'
+  `PreviewSupport.getMarker` looks markers up with
+  `querySelector("marker#" + id)` — which throws `SyntaxError` on an unescaped
+  `#` and kills the drag. Upstream only ever hit that on a _coloured_ activity;
+  making `#000000` the default would have broken every activity drag, so
+  `markerId` now folds anything a CSS identifier cannot carry to `_`. Note
+  `getIconSvg`'s `pickedColor !== DEFAULT_COLOR` check still mis-reads a
+  persisted literal `"black"` as a custom colour — pre-existing, tracked in
+  [#74](https://github.com/Miragon/egon-core/issues/74). Issue [#65](https://github.com/Miragon/egon-core/issues/65); locked
+  by `RendererModelPurity.browser.spec.ts` and the byte-strict matrix. Neither
+  fix repairs history: a file that already accumulated drift keeps it (the v4.0.0
+  fixture's `y: 370` against `original.y: 337`) — this stops the creep.
 
 ### Known, still shared with upstream
 
@@ -171,17 +225,6 @@ undefined (reading 'appendChild')`, which escapes `commandStack.undo()`. Even
   only removes diagram-js' own `.djs-container`. A host reusing one container
   across sessions keeps the previous session's icon rules. Low severity — the
   `#iconsCss` id guard prevents duplicates — but it is not a clean teardown.
-
-Found while building the format compatibility matrix; these change what the
-canvas draws, not what the format means. Recorded as exact per-row expectations
-in `FormatCompatibilityMatrix.browser.spec.ts`.
-
-- `DomainStoryRenderer` writes its default colour back onto any business object
-  that carried none, so a colourless pre-v1.1.0 file gains `pickedColor` on save.
-- `checkIfPointOverlapsText` nudges an activity's start waypoint down _in place_
-  during rendering. The connection shares the business object's `waypoints`
-  array, so the nudge is persisted — visible in the fixture family itself, where
-  v1.1.0→v1.4.0 record `connection_8174`'s start `y` as 172, 177, 182, 187.
 
 ## Standing skip reasons
 
