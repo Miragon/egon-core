@@ -56,7 +56,7 @@ produced needs a deliberate compatibility policy, not piecemeal fixes.
   accepted.
 - The public API is coupled to the on-disk shape: a future v5 format becomes a
   breaking API change, not just a parser change. Accepted while pre-1.0.
-- The fixture suite (`src/import/service/__tests__/fixtures/`, v1.0.0–2.2.0
+- The fixture suite (`src/__tests__/fixtures/`, v1.0.0–2.2.0
   and 4.0.0) is the executable compatibility contract; supporting a new
   upstream version means adding a fixture and a parser branch.
 - Exported files always declare `version: "4.0.0"` regardless of the version

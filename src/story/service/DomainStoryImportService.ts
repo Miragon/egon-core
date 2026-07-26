@@ -14,6 +14,7 @@ import { ImportRepairService } from "./ImportRepairService";
 import { parseExportFile } from "./ExportFileParser";
 import { BusinessObject } from "../domain/businessObject";
 import { isActivity, isConnection, isGroup } from "../domain/elementPredicates";
+import { needsPreV050Repair } from "../domain/importRepair";
 import { VersionBannerPort } from "../domain/ports/VersionBannerPort";
 import {
     IconDictionaryService,
@@ -34,9 +35,13 @@ export class DomainStoryImportService {
         "domainStoryVersionBanner",
     ];
 
-    private readonly elements: ElementLike[] = [];
-
-    private readonly groupElements: ElementLike[] = [];
+    /**
+     * Group shapes already added to the canvas, by business-object id, so a
+     * child can be parented onto its group. Cleared at the top of every
+     * `import()`: a second import runs after `diagram.clear`, and stale entries
+     * would parent new shapes onto shapes that no longer exist.
+     */
+    private readonly groupElements = new Map<string, ElementLike>();
 
     private readonly importRepairService = new ImportRepairService();
 
@@ -78,26 +83,28 @@ export class DomainStoryImportService {
                 iconSetConfiguration,
             );
 
-        let domainStoryElements = domainStory.businessObjects;
-
         this.importRepairService.removeWhitespacesFromIcons(
-            domainStoryElements,
+            domainStory.businessObjects,
         );
         this.importRepairService.removeUnnecessaryBpmnProperties(
-            domainStoryElements,
+            domainStory.businessObjects,
         );
-        this.importRepairService.checkForUnreferencedElementsInActivitiesAndRepair(
-            domainStoryElements,
-        );
+        const { elements: prunedElements, removedConnections } =
+            this.importRepairService.checkForUnreferencedElementsInActivitiesAndRepair(
+                domainStory.businessObjects,
+            );
 
         this.eventBus.fire("diagram.clear", {});
+        // A previous import's groups were just destroyed; keeping their shapes
+        // would parent this story's children onto dead elements.
+        this.groupElements.clear();
 
         // The normalizer already stripped web-only trailers; the version now
         // lives on the story. Feed it through so pre-v0.5.0 files still get the
         // custom-element repair and the version box renders as before.
-        domainStoryElements = this.handleVersionNumber(
+        const domainStoryElements = this.handleVersionNumber(
             domainStory.version,
-            domainStoryElements,
+            prunedElements,
         );
 
         const connections: Connection[] = [],
@@ -123,6 +130,14 @@ export class DomainStoryImportService {
         otherElementTypes.forEach(this.createElementFromBusinessObject, this);
         connections.forEach(this.addConnection, this);
 
+        // Surface the repair so a host can tell the user the file was lossy.
+        // Internal diagram-js event on purpose: the public EgonClient API is
+        // frozen by ADR 0010 and widening it needs its own decision, while a
+        // host can already subscribe via `additionalModules`.
+        if (removedConnections.length > 0) {
+            this.eventBus.fire("dst.import.repaired", { removedConnections });
+        }
+
         // Persist story-level metadata: the element registry keeps only diagram
         // elements, so without this the title/description/scope would be lost
         // on the next export.
@@ -139,24 +154,23 @@ export class DomainStoryImportService {
         delete businessObject.children;
         delete businessObject.parent;
 
-        this.elements.push(businessObject);
-
         const attributes = assign({ businessObject }, businessObject);
         const shape = this.elementFactory.create("shape", attributes);
 
         if (isOfTypeGroup(businessObject)) {
-            this.groupElements[businessObject.id] = shape;
+            this.groupElements.set(businessObject.id, shape);
         }
 
         if (parentId) {
-            const parentShape = this.groupElements[parentId];
+            const parentShape = this.groupElements.get(parentId);
 
             if (isOfTypeGroup(parentShape)) {
-                return this.canvas.addShape(
-                    shape,
-                    parentShape,
-                    Number(parentShape.id),
-                );
+                // No `parentIndex`: diagram-js appends when it is omitted, which
+                // is the intent. Passing `Number(parentShape.id)` — as this did —
+                // yields NaN for ids like "shape_1683"; diagram-js normalizes only
+                // non-numbers to -1 and `typeof NaN === "number"` slips through to
+                // `splice(NaN, …)`, i.e. index 0, prepending children in reverse.
+                return this.canvas.addShape(shape, parentShape);
             }
         }
         return this.canvas.addShape(shape);
@@ -164,8 +178,6 @@ export class DomainStoryImportService {
 
     // FIXME: use an actual type for element. It should be BusinessObject from the domain.
     private addConnection(element: any) {
-        this.elements.push(element);
-
         const attributes = assign({ businessObject: element }, element);
 
         if (element.source === undefined || element.target === undefined) {
@@ -188,11 +200,7 @@ export class DomainStoryImportService {
         importVersionNumber: string,
         elements: BusinessObject[],
     ): BusinessObject[] {
-        const versionPrefix = +importVersionNumber.substring(
-            0,
-            importVersionNumber.lastIndexOf("."),
-        );
-        if (versionPrefix <= 0.5) {
+        if (needsPreV050Repair(importVersionNumber)) {
             elements =
                 this.importRepairService.updateCustomElementsPreviousV050(
                     elements,
@@ -211,6 +219,6 @@ function isOfTypeConnection(element: BusinessObject) {
     return isActivity(element) || isConnection(element);
 }
 
-function isOfTypeGroup(element: BusinessObject | ElementLike) {
+function isOfTypeGroup(element: BusinessObject | ElementLike | undefined) {
     return isGroup(element);
 }
