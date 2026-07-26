@@ -242,6 +242,36 @@ describe("modeling commands (browser)", () => {
             );
 
             expect(actor.parent).toBe(modeler.root);
+            // The persisted counterpart of the line above: leaving
+            // `businessObject.parent` set would export the shape as still
+            // belonging to a group it was moved out of.
+            expect(actor.businessObject.parent).toBeUndefined();
+        });
+
+        it("adopts group-into-group and deletes the whole stack at once", () => {
+            modeler = createTestModeler();
+            const actor = addActor(modeler, { point: { x: 400, y: 300 } });
+            const childGroup = addGroup(modeler, {
+                point: { x: 400, y: 300 },
+                width: 120,
+                height: 100,
+            });
+            const group = addGroup(modeler, { point: { x: 400, y: 300 } });
+
+            // Each group adopts only what was on the canvas when it was drawn,
+            // so the actor stays the *inner* group's child. `reworkGroupElements`
+            // assigns `innerShape.parent`, and diagram-js binds parent↔children
+            // as an object-refs inverse pair — assigning one side splices the
+            // other — so the actor lands in exactly one `children` array.
+            expect(actor.parent).toBe(childGroup);
+            expect(childGroup.parent).toBe(group);
+            expect(modeler.root["children"]).not.toContain(actor);
+
+            modeler.modeling.removeElements([group]);
+
+            expect(modeler.elementRegistry.get(group.id)).toBeUndefined();
+            expect(modeler.elementRegistry.get(childGroup.id)).toBeUndefined();
+            expect(modeler.elementRegistry.get(actor.id)).toBeUndefined();
         });
     });
 
@@ -253,6 +283,12 @@ describe("modeling commands (browser)", () => {
                 point: { x: 450, y: 200 },
             });
             connect(modeler, actor, workObject);
+            // `removeGroup` is the one call that fans out into several nested
+            // commands (a move per child, then the delete). They inherit the
+            // outer action id, so it must still cost exactly one undo — a
+            // regression here shows up as leftovers after the loop below.
+            const group = addGroup(modeler, { point: { x: 400, y: 500 } });
+            modeler.modeling.removeGroup(group);
 
             expect(modeler.commandStack.canUndo()).toBe(true);
             expect(modeler.commandStack.canRedo()).toBe(false);
