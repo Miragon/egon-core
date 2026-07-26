@@ -23,12 +23,13 @@ function createMockDiagramServices() {
         viewbox: vi
             .fn()
             .mockReturnValue({ x: 0, y: 0, width: 100, height: 100 }),
-        setRootElement: vi.fn(),
+        // The adapter realizes diagram-js' *implicit* root at boot — the real
+        // `getRootElement()` creates and installs one when none is set. It must
+        // be the implicit root because `isBackground` keys off that id prefix.
+        getRootElement: vi
+            .fn()
+            .mockReturnValue({ id: "__implicitroot_0", children: [] }),
         zoom: vi.fn(),
-    };
-
-    const mockElementFactory = {
-        createRoot: vi.fn().mockReturnValue({ id: "root" }),
     };
 
     const mockAlignToOrigin = {
@@ -41,8 +42,6 @@ function createMockDiagramServices() {
                 return mockEventBus;
             case "canvas":
                 return mockCanvas;
-            case "elementFactory":
-                return mockElementFactory;
             case "alignToOrigin":
                 return mockAlignToOrigin;
             default:
@@ -55,7 +54,6 @@ function createMockDiagramServices() {
         destroy: vi.fn(),
         mockEventBus,
         mockCanvas,
-        mockElementFactory,
         mockAlignToOrigin,
     };
 }

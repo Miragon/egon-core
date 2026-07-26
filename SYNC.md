@@ -70,6 +70,18 @@ future round. Offer the fixes upstream separately.
   prepended in reverse instead of appended. Fixed locally by dropping the third
   argument — diagram-js appends when `parentIndex` is omitted, which is the
   intent.
+- **`util.ts` calls Array-less methods on `element.children`.**
+  `reworkGroupElements` did `innerShape.children.remove(shape)` and
+  `undoGroupRework` did `parent.children.remove(shape)` /
+  `superParent.children.add(shape)`. diagram-js `element.children` is a **plain
+  Array** — neither method exists, so both the group-reparenting branch and the
+  whole "undo group deletion" path threw `TypeError`. Upstream gets away with it
+  because moddle collections do carry those methods. Fixed locally with `add`/
+  `remove` from `diagram-js/lib/util/Collections` (already used by
+  `DomainStoryUpdater`), as issue [#8](https://github.com/Miragon/egon-core/issues/8)
+  anticipated. Note upstream's own "fix" here (wps/egon.io@fa55d12f,
+  `children.set(undefined, shape)`) is equally broken — see the skip list below.
+  Locked by the group cases in `ModelingCommands.browser.spec.ts`.
 - **Import state is never reset between imports.** Upstream keeps an array used
   as a string-keyed map of group shapes and never clears it, so a second import
   parents new children onto shapes the first import's `diagram.clear` already

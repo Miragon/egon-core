@@ -2,7 +2,6 @@ import Diagram from "diagram-js";
 import type { ModuleDeclaration } from "didi";
 import type Canvas from "diagram-js/lib/core/Canvas";
 import type EventBus from "diagram-js/lib/core/EventBus";
-import type ElementFactory from "diagram-js/lib/core/ElementFactory";
 
 import EgonPlugin from "./plugin";
 import {
@@ -134,11 +133,22 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         }
     }
 
+    /**
+     * Realizes the canvas root eagerly, so every service that reads it at boot
+     * sees the same element.
+     *
+     * It must be diagram-js' *implicit* root: `isBackground` (story/domain)
+     * identifies the canvas background by the `__implicitroot` id prefix, as
+     * upstream does. A root built via `elementFactory.createRoot()` instead gets
+     * a `root_<n>` id from DomainStoryIdFactory, so `isBackground` answered
+     * false for it — and `DomainStoryUpdater.updateElement` then took its
+     * "group dropped onto a shape" branch for a group created on the bare
+     * canvas, dereferencing `parent.parent` (undefined for a root) and throwing
+     * `TypeError: Cannot read properties of undefined (reading 'children')`.
+     * `getRootElement()` creates and installs the implicit root when none is set.
+     */
     private initializeRootElement(): void {
-        const elementFactory =
-            this.diagram.get<ElementFactory>("elementFactory");
-        const root = elementFactory.createRoot();
-        this.canvas.setRootElement(root);
+        this.canvas.getRootElement();
     }
 
     private createDebouncedCallback(
