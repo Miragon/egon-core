@@ -1,0 +1,436 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type CommandStack from "diagram-js/lib/command/CommandStack";
+import type { ModuleDeclaration } from "didi";
+
+import {
+    createTestDiagram,
+    type TestDiagram,
+} from "../../../__tests__/helpers/createTestDiagram";
+import {
+    TEST_ICON_NAMES,
+    TEST_ICON_SET,
+} from "../../../__tests__/helpers/testIconSet";
+import { ElementTypes } from "../../../story/domain/elementTypes";
+import type { DomainStoryDocument } from "../../../story/domain/DomainStoryDocument";
+import type { EgonClient } from "../EgonClient";
+import type { ViewportData } from "../../domain";
+
+/**
+ * The other half of `EgonClient.spec.ts`: the same public API, but wired to the
+ * real `DiagramJsModelerAdapter` and `DiagramJsIconAdapter`.
+ *
+ * WHY it exists next to the mocked-port spec: that spec proves routing only —
+ * every case asserts "the port method was called". It therefore cannot see the
+ * behaviour hosts actually depend on: that `story.changed` arrives *once* and
+ * only after the adapters' 100 ms debounce, that a viewport round-trips through
+ * diagram-js' viewbox maths, that `alignToOrigin` really shifts elements and
+ * stays undoable, or that the icon API reaches the live icon dictionary. Those
+ * are the seams an upstream sync breaks silently.
+ *
+ * WHY browser tier (ADR 0014): every case here reaches `canvas.addShape` via
+ * `import()`, which needs `SVGSVGElement.createSVGTransform`; and viewbox maths
+ * needs a real `getBBox` and a non-zero `viewbox().outer` — in jsdom the outer
+ * box is `{0,0}`, so `fitToScreen()` yields NaN.
+ */
+
+/** The adapters debounce host callbacks by this much before delivering them. */
+const DEBOUNCE_MS = 100;
+
+/**
+ * Waits long enough that a debounced callback *must* have been delivered.
+ *
+ * Real timers, not `vi.useFakeTimers()`: this tier drives a real canvas whose
+ * rendering and scroll compensation are browser-scheduled, and freezing the
+ * clock would stall them alongside the debounce.
+ */
+function settle(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, DEBOUNCE_MS * 2.5));
+}
+
+/**
+ * The two halves of the shared icon set, narrowed once.
+ *
+ * `IconSetData` marks both maps optional (icon-only callers may send just one),
+ * while a document's `iconSet` and `Object.keys` want them present — so the
+ * fallback lives here rather than at four call sites.
+ */
+const TEST_ACTOR_ICONS = TEST_ICON_SET.actors ?? {};
+const TEST_WORK_OBJECT_ICONS = TEST_ICON_SET.workObjects ?? {};
+
+/** Shape geometry as it survives an export — the only bounds the API exposes. */
+interface ExportedBounds {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
+/**
+ * A minimal EGN v4 story, placed wherever a case needs it.
+ *
+ * Hand-built rather than taken from `importFixture`: the alignment cases need
+ * *negative* coordinates (the shipped fixtures start at x >= 100, and
+ * align-to-origin ignores adjustments below its 50 px tolerance), and explicit
+ * width/height so the enclosure assertions do not depend on the element
+ * factory's defaults reaching the business object.
+ *
+ * Its `iconSet` is TEST_ICON_SET because import loads the document's own icons,
+ * and an actor whose icon is missing throws inside the renderer.
+ */
+function storyAt(topLeft: { x: number; y: number }): DomainStoryDocument {
+    return {
+        iconSet: {
+            name: "test-icons",
+            actors: TEST_ACTOR_ICONS,
+            workObjects: TEST_WORK_OBJECT_ICONS,
+        },
+        domainStory: {
+            businessObjects: [
+                {
+                    id: "shape_actor",
+                    type: ElementTypes.ACTOR + TEST_ICON_NAMES.person,
+                    name: "Alice",
+                    x: topLeft.x,
+                    y: topLeft.y,
+                    width: 75,
+                    height: 75,
+                },
+                {
+                    id: "shape_workobject",
+                    type: ElementTypes.WORKOBJECT + TEST_ICON_NAMES.document,
+                    name: "Report",
+                    x: topLeft.x + 320,
+                    y: topLeft.y + 240,
+                    width: 75,
+                    height: 75,
+                },
+            ],
+            title: "browser-tier story",
+            description: "",
+            version: "4.0.0",
+        },
+    };
+}
+
+/** Reads the positioned elements back out through the public export. */
+function exportedBounds(client: EgonClient): ExportedBounds[] {
+    return (client.export().domainStory.businessObjects as ExportedBounds[])
+        .filter((element) => typeof element.x === "number")
+        .map(({ x, y, width, height }) => ({ x, y, width, height }));
+}
+
+/**
+ * Halves the visible area while keeping the canvas' aspect ratio.
+ *
+ * Aspect matters: diagram-js' viewbox setter re-derives the scale as
+ * `min(outer.width / box.width, outer.height / box.height)` and re-centres the
+ * result, so only an aspect-preserving box round-trips unchanged. Deriving it
+ * from the current viewport keeps the case independent of the container size.
+ */
+function halfOf(viewport: ViewportData): ViewportData {
+    return {
+        x: 100,
+        y: 50,
+        width: viewport.width / 2,
+        height: viewport.height / 2,
+    };
+}
+
+/**
+ * Reaches the diagram's own commandStack through `additionalModules`.
+ *
+ * `EgonClient` exposes no undo — hosts drive it via keyboard or their own editor
+ * actions — so this is the only way to prove that `alignToOrigin()`, called on
+ * the public API, produced a *revertible* command rather than an in-place edit.
+ * `additionalModules` is the supported extension point, so the probe rides the
+ * production boot instead of a second diagram.
+ */
+function commandStackProbe(): {
+    module: ModuleDeclaration;
+    commandStack(): CommandStack;
+} {
+    let captured: CommandStack | undefined;
+
+    function capture(commandStack: CommandStack): void {
+        captured = commandStack;
+    }
+    capture.$inject = ["commandStack"];
+
+    return {
+        module: { __init__: [capture] },
+        commandStack: () => {
+            if (!captured) {
+                throw new Error("commandStack was never injected");
+            }
+            return captured;
+        },
+    };
+}
+
+describe("EgonClient on real adapters (browser)", () => {
+    let diagram: TestDiagram | undefined;
+
+    // One diagram per case, torn down here: leaked canvases — not file count —
+    // are what makes this tier slow. Guarded because a failed boot leaves it unset.
+    afterEach(() => {
+        diagram?.cleanup();
+        diagram = undefined;
+    });
+
+    describe("story.changed", () => {
+        it("fires once, and only after the debounce window", async () => {
+            diagram = await createTestDiagram();
+            // Import runs through canvas.addShape, not the commandStack, so it
+            // raises no story.changed of its own — the align below is the only
+            // command in this case.
+            diagram.client.import(storyAt({ x: -400, y: -300 }));
+
+            const storyChanged = vi.fn();
+            diagram.client.on("story.changed", storyChanged);
+            diagram.client.alignToOrigin();
+
+            expect(storyChanged).not.toHaveBeenCalled();
+
+            await vi.waitFor(() =>
+                expect(storyChanged).toHaveBeenCalledTimes(1),
+            );
+            await settle();
+
+            // Still one: the debounce collapses the command's event burst
+            // (align nests a moveElements plus a canvas scroll) into one call.
+            expect(storyChanged).toHaveBeenCalledTimes(1);
+        });
+
+        it("stops firing after off()", async () => {
+            diagram = await createTestDiagram();
+            diagram.client.import(storyAt({ x: -400, y: -300 }));
+
+            const storyChanged = vi.fn();
+            diagram.client.on("story.changed", storyChanged);
+            diagram.client.off("story.changed", storyChanged);
+            diagram.client.alignToOrigin();
+            await settle();
+
+            expect(storyChanged).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("viewport.changed", () => {
+        it("fires with the applied viewbox on setViewport", async () => {
+            diagram = await createTestDiagram();
+            const viewportChanged = vi.fn();
+            diagram.client.on("viewport.changed", viewportChanged);
+
+            const target = halfOf(diagram.client.getViewport());
+            diagram.client.setViewport(target);
+
+            await vi.waitFor(() =>
+                expect(viewportChanged).toHaveBeenCalledTimes(1),
+            );
+            const delivered = viewportChanged.mock.calls[0]![0] as ViewportData;
+            expect(delivered.x).toBeCloseTo(target.x, 3);
+            expect(delivered.y).toBeCloseTo(target.y, 3);
+            expect(delivered.width).toBeCloseTo(target.width, 3);
+        });
+
+        it("stops firing after off()", async () => {
+            diagram = await createTestDiagram();
+            const viewportChanged = vi.fn();
+            diagram.client.on("viewport.changed", viewportChanged);
+            diagram.client.off("viewport.changed", viewportChanged);
+
+            diagram.client.setViewport(halfOf(diagram.client.getViewport()));
+            await settle();
+
+            expect(viewportChanged).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("viewport round trip", () => {
+        it("getViewport reports back what setViewport applied", async () => {
+            diagram = await createTestDiagram();
+            const target = halfOf(diagram.client.getViewport());
+
+            diagram.client.setViewport(target);
+            const current = diagram.client.getViewport();
+
+            expect(current.x).toBeCloseTo(target.x, 3);
+            expect(current.y).toBeCloseTo(target.y, 3);
+            expect(current.width).toBeCloseTo(target.width, 3);
+            expect(current.height).toBeCloseTo(target.height, 3);
+        });
+    });
+
+    describe("alignToOrigin", () => {
+        it("shifts every element to non-negative coordinates", async () => {
+            diagram = await createTestDiagram();
+            diagram.client.import(storyAt({ x: -400, y: -300 }));
+            const before = exportedBounds(diagram.client);
+            // Pins the premise: without both shapes off-canvas the loop below
+            // would pass vacuously.
+            expect(before).toHaveLength(2);
+            expect(before.every((bounds) => bounds.x < 0)).toBe(true);
+
+            diagram.client.alignToOrigin();
+
+            for (const bounds of exportedBounds(diagram.client)) {
+                expect(bounds.x).toBeGreaterThanOrEqual(0);
+                expect(bounds.y).toBeGreaterThanOrEqual(0);
+            }
+        });
+
+        it("is undoable — the shift is a revertible command", async () => {
+            const probe = commandStackProbe();
+            diagram = await createTestDiagram({}, [probe.module]);
+            diagram.client.import(storyAt({ x: -400, y: -300 }));
+            const before = exportedBounds(diagram.client);
+
+            diagram.client.alignToOrigin();
+            expect(exportedBounds(diagram.client)).not.toEqual(before);
+            expect(probe.commandStack().canUndo()).toBe(true);
+
+            probe.commandStack().undo();
+
+            // Exact equality, not "negative again": undo must restore the
+            // business objects the export reads, not just the rendered shapes.
+            expect(exportedBounds(diagram.client)).toEqual(before);
+        });
+    });
+
+    describe("fitToScreen", () => {
+        it("yields a viewbox that encloses every element", async () => {
+            diagram = await createTestDiagram();
+            diagram.client.import(storyAt({ x: -400, y: -300 }));
+
+            diagram.client.fitToScreen();
+
+            const viewport = diagram.client.getViewport();
+            // fitToScreen aligns first, so read the positions afterwards.
+            const bounds = exportedBounds(diagram.client);
+            expect(bounds).toHaveLength(2);
+            for (const shape of bounds) {
+                expect(shape.x).toBeGreaterThanOrEqual(viewport.x);
+                expect(shape.y).toBeGreaterThanOrEqual(viewport.y);
+                expect(shape.x + shape.width).toBeLessThanOrEqual(
+                    viewport.x + viewport.width,
+                );
+                expect(shape.y + shape.height).toBeLessThanOrEqual(
+                    viewport.y + viewport.height,
+                );
+            }
+        });
+    });
+
+    describe("icons", () => {
+        it("loadIcons publishes the set to getIcons/hasIcon and fires icons.changed", async () => {
+            diagram = await createTestDiagram();
+            // A fresh canvas has no icon set: the export configuration is built
+            // only once both dictionaries are non-empty.
+            expect(diagram.client.getIcons()).toEqual({
+                actors: {},
+                workObjects: {},
+            });
+
+            const iconsChanged = vi.fn();
+            diagram.client.on("icons.changed", iconsChanged);
+            diagram.client.loadIcons(TEST_ICON_SET);
+
+            expect(Object.keys(diagram.client.getIcons().actors)).toEqual(
+                Object.keys(TEST_ACTOR_ICONS),
+            );
+            expect(
+                diagram.client.hasIcon("actor", TEST_ICON_NAMES.person),
+            ).toBe(true);
+            expect(
+                diagram.client.hasIcon("workObject", TEST_ICON_NAMES.document),
+            ).toBe(true);
+            expect(diagram.client.hasIcon("actor", "NotLoaded")).toBe(false);
+
+            await vi.waitFor(() =>
+                expect(iconsChanged).toHaveBeenCalledTimes(1),
+            );
+            expect(iconsChanged).toHaveBeenCalledWith(
+                diagram.client.getIcons(),
+            );
+        });
+
+        it("addIcon registers an icon and a CSS rule; removeIcon takes it back out", async () => {
+            diagram = await createTestDiagram();
+            diagram.client.loadIcons(TEST_ICON_SET);
+            const styleSheet =
+                diagram.container.querySelector<HTMLStyleElement>(
+                    "#iconsCss",
+                )!.sheet!;
+            const rulesBefore = styleSheet.cssRules.length;
+
+            diagram.client.addIcon(
+                "actor",
+                "Robot",
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">' +
+                    '<rect x="4" y="4" width="16" height="16" fill="#333"/></svg>',
+            );
+
+            expect(diagram.client.hasIcon("actor", "Robot")).toBe(true);
+            expect(diagram.client.getIcons().actors["Robot"]).toContain("<svg");
+            // The renderer paints icons through a mask-image rule, so the icon is
+            // only usable once IconCssInjector published one for it.
+            expect(styleSheet.cssRules.length).toBe(rulesBefore + 1);
+
+            diagram.client.removeIcon("actor", "Robot");
+
+            expect(diagram.client.hasIcon("actor", "Robot")).toBe(false);
+            expect(diagram.client.getIcons().actors["Robot"]).toBeUndefined();
+            // The icons already in the set are untouched by the removal.
+            expect(
+                diagram.client.hasIcon("actor", TEST_ICON_NAMES.person),
+            ).toBe(true);
+        });
+
+        it("keeps unrelated icons when removing a work object", async () => {
+            diagram = await createTestDiagram();
+            diagram.client.loadIcons(TEST_ICON_SET);
+
+            diagram.client.removeIcon("workObject", TEST_ICON_NAMES.folder);
+
+            expect(
+                diagram.client.hasIcon("workObject", TEST_ICON_NAMES.folder),
+            ).toBe(false);
+            expect(
+                diagram.client.hasIcon("workObject", TEST_ICON_NAMES.document),
+            ).toBe(true);
+        });
+    });
+
+    describe("destroy", () => {
+        it("removes the rendered canvas and delivers no further events", async () => {
+            diagram = await createTestDiagram();
+            const { client, container } = diagram;
+            client.import(storyAt({ x: -400, y: -300 }));
+            expect(container.querySelector("svg")).not.toBeNull();
+
+            const storyChanged = vi.fn();
+            const viewportChanged = vi.fn();
+            client.on("story.changed", storyChanged);
+            client.on("viewport.changed", viewportChanged);
+
+            // destroy() is the subject, so this case owns it; hand teardown only
+            // the DOM node, or afterEach would destroy the client twice.
+            diagram = { ...diagram, cleanup: () => container.remove() };
+            client.destroy();
+
+            // The canvas goes, but the container itself is *not* emptied: the
+            // `<style id="iconsCss">` node the adapter injects survives destroy.
+            expect(container.querySelector("svg")).toBeNull();
+            expect(container.querySelector(".djs-container")).toBeNull();
+
+            // Teardown must also silence the subscriptions, or a host that
+            // destroys the client still gets called back. Scoped honestly: this
+            // covers listeners with nothing in flight — a callback whose debounce
+            // timer was already running at destroy() time is *not* cancelled.
+            await settle();
+
+            expect(storyChanged).not.toHaveBeenCalled();
+            expect(viewportChanged).not.toHaveBeenCalled();
+        });
+    });
+});
