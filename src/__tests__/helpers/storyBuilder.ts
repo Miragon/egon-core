@@ -104,10 +104,15 @@ export function addGroup(
 }
 
 /**
- * Connects two shapes with the grammar's own edge type: an activity when the
- * source is an actor or work object, a plain connection to an annotation. Left
- * to `modeling.connect`, which consults the rules — so a call that the notation
- * forbids returns nothing rather than silently creating an illegal edge.
+ * Connects two shapes with the given edge type — an activity between actors and
+ * work objects, a plain connection to an annotation.
+ *
+ * **This does not enforce the grammar.** `modeling.connect` executes
+ * `connection.create` on the commandStack, and `CommandStack.execute` never
+ * consults `canExecute`, so the rules guard only the *interaction* layer
+ * (drag-to-connect, bendpoint drag). A forbidden pair asked for here really is
+ * created. Specs that care about a rule must assert `rules.allowed(...)`
+ * themselves; see `ActivityConnections.browser.spec.ts`.
  */
 export function connect(
     modeler: TestModeler,
