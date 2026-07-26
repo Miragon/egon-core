@@ -10,8 +10,6 @@ import {
     addWorkObject,
     connect,
 } from "../../../../__tests__/helpers/storyBuilder";
-import type { ActivityCanvasObject } from "../../../../story/domain/canvasObject";
-import type { ElementRegistryService } from "../../../service/ElementRegistryService";
 import type { DomainStoryNumberingRegistry } from "../DomainStoryNumberingRegistry";
 
 /**
@@ -63,62 +61,27 @@ describe("activity numbering (browser)", () => {
     }
 
     /**
-     * Replays `DomainStoryPopupService.handleUpdate` — the only production caller
-     * of `activity.changed`. Reproduced here rather than invoked because `open()`
-     * needs a `#egon-io-container` in the host document and a real dblclick; the
-     * *context shape* and the pre/post-execute ordering are what the handler and
-     * the numbering registry actually contract on, so they are mirrored exactly,
-     * including the pre-execute mutation of `businessObject.number`.
+     * The context `DomainStoryPopupService.handleUpdate` builds — and, since
+     * #68, all it builds. The popup no longer touches the model and no longer
+     * runs the cascade; `ActivityChangedHandler` owns the whole transaction, so
+     * everything here is undoable and redoable as one action. Reproduced rather
+     * than driven through `open()` because that needs a `#egon-io-container` in
+     * the host document and a real dblclick; the context shape is the contract.
      */
     function editActivityThroughPopupFlow(
         modeler: TestModeler,
         activity: Connection,
         options: { label: string; number?: number; isMultiple?: boolean },
     ): void {
-        const registryService = modeler.get<ElementRegistryService>(
-            "domainStoryElementRegistryService",
-        );
-        const numberingRegistry = modeler.get<DomainStoryNumberingRegistry>(
-            "domainStoryNumberingRegistry",
-        );
         const { label, number, isMultiple = false } = options;
-
-        const otherActivities = registryService.getActivitiesFromActors();
-        otherActivities.splice(
-            otherActivities.indexOf(
-                activity as unknown as ActivityCanvasObject,
-            ),
-            1,
-        );
-
-        if (number) {
-            activity.businessObject.number = number;
-            numberingRegistry.setNumberIsMultiple(number, isMultiple);
-        }
-        activity.businessObject.multipleNumberAllowed = isMultiple;
 
         modeler.commandStack.execute("activity.changed", {
             businessObject: activity.businessObject,
+            element: activity,
             newLabel: label,
             newNumber: number,
-            element: activity,
+            newMultipleNumberAllowed: isMultiple,
         });
-
-        if (!number) {
-            return;
-        }
-        // The registry is told the number is "multiple" *before* this check, so
-        // asking for multiple always short-circuits the cascade.
-        if (
-            activity.businessObject.multipleNumberAllowed &&
-            numberingRegistry.isNumberMultiple(number)
-        ) {
-            return;
-        }
-        numberingRegistry.updateExistingNumbersAtEditing(
-            otherActivities,
-            number,
-        );
     }
 
     describe("automatic numbers", () => {
@@ -211,9 +174,10 @@ describe("activity numbering (browser)", () => {
                 numberOf(second),
             ]).toEqual([1, 2, 3]);
             expect(third.businessObject.name).toBe("third");
+            expect(third.businessObject.multipleNumberAllowed).toBe(false);
         });
 
-        it("undo restores the numbers the cascade moved, not just the edited one", () => {
+        it("undo and redo move the whole edit, cascade included", () => {
             const modeler = boot();
             const { actor, workObjects } = addStoryCast(modeler, 3);
             const [first, second, third] = workObjects.map((workObject) =>
@@ -226,21 +190,38 @@ describe("activity numbering (browser)", () => {
             });
             modeler.commandStack.undo();
 
-            // This is the whole point of `oldNumbersWithIDs` /
-            // `restoredNumberAssignments`: the command only names one element, so
-            // without the snapshot the two *cascaded* activities would keep the
-            // numbers the cascade gave them.
+            // The cascade revert is what `oldNumbersWithIDs` /
+            // `restoredNumberAssignments` exist for: the command names one
+            // element, so without the snapshot the two *cascaded* activities
+            // would keep the numbers the cascade gave them.
             expect([numberOf(first), numberOf(second)]).toEqual([1, 2]);
-            // The empty original name comes back, not `preExecute`'s `" "`
-            // fallback: `updateLabel` runs as a nested command, so its own revert
-            // fires after the outer handler's and has the last word.
+            // …and the edited activity comes back too (#68). It used to keep the
+            // number the edit gave it, because the popup wrote it onto the model
+            // before `preExecute` could snapshot the old one — leaving two
+            // activities numbered 1 after an undo.
+            expect(numberOf(third)).toBe(3);
             expect(third.businessObject.name).toBe("");
-            // NOTE: the edited activity's own number is deliberately not asserted
-            // here — it is not restored. `DomainStoryPopupService.handleUpdate`
-            // assigns `businessObject.number` *before* `commandStack.execute`, so
-            // `ActivityChangedHandler.preExecute` snapshots the new number as
-            // `oldNumber`. Reported as a suspected bug rather than pinned, so a
-            // fix does not have to edit this spec.
+
+            modeler.commandStack.redo();
+
+            // Redo re-runs `execute` only. With the cascade outside the command
+            // it re-applied the edited element alone and the duplicates returned.
+            expect([
+                numberOf(third),
+                numberOf(first),
+                numberOf(second),
+            ]).toEqual([1, 2, 3]);
+            expect(third.businessObject.name).toBe("third");
+
+            // A second undo has to land in the same place as the first — the
+            // command's snapshots must survive being replayed.
+            modeler.commandStack.undo();
+
+            expect([
+                numberOf(first),
+                numberOf(second),
+                numberOf(third),
+            ]).toEqual([1, 2, 3]);
         });
 
         it("suppresses the cascade when the number may occur multiple times", () => {
@@ -248,6 +229,9 @@ describe("activity numbering (browser)", () => {
             const { actor, workObjects } = addStoryCast(modeler, 3);
             const [first, second, third] = workObjects.map((workObject) =>
                 connect(modeler, actor, workObject)!,
+            );
+            const numberingRegistry = modeler.get<DomainStoryNumberingRegistry>(
+                "domainStoryNumberingRegistry",
             );
 
             editActivityThroughPopupFlow(modeler, third, {
@@ -263,13 +247,75 @@ describe("activity numbering (browser)", () => {
                 numberOf(first),
                 numberOf(second),
             ]).toEqual([1, 1, 2]);
-            expect(
-                modeler
-                    .get<DomainStoryNumberingRegistry>(
-                        "domainStoryNumberingRegistry",
-                    )
-                    .isNumberMultiple(1),
-            ).toBe(true);
+            expect(numberingRegistry.isNumberMultiple(1)).toBe(true);
+
+            modeler.commandStack.undo();
+
+            // The registry flag is part of the transaction now; it used to be set
+            // from the popup, outside the command, and so survived every undo.
+            expect(numberingRegistry.isNumberMultiple(1)).toBe(false);
+            // `undefined`, not `false`: a freshly drawn activity carries no such
+            // field, and the revert restores the value `preExecute` saw rather
+            // than normalizing one in. Writing `false` would put a key into the
+            // exported bytes that undoing an edit has no business adding.
+            expect(third.businessObject.multipleNumberAllowed).toBeUndefined();
+
+            modeler.commandStack.redo();
+
+            expect(numberingRegistry.isNumberMultiple(1)).toBe(true);
+            expect(third.businessObject.multipleNumberAllowed).toBe(true);
+        });
+
+        it("leaves the actor sequence alone when a response arrow is edited", () => {
+            const modeler = boot();
+            const { actor, workObjects } = addStoryCast(modeler, 2);
+            const [first, second] = workObjects.map((workObject) =>
+                connect(modeler, actor, workObject)!,
+            );
+            const response = connect(modeler, workObjects[0], workObjects[1])!;
+
+            // A work-object-sourced activity renders no number input, so the
+            // popup always submits `newNumber: undefined` for it — which is why
+            // the `splice(indexOf(...) === -1, 1)` defect this guards against was
+            // never reachable through the UI. Its real lock is the domain case
+            // "excludes the edited activity from its own cascade"; this one
+            // covers the non-actor / `oldNumber == null` path end to end.
+            editActivityThroughPopupFlow(modeler, response, {
+                label: "response",
+            });
+
+            expect([numberOf(first), numberOf(second)]).toEqual([1, 2]);
+            expect(numberOf(response)).toBeNull();
+            expect(response.businessObject.name).toBe("response");
+
+            modeler.commandStack.undo();
+
+            expect([numberOf(first), numberOf(second)]).toEqual([1, 2]);
+            expect(response.businessObject.name).toBe("");
+        });
+
+        it("re-mints a number when the field is cleared, and undo restores the old one", () => {
+            const modeler = boot();
+            const { actor, workObjects } = addStoryCast(modeler, 3);
+            const activities = workObjects.map((workObject) =>
+                connect(modeler, actor, workObject)!,
+            );
+            // Leaves numbers {1, 3}, so a re-mint is visibly different from the
+            // number that was cleared.
+            modeler.modeling.removeConnection(activities[1]);
+
+            editActivityThroughPopupFlow(modeler, activities[2], {
+                label: "third",
+            });
+
+            // `execute` clears the number; the redraw that follows finds it null
+            // and `renderExternalNumber` mints the lowest free one. Today's
+            // behaviour, preserved.
+            expect(numberOf(activities[2])).toBe(2);
+
+            modeler.commandStack.undo();
+
+            expect(numberOf(activities[2])).toBe(3);
         });
     });
 

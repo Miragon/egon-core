@@ -165,6 +165,38 @@ future round. Offer the fixes upstream separately.
   by `RendererModelPurity.browser.spec.ts` and the byte-strict matrix. Neither
   fix repairs history: a file that already accumulated drift keeps it (the v4.0.0
   fixture's `y: 370` against `original.y: 337`) — this stops the creep.
+- **The activity number edit is split across three places, so undo and redo both
+  corrupt the sequence.** Upstream still spreads one edit over
+  `DomainStoryPopupService.handleUpdate` (which writes
+  `businessObject.number`/`multipleNumberAllowed` and the registry's
+  "multiple" flag _before_ the command), `ActivityChangedHandler` (whose
+  `preExecute` therefore snapshots an already-mutated model, and whose
+  `modeling.updateNumber` no-ops because the number already matches), and a
+  renumbering cascade run _after_ `commandStack.execute`. Three defects follow:
+  undo does not restore the edited activity's own number — measured with
+  activities 1/2/3 and the third edited to 1, the edit gives `{a3:1, a1:2, a2:3}`
+  but undo gives `{a1:1, a2:2, a3:1}`, **two activities numbered 1**; redo re-runs
+  `execute` only, so the cascade is not re-applied and the duplicates return; and
+  the registry's multiple-number flags are never undone at all. Fixed locally by
+  making `activity.changed` the whole transaction: `preExecute` snapshots (label,
+  number, allowance, `getNumbersAndIDs()`, and a **copy** of the multiple-number
+  registry), `execute` applies the edit _and_ the cascade, `revert` restores all
+  of it. The popup now only builds the command context and touches nothing.
+  Consequently `renumberOnNumberEdit` takes an `ActivityNumberEdit` descriptor
+  (`{ id, number, multipleAllowed }`) and owns the multiple-allowed suppression
+  upstream keeps in the caller — which also kills upstream's
+  `activitiesFromActors.splice(indexOf(element), 1)`, whose `-1` miss removed the
+  _last_ activity when the edited one was not actor-sourced; the domain now
+  excludes it by id instead. One deliberate behaviour change rides along:
+  `multipleAllowedByNumber` is read **pre-edit**, so a shifted activity keeps the
+  allowance it had rather than losing it to the popup's early write. Issue
+  [#68](https://github.com/Miragon/egon-core/issues/68); locked by
+  `ActivityNumbering.browser.spec.ts` (undo→redo→undo end to end),
+  `activityUpdateHandler.spec.ts`, `DomainStoryPopupService.spec.ts` and the
+  domain/registry specs. Two `PopupMenu` attributes were needed to make the
+  round trip exercisable at all: `checked` on the multiple checkbox (it always
+  opened unchecked, so re-saving silently cleared the allowance) and `min="1"` on
+  the number input.
 - **A forbidden activity↔annotation reconnect was permitted** (issue
   [#66](https://github.com/Miragon/egon-core/issues/66)). Two defects, both still
   present upstream, and fixing either alone is not enough:
@@ -233,6 +265,32 @@ silently. Fixing one means inverting its assertions.
 
 Found while building the modeling-command suite (#55):
 
+- **A forbidden activity→annotation reconnect is permitted.** The
+  `connection.reconnect` rule returns `undefined` when `canConnectToAnnotation`
+  denies, and diagram-js' `Rules.allowed` maps `undefined` to **`true`** ("no
+  rules objected"). `BendpointMove` sets `context.allowed` straight from that
+  call, so dragging an activity's endpoint onto a text annotation is accepted and
+  creates an edge the grammar forbids. It should `return false` — no
+  lower-priority `connection.reconnect` provider exists for the `undefined`
+  "no opinion" to defer to. Left as-is here because
+  `rules/__tests__/DomainStoryRules.spec.ts` deliberately records the `undefined`
+  verdict as intended ("ignores a forbidden annotation reconnect"), so reversing
+  it is a maintainer decision; note the pure grammar
+  (`story/domain/modelingRules.ts`) is correct and only the adapter's verdict is
+  wrong. Pinned by `ActivityConnections.browser.spec.ts` ("permits a forbidden
+  activity→annotation reconnect").
+- **Undoing "Remove Group without Child-Elements" throws, and re-adopts
+  nothing.** `elementUpdateHandler.js`'s `removeGroupWithoutChildren.revert`
+  fires `shape.added` with no `gfx`, and diagram-js' `InteractionEvents`
+  listener dereferences `event.gfx` → `TypeError: Cannot read properties of
+undefined (reading 'appendChild')`, which escapes `commandStack.undo()`. Even
+  with that fixed the body is a no-op: it iterates `element.children`, which
+  `execute` has already emptied via `undoGroupRework`, instead of the
+  `context.children` snapshot `preExecute` took for exactly this purpose. So the
+  group's contents are never returned to it. A correct fix must also restore the
+  SVG re-parenting `undoGroupRework` performed, which is why it is not done here.
+  Pinned by `UpdateHandlerCommands.browser.spec.ts` ("undo of the custom command
+  throws and re-adopts nothing").
 - **Undoing a number edit does not restore the edited activity's own number.**
   `DomainStoryPopupService.handleUpdate` writes
   `element.businessObject.number = number` _before_ executing

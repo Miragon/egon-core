@@ -28,21 +28,32 @@ describe("nextAvailableActivityNumber", () => {
 describe("renumberOnNumberEdit", () => {
     const activity = (id: string, number?: number | null) => ({ id, number });
 
+    /** The edited activity, addressed by an id no fixture below reuses. */
+    const edit = (number: number, multipleAllowed = false) => ({
+        id: "edited",
+        number,
+        multipleAllowed,
+    });
+
     it("returns no assignments when the edited number is free", () => {
         const result = renumberOnNumberEdit(
             [activity("a", 1), activity("b", 2)],
-            3,
+            edit(3),
             [],
         );
 
         expect(result.assignments).toEqual([]);
-        expect(result.multipleAllowedUpdates).toEqual([]);
+        // T1.3: nothing moves, but the edit's own allowance is still recorded —
+        // it is the caller's only channel for the flag.
+        expect(result.multipleAllowedUpdates).toEqual([
+            { number: 3, allowed: false },
+        ]);
     });
 
     it("shifts every occupied number at or above the edited one up by one", () => {
         const result = renumberOnNumberEdit(
             [activity("a", 1), activity("b", 2), activity("c", 3)],
-            2,
+            edit(2),
             [],
         );
 
@@ -56,7 +67,7 @@ describe("renumberOnNumberEdit", () => {
         // numbers {1, 2, 5}, another activity takes 2: 2 → 3 and 5 → 4
         const result = renumberOnNumberEdit(
             [activity("a", 1), activity("b", 2), activity("c", 5)],
-            2,
+            edit(2),
             [],
         );
 
@@ -69,7 +80,7 @@ describe("renumberOnNumberEdit", () => {
     it("leaves numbers below the edited one untouched", () => {
         const result = renumberOnNumberEdit(
             [activity("a", 1), activity("b", 2), activity("c", 4)],
-            3,
+            edit(3),
             [],
         );
 
@@ -79,7 +90,7 @@ describe("renumberOnNumberEdit", () => {
     it("moves activities sharing one number together", () => {
         const result = renumberOnNumberEdit(
             [activity("a", 2), activity("b", 2), activity("c", 3)],
-            2,
+            edit(2),
             [],
         );
 
@@ -97,20 +108,22 @@ describe("renumberOnNumberEdit", () => {
 
         const result = renumberOnNumberEdit(
             [activity("a", 2), activity("b", 3)],
-            2,
+            edit(2),
             multipleAllowed,
         );
 
         expect(result.multipleAllowedUpdates).toEqual([
+            { number: 2, allowed: false },
             { number: 3, allowed: true },
             { number: 4, allowed: false },
         ]);
     });
 
     it("defaults an unset allowance flag to false", () => {
-        const result = renumberOnNumberEdit([activity("a", 2)], 2, []);
+        const result = renumberOnNumberEdit([activity("a", 2)], edit(2), []);
 
         expect(result.multipleAllowedUpdates).toEqual([
+            { number: 2, allowed: false },
             { number: 3, allowed: false },
         ]);
     });
@@ -118,7 +131,7 @@ describe("renumberOnNumberEdit", () => {
     it("ignores activities without a number", () => {
         const result = renumberOnNumberEdit(
             [activity("a", undefined), activity("b", null), activity("c", 1)],
-            1,
+            edit(1),
             [],
         );
 
@@ -126,10 +139,77 @@ describe("renumberOnNumberEdit", () => {
     });
 
     it("returns nothing for an empty story", () => {
-        const result = renumberOnNumberEdit([], 1, []);
+        const result = renumberOnNumberEdit([], edit(1), []);
 
         expect(result.assignments).toEqual([]);
-        expect(result.multipleAllowedUpdates).toEqual([]);
+        expect(result.multipleAllowedUpdates).toEqual([
+            { number: 1, allowed: false },
+        ]);
+    });
+
+    // T1.1 — death certificate of the `splice(indexOf(...) === -1, 1)` defect:
+    // the caller no longer has to remove the edited activity from the list, so
+    // it can no longer remove the wrong one.
+    it("excludes the edited activity from its own cascade", () => {
+        const result = renumberOnNumberEdit(
+            [activity("edited", 3), activity("a", 1), activity("b", 2)],
+            edit(1),
+            [],
+        );
+
+        // Only a and b move; "edited" is not told to shift away from the number
+        // it is claiming.
+        expect(result.assignments).toEqual([
+            { id: "a", newNumber: 2 },
+            { id: "b", newNumber: 3 },
+        ]);
+    });
+
+    // T1.2
+    it("suppresses the cascade entirely when the number may be shared", () => {
+        const result = renumberOnNumberEdit(
+            [activity("a", 1), activity("b", 2)],
+            edit(1, true),
+            [],
+        );
+
+        expect(result.assignments).toEqual([]);
+        expect(result.multipleAllowedUpdates).toEqual([
+            { number: 1, allowed: true },
+        ]);
+    });
+
+    // T1.4
+    it("emits the edited number's allowance before the shifted ones", () => {
+        const result = renumberOnNumberEdit([activity("a", 1)], edit(1), [
+            false,
+            true,
+        ]);
+
+        expect(result.multipleAllowedUpdates[0]).toEqual({
+            number: 1,
+            allowed: false,
+        });
+    });
+
+    // T1.5 — `multipleAllowedByNumber` is read pre-edit, so slot 1 still holds
+    // the *previous* occupant's flag and that flag moves up with them. The popup
+    // used to overwrite the slot before the cascade read it, so a shifted
+    // activity silently lost its allowance. Deliberate behaviour fix.
+    it("carries the previous occupant's flag upward, not the edit's", () => {
+        const multipleAllowed: boolean[] = [];
+        multipleAllowed[1] = true;
+
+        const result = renumberOnNumberEdit(
+            [activity("a", 1)],
+            edit(1, false),
+            multipleAllowed,
+        );
+
+        expect(result.multipleAllowedUpdates).toEqual([
+            { number: 1, allowed: false },
+            { number: 2, allowed: true },
+        ]);
     });
 });
 
