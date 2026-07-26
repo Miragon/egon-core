@@ -104,10 +104,77 @@ future round. Offer the fixes upstream separately.
 
 ### Known, still shared with upstream
 
-Found while building the format compatibility matrix; **not** fixed here because
-they change what the canvas draws, not what the format means. Recorded as exact
-per-row expectations in `FormatCompatibilityMatrix.browser.spec.ts` so a fix on
-either side turns that spec red rather than passing silently.
+**Not** fixed here — each needs a design decision rather than a one-liner, so
+they are pinned instead: the spec named on each row asserts the _current_ broken
+behaviour, so a fix on either side turns that spec red rather than passing
+silently. Fixing one means inverting its assertions.
+
+Found while building the modeling-command suite (#55):
+
+- **A forbidden activity→annotation reconnect is permitted.** The
+  `connection.reconnect` rule returns `undefined` when `canConnectToAnnotation`
+  denies, and diagram-js' `Rules.allowed` maps `undefined` to **`true`** ("no
+  rules objected"). `BendpointMove` sets `context.allowed` straight from that
+  call, so dragging an activity's endpoint onto a text annotation is accepted and
+  creates an edge the grammar forbids. It should `return false` — no
+  lower-priority `connection.reconnect` provider exists for the `undefined`
+  "no opinion" to defer to. Left as-is here because
+  `rules/__tests__/DomainStoryRules.spec.ts` deliberately records the `undefined`
+  verdict as intended ("ignores a forbidden annotation reconnect"), so reversing
+  it is a maintainer decision; note the pure grammar
+  (`story/domain/modelingRules.ts`) is correct and only the adapter's verdict is
+  wrong. Pinned by `ActivityConnections.browser.spec.ts` ("permits a forbidden
+  activity→annotation reconnect").
+- **Undoing a number edit does not restore the edited activity's own number.**
+  `DomainStoryPopupService.handleUpdate` writes
+  `element.businessObject.number = number` _before_ executing
+  `activity.changed`. `ActivityChangedHandler.preExecute` then snapshots
+  `getNumbersAndIDs()` and `context.oldNumber` from an already-mutated model, and
+  `modeling.updateNumber` no-ops because the number already matches — so no
+  nested `element.updateLabel` records the old value either. Measured with three
+  activities numbered 1/2/3 and the third edited to 1: the edit yields
+  `{a3:1, a1:2, a2:3}` correctly, but undo yields `{a1:1, a2:2, a3:1}` — the
+  cascade reverts, the edit does not, and two activities end up numbered 1. Fix
+  is to execute the command first and let the handler own the mutation, which
+  changes command semantics and so is left for a focused change.
+  `ActivityNumbering.browser.spec.ts` asserts only the cascade revert (what
+  `restoredNumberAssignments` exists for) and states the gap, deliberately not
+  asserting the buggy value — so a fix will not require editing that spec.
+- **`handleUpdate` mis-splices on an `indexOf` miss.**
+  `activitiesFromActors.splice(indexOf(element), 1)` removes the _last_ entry
+  when `indexOf` returns `-1`, reachable if the edited element is not in
+  `getActivitiesFromActors()` (e.g. a work-object-sourced activity). Latent, not
+  pinned.
+- **Undoing "Remove Group without Child-Elements" throws, and re-adopts
+  nothing.** `elementUpdateHandler.js`'s `removeGroupWithoutChildren.revert`
+  fires `shape.added` with no `gfx`, and diagram-js' `InteractionEvents`
+  listener dereferences `event.gfx` → `TypeError: Cannot read properties of
+undefined (reading 'appendChild')`, which escapes `commandStack.undo()`. Even
+  with that fixed the body is a no-op: it iterates `element.children`, which
+  `execute` has already emptied via `undoGroupRework`, instead of the
+  `context.children` snapshot `preExecute` took for exactly this purpose. So the
+  group's contents are never returned to it. A correct fix must also restore the
+  SVG re-parenting `undoGroupRework` performed, which is why it is not done here.
+  Pinned by `UpdateHandlerCommands.browser.spec.ts` ("undo of the custom command
+  throws and re-adopts nothing").
+- **Debounced host callbacks fire after `destroy()`.**
+  `DiagramJsModelerAdapter.destroy()` clears its callback registry but never
+  cancels the pending `setTimeout` from `createDebouncedCallback`, and
+  `DiagramJsIconAdapter` has no `destroy()` at all — so its timer cannot be
+  cancelled. A host that disposes within the 100 ms window still gets
+  `story.changed`/`icons.changed`, and the icons callback reads services off a
+  destroyed injector. (Local-only shape: upstream's Angular host owns the
+  debounce, so there is no upstream line to re-import.) `EgonClient.browser.spec.ts`
+  scopes its `destroy` case to listeners with nothing in flight and says so.
+- **`destroy()` leaves the `#iconsCss` style node in the host container.**
+  `initializeContainer` appends it to the _host's_ element; `diagram.destroy()`
+  only removes diagram-js' own `.djs-container`. A host reusing one container
+  across sessions keeps the previous session's icon rules. Low severity — the
+  `#iconsCss` id guard prevents duplicates — but it is not a clean teardown.
+
+Found while building the format compatibility matrix; these change what the
+canvas draws, not what the format means. Recorded as exact per-row expectations
+in `FormatCompatibilityMatrix.browser.spec.ts`.
 
 - `DomainStoryRenderer` writes its default colour back onto any business object
   that carried none, so a colourless pre-v1.1.0 file gains `pickedColor` on save.
