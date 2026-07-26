@@ -30,13 +30,23 @@ export class DomainStoryPropertyCopy {
             });
         });
 
-        // default check whether property can be copied
+        // default check whether property can be copied.
+        // Returns `false` to veto and *nothing* otherwise: on the event bus a
+        // returned value is the listener's answer, so answering `true` for an
+        // allowed property would make `copyProperty` hand back that `true`
+        // instead of the value (see the truthy branch there) — every copied
+        // property would become the boolean `true`, and the array/object/
+        // primitive copy paths below it would be unreachable.
         eventBus.on("propertyCopy.canCopyProperty", function (context: any) {
             const propertyName = context.propertyName;
-            return !(
+
+            if (
                 propertyName &&
                 DISALLOWED_PROPERTIES.indexOf(propertyName) !== -1
-            );
+            ) {
+                return false;
+            }
+            return undefined;
         });
     }
 
@@ -131,8 +141,6 @@ export class DomainStoryPropertyCopy {
             // if copiedProperty is whatever, returns whatever
             return copiedProperty;
         }
-
-        // TODO: Does the following part get ever executed???
 
         // copy arrays
         if (isArray(property)) {

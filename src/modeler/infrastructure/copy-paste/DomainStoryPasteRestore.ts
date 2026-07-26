@@ -76,7 +76,16 @@ export class DomainStoryPasteRestore {
             // `text ?? ""` mirrors the renderer, which treats a missing
             // annotation text as empty rather than undefined.
             this.pasteText.push(oldBusinessObject.text ?? "");
-            this.pasteHeight.push(oldBusinessObject.height);
+            // `?? number` is load-bearing, not defensive. Nothing on a live
+            // canvas ever writes `businessObject.height` for an annotation:
+            // `drawAnnotation` persists the height as `number` (the documented
+            // "height is not exported" hack) and only the *export* pass copies it
+            // to `height`. Reading `height` alone — as upstream does — therefore
+            // lost the height of every annotation drawn in the current session,
+            // and only worked for one round-tripped through a file.
+            this.pasteHeight.push(
+                oldBusinessObject.height ?? oldBusinessObject.number,
+            );
         }
     }
 

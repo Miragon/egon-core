@@ -1,4 +1,8 @@
 import { Element, Shape } from "diagram-js/lib/model/Types";
+import {
+    add as collectionAdd,
+    remove as collectionRemove,
+} from "diagram-js/lib/util/Collections";
 
 // TODO: this will not work for actors and work objects as the name of the icon is part of the type
 export function is(element: Element | undefined, type: string): boolean {
@@ -15,6 +19,15 @@ export function getBusinessObject(element: Element) {
     return (element && element.businessObject) || element;
 }
 
+/**
+ * Re-parents every shape that visually sits inside `shape` (a group) onto it.
+ *
+ * diagram-js `element.children` is a plain Array, so the `.add()`/`.remove()`
+ * methods upstream calls here do not exist — they threw `TypeError` and made the
+ * whole group-reparenting path dead (see issue #8). Upstream got away with it
+ * because moddle collections do carry those methods. The diagram-js `Collections`
+ * helpers are the array-safe equivalents and are what the updater already uses.
+ */
 export function reworkGroupElements(parent: any, shape: Shape) {
     parent.children.slice().forEach((innerShape: any) => {
         if (innerShape.id !== shape.id) {
@@ -26,8 +39,8 @@ export function reworkGroupElements(parent: any, shape: Shape) {
                     innerShape.y >= shape.y &&
                     innerShape.y <= shape.y + shape.height
                 ) {
-                    if (innerShape.children.includes(shape)) {
-                        innerShape.children.remove(shape);
+                    if (innerShape.children?.includes(shape)) {
+                        collectionRemove(innerShape.children, shape);
                     }
                     innerShape.parent = shape;
                     if (!shape.children.includes(innerShape)) {
@@ -39,11 +52,13 @@ export function reworkGroupElements(parent: any, shape: Shape) {
     });
 }
 
+/** Lifts `shape` out of the group `parent` and back onto the group's own parent. */
 export function undoGroupRework(parent: any, shape: Shape) {
     const superParent = parent.parent;
 
-    parent.children.remove(shape);
-    superParent.children.add(shape);
+    // See reworkGroupElements: `children` is an Array, not a moddle collection.
+    collectionRemove(parent.children, shape);
+    collectionAdd(superParent.children, shape);
 
     shape.parent = superParent;
 

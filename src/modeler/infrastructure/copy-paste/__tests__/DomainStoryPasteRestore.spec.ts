@@ -110,6 +110,27 @@ describe("DomainStoryPasteRestore", () => {
         expect(element.businessObject.number).toBe(80);
     });
 
+    it("reads the height off `number` when the copy carries no `height`", () => {
+        // This is the *normal* case on a live canvas: `drawAnnotation` records
+        // the height as `number` and only the export pass ever writes `height`,
+        // so a session-drawn annotation reaches paste with `number` alone.
+        // Covered end to end by CopyPasteIntegration.browser.spec.ts.
+        eventBus.fire(
+            "copyPaste.pasteElement",
+            pasteElementEvent({
+                type: ANNOTATION_TYPE,
+                text: "note",
+                number: 80,
+            }),
+        );
+
+        const element = createdElement(ANNOTATION_TYPE);
+        eventBus.fire("create.end", { elements: [element] });
+
+        expect(element.height).toBe(80);
+        expect(element.businessObject.number).toBe(80);
+    });
+
     it("falls back to empty text for an annotation copied without text", () => {
         eventBus.fire(
             "copyPaste.pasteElement",
