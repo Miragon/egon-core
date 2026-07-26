@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { Shape } from "diagram-js/lib/model/Types";
 import type { Point } from "diagram-js/lib/util/Types";
+import type BendpointMove from "diagram-js/lib/features/bendpoints/BendpointMove";
+import type Dragging from "diagram-js/lib/features/dragging/Dragging";
 
 import {
     createTestModeler,
     type TestModeler,
 } from "../../../__tests__/helpers/createTestModeler";
+import { canvasEvent } from "../../../__tests__/helpers/canvasEvent";
 import {
     addActor,
     addAnnotation,
@@ -13,7 +16,7 @@ import {
     connect,
 } from "../../../__tests__/helpers/storyBuilder";
 import { ElementTypes } from "../../../story/domain/elementTypes";
-import { canConnectToAnnotation } from "../../../story/domain/modelingRules";
+import { isForbiddenAnnotationEdge } from "../../../story/domain/modelingRules";
 
 /**
  * The connection half of issue #55: activities and annotation connections driven
@@ -148,23 +151,12 @@ describe("activity connections (browser)", () => {
 
     describe("connection.reconnect", () => {
         /**
-         * KNOWN BUG, shared with upstream — pinned, not asserted-correct.
-         *
-         * `DomainStoryRules`' `connection.reconnect` rule returns `undefined`
-         * when `canConnectToAnnotation` denies, and `Rules.allowed` maps
-         * `undefined` to `true` ("no rules objected"). `BendpointMove` sets
-         * `context.allowed` straight from that call, so dragging an activity's
-         * endpoint onto a text annotation is *accepted* and produces an edge the
-         * grammar forbids. It should `return false`: no lower-priority
-         * `connection.reconnect` provider exists for the `undefined`
-         * "no opinion" to defer to.
-         *
-         * Not fixed here because `DomainStoryRules.spec.ts` deliberately records
-         * the `undefined` verdict as intended behaviour ("ignores a forbidden
-         * annotation reconnect"), and overruling a recorded decision is the
-         * maintainer's call. Recorded in SYNC.md; a fix turns this case red.
+         * Issue #66, half one: the rule now answers `false` rather than
+         * `undefined` (which `Rules.allowed` maps to `true`). Both orientations
+         * are asserted because `BendpointMove` retries a denied reconnect with
+         * the endpoints swapped.
          */
-        it("permits a forbidden activity→annotation reconnect (known bug)", () => {
+        it("refuses an activity→annotation reconnect in either orientation", () => {
             modeler = createTestModeler();
             const { actor, workObject } = addHorizontalPair(modeler);
             const annotation = addAnnotation(modeler, {
@@ -172,19 +164,78 @@ describe("activity connections (browser)", () => {
             });
             const activity = connect(modeler, actor, workObject)!;
 
-            // The grammar itself is right — only the adapter's verdict is wrong.
-            expect(canConnectToAnnotation(actor, annotation, activity)).toBe(
-                false,
+            expect(isForbiddenAnnotationEdge(actor, annotation, activity)).toBe(
+                true,
             );
 
-            // What it *should* be, once fixed: .toBe(false)
             expect(
                 modeler.rules.allowed("connection.reconnect", {
                     connection: activity,
                     source: actor,
                     target: annotation,
                 }),
-            ).toBe(true);
+            ).toBe(false);
+            expect(
+                modeler.rules.allowed("connection.reconnect", {
+                    connection: activity,
+                    source: annotation,
+                    target: actor,
+                }),
+            ).toBe(false);
+        });
+
+        /**
+         * Issue #66, half two — **not** redundant with the rule-level case
+         * above. That one pins the *verdict*; this one proves the verdict is
+         * what actually governs the interaction, so the pair above cannot drift
+         * into asserting an answer no code path reads.
+         *
+         * It is the swap retry that makes the distinction load-bearing: `false`
+         * is what *enters* it, so with a target-only grammar clause the retry is
+         * allowed and this drag lands the same forbidden edge reversed
+         * (`annotation --ACTIVITY--> actor`) — verified by narrowing the clause
+         * and watching `activity.source` become the annotation.
+         */
+        it("refuses a bendpoint drag of an activity's end onto an annotation", () => {
+            modeler = createTestModeler();
+            modeler.get<Dragging>("dragging").setOptions({ manual: true });
+
+            const { actor, workObject } = addHorizontalPair(modeler);
+            const annotation = addAnnotation(modeler, {
+                point: { x: 450, y: 450 },
+            });
+            const activity = connect(modeler, actor, workObject)!;
+
+            const bendpointMove = modeler.get<BendpointMove>("bendpointMove");
+            const dragging = modeler.get<Dragging>("dragging");
+            const waypoints = activity.waypoints;
+            const target = {
+                x: annotation.x + annotation.width / 2,
+                y: annotation.y + annotation.height / 2,
+            };
+
+            // The target-end bendpoint is the last waypoint ⇒ RECONNECT_END.
+            bendpointMove.start(
+                canvasEvent(modeler.canvas, waypoints[waypoints.length - 1]),
+                activity,
+                waypoints.length - 1,
+                undefined,
+            );
+            dragging.hover({
+                element: annotation,
+                gfx: modeler.canvas.getGraphics(annotation),
+            } as never);
+            (dragging.move as (event: unknown) => void)(
+                canvasEvent(modeler.canvas, target),
+            );
+            (dragging.end as () => void)();
+
+            // Both orientations deny, so `bendpoint.move.end` bails before
+            // `modeling.reconnect` — the model is untouched.
+            expect(activity.source).toBe(actor);
+            expect(activity.target).toBe(workObject);
+            expect(annotation.incoming).toHaveLength(0);
+            expect(annotation.outgoing).toHaveLength(0);
         });
 
         it("moves the target and has the businessObject follow; undo restores it", () => {

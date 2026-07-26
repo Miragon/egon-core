@@ -5,11 +5,11 @@ import RuleProvider from "diagram-js/lib/features/rules/RuleProvider";
 import { isConnection, isGroup } from "../../../story/domain/elementPredicates";
 import {
     canConnect,
-    canConnectToAnnotation,
     canCreate,
     canResize,
     canStartConnection,
     clampGroupBounds,
+    isForbiddenAnnotationEdge,
 } from "../../../story/domain/modelingRules";
 import { getBusinessObject } from "../../../shared/infrastructure/util";
 
@@ -20,10 +20,13 @@ const HIGH_PRIORITY = 1500;
  *
  * WHY: the grammar itself lives in `story/domain/modelingRules` (pure and
  * tested); this class only wires it into diagram-js's rule protocol and
- * preserves the two framework-specific contracts the pure functions cannot
- * express — the legacy `undefined` tri-state that `elements.move` depends on
- * (returning `false` would forbid moving a non-group over empty canvas), and the
- * in-place mutation of `context.newBounds` that diagram-js's resize expects.
+ * preserves the framework-specific contracts the pure functions cannot express —
+ * the legacy `undefined` tri-state that `elements.move` depends on (returning
+ * `false` would forbid moving a non-group over empty canvas), and the in-place
+ * mutation of `context.newBounds` that diagram-js's resize expects. That
+ * tri-state is deliberately confined to `elements.move`/`*.create`: everywhere
+ * else a denial must be an explicit `false`, because `Rules.allowed` reads
+ * `undefined` as "allowed".
  */
 
 /**
@@ -99,10 +102,11 @@ export class DomainStoryRules extends RuleProvider {
                 source: Element = context.hover || context.source,
                 target: Element = context.target;
 
-            const result = canConnectToAnnotation(source, target, connection);
-
-            if (!result) {
-                return undefined;
+            // `false`, not `undefined`: `Rules.allowed` maps `undefined` to
+            // `true` and no lower-priority `connection.reconnect` provider
+            // exists to defer to.
+            if (isForbiddenAnnotationEdge(source, target, connection)) {
+                return false;
             }
 
             return canConnect(source, target);

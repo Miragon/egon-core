@@ -85,17 +85,27 @@ future round. Offer the fixes upstream separately.
   where upstream assigns `businessObject.height` and so leaves the shape at its
   default size.
 - **`util.ts` calls Array-less methods on `element.children`.**
-  `reworkGroupElements` did `innerShape.children.remove(shape)` and
-  `undoGroupRework` did `parent.children.remove(shape)` /
-  `superParent.children.add(shape)`. diagram-js `element.children` is a **plain
-  Array** — neither method exists, so both the group-reparenting branch and the
-  whole "undo group deletion" path threw `TypeError`. Upstream gets away with it
-  because moddle collections do carry those methods. Fixed locally with `add`/
-  `remove` from `diagram-js/lib/util/Collections` (already used by
-  `DomainStoryUpdater`), as issue [#8](https://github.com/Miragon/egon-core/issues/8)
-  anticipated. Note upstream's own "fix" here (wps/egon.io@fa55d12f,
+  `reworkGroupElements` did `innerShape.children.remove(shape)`, which throws
+  `TypeError` whenever `innerShape` carries no `children` at all, killing the
+  group-reparenting branch. Fixed locally with `remove` from
+  `diagram-js/lib/util/Collections` (already used by `DomainStoryUpdater`), as
+  issue [#8](https://github.com/Miragon/egon-core/issues/8) anticipated. Note
+  upstream's own "fix" here (wps/egon.io@fa55d12f,
   `children.set(undefined, shape)`) is equally broken — see the skip list below.
-  Locked by the group cases in `ModelingCommands.browser.spec.ts`.
+  Locked by the group cases in `ModelingCommands.browser.spec.ts`. The sibling
+  half of this row, `undoGroupRework`, no longer exists — see the
+  "Remove Group without Child-Elements" entry below.
+
+    Caveat recorded while fixing #67: the original diagnosis ("`element.children`
+    is a **plain Array**, neither method exists") is **not true of diagram-js
+    15.22.0**. `ShapeImpl` binds `parent`↔`children` through `object-refs`, so
+    `children` is a refs collection that does carry `.add()`/`.remove()`, and
+    **assigning `element.parent` maintains the inverse by itself** — it splices the
+    shape out of the old parent's `children` and into the new one's. Only elements
+    without a `children` binding (connections, labels) lack the methods. Anything
+    reasoning about "a shape left in two `children` arrays" is reasoning about a
+    state diagram-js does not produce.
+
 - **Import state is never reset between imports.** Upstream keeps an array used
   as a string-keyed map of group shapes and never clears it, so a second import
   parents new children onto shapes the first import's `diagram.clear` already
@@ -187,6 +197,64 @@ future round. Offer the fixes upstream separately.
   round trip exercisable at all: `checked` on the multiple checkbox (it always
   opened unchecked, so re-saving silently cleared the allowance) and `min="1"` on
   the number input.
+- **A forbidden activity↔annotation reconnect was permitted** (issue
+  [#66](https://github.com/Miragon/egon-core/issues/66)). Two defects, both still
+  present upstream, and fixing either alone is not enough:
+  (1) the `connection.reconnect` adapter returned `undefined` on a denial, and
+  diagram-js' `Rules.allowed` maps `undefined` to **`true`** ("no rules
+  objected") — no lower-priority `connection.reconnect` provider exists for that
+  "no opinion" to defer to; (2) the grammar's `canConnectToAnnotation` guarded
+  only the **target**, so a bare `return false` would have handed the same
+  illegal edge back reversed — `false` is precisely what _enters_
+  `BendpointMove`'s swapped-endpoint retry, which would then have been allowed.
+  Fixed locally by renaming that predicate to `isForbiddenAnnotationEdge` with
+  inverted polarity and a symmetric activity clause (either endpoint an
+  annotation), plus `return false` in the adapter. Locked by a real bendpoint
+  drag in `ActivityConnections.browser.spec.ts` — the rule-level assertions go
+  green on the adapter half alone, only the drag catches the swap retry.
+  Side effect worth knowing on a sync: a _pre-existing_ illegal edge in a legacy
+  file now denies in both orientations, so `BendpointMove.start` returns early
+  and its bendpoints can no longer be dragged. The edge stays selectable and
+  deletable.
+- **"Remove Group without Child-Elements" was hand-rolled, and undoing it threw.**
+  `elementUpdateHandler.js`'s `removeGroupWithoutChildren` did its own teardown:
+  `execute` called `undoGroupRework` (raw `document.querySelector` SVG surgery)
+  per child, and `revert` fired `shape.added` with no `gfx` — diagram-js'
+  `InteractionEvents` dereferences `event.gfx`, so undo died with
+  `TypeError: Cannot read properties of undefined (reading 'appendChild')`. Even
+  past that, `revert` iterated `element.children`, which `execute` had already
+  emptied, so nothing was re-adopted; and `modeling.removeGroup` executed the
+  command _then_ `removeElements`, making one UI action cost two undos.
+  **Fixed locally by deleting the mechanism, not repairing it** (issue
+  [#67](https://github.com/Miragon/egon-core/issues/67)): the handler is now
+  preExecute-only and expresses the teardown as nested modeling calls — a
+  `moveShape`/`moveConnection` per child onto the group's own parent, then
+  `removeElements([group])`. Nested commands inherit the outer action id, so the
+  whole thing is one commandStack entry, and diagram-js' own handlers own both
+  the gfx re-parenting (`GraphicsFactory.updateContainments`, driven from
+  `element.parent`) and the inverse. `undoGroupRework` was deleted outright.
+  Two details are load-bearing and easy to undo by accident: the children are
+  moved **individually with `layout: false`**, not through
+  `modeling.moveElements` — `MoveHelper.moveClosure` routes a connection with
+  only one moved endpoint through `modeling.layoutConnection` → `BaseLayouter`,
+  which returns exactly two points and would flatten every bendpoint into the
+  saved file (the corruption class of #65); and connections are moved
+  **separately**, because `moveClosure` never re-parents them, so an activity
+  drawn from inside the group (`Modeling.connect` parents it to `source.parent`)
+  would be deleted with the group. Carried with it: a shape lifted out of a group
+  now has `businessObject.parent` **cleared**, where the updater previously only
+  ever set it — a stale `parent: <deletedGroupId>` used to survive into the
+  export. And the teardown's internal moves carry a `groupTeardown` hint that
+  suppresses `reworkGroupElements`, whose parent/children rewrites happen outside
+  the command stack and would otherwise survive the undo. Locked by the
+  `shape.removeGroupWithoutChildren` cases in
+  `UpdateHandlerCommands.browser.spec.ts` (one undo re-adopts; bendpoints
+  survive; a group-parented activity survives; no sibling gets swallowed) and by
+  the group cases in `ModelingCommands.browser.spec.ts`.
+
+    Still shared with upstream and **out of scope**: `reworkGroupElements` mutates
+    `parent`/`children` outside any command, so group adoption from _moving or
+    creating_ a group remains non-undoable.
 
 ### Known, still shared with upstream
 
@@ -223,6 +291,26 @@ undefined (reading 'appendChild')`, which escapes `commandStack.undo()`. Even
   SVG re-parenting `undoGroupRework` performed, which is why it is not done here.
   Pinned by `UpdateHandlerCommands.browser.spec.ts` ("undo of the custom command
   throws and re-adopts nothing").
+- **Undoing a number edit does not restore the edited activity's own number.**
+  `DomainStoryPopupService.handleUpdate` writes
+  `element.businessObject.number = number` _before_ executing
+  `activity.changed`. `ActivityChangedHandler.preExecute` then snapshots
+  `getNumbersAndIDs()` and `context.oldNumber` from an already-mutated model, and
+  `modeling.updateNumber` no-ops because the number already matches — so no
+  nested `element.updateLabel` records the old value either. Measured with three
+  activities numbered 1/2/3 and the third edited to 1: the edit yields
+  `{a3:1, a1:2, a2:3}` correctly, but undo yields `{a1:1, a2:2, a3:1}` — the
+  cascade reverts, the edit does not, and two activities end up numbered 1. Fix
+  is to execute the command first and let the handler own the mutation, which
+  changes command semantics and so is left for a focused change.
+  `ActivityNumbering.browser.spec.ts` asserts only the cascade revert (what
+  `restoredNumberAssignments` exists for) and states the gap, deliberately not
+  asserting the buggy value — so a fix will not require editing that spec.
+- **`handleUpdate` mis-splices on an `indexOf` miss.**
+  `activitiesFromActors.splice(indexOf(element), 1)` removes the _last_ entry
+  when `indexOf` returns `-1`, reachable if the edited element is not in
+  `getActivitiesFromActors()` (e.g. a work-object-sourced activity). Latent, not
+  pinned.
 - **Debounced host callbacks fire after `destroy()`.**
   `DiagramJsModelerAdapter.destroy()` clears its callback registry but never
   cancels the pending `setTimeout` from `createDebouncedCallback`, and
@@ -258,7 +346,10 @@ undefined (reading 'appendChild')`, which escapes `commandStack.undo()`. Even
   styling, or the workbench shell.
 - **Do not port (upstream bug)**: `children.set(undefined, shape)` in
   `undoGroupRework` (wps/egon.io@fa55d12f) — see
-  [#8](https://github.com/Miragon/egon-core/issues/8).
+  [#8](https://github.com/Miragon/egon-core/issues/8). The instruction stands,
+  but note the local `undoGroupRework` no longer exists (deleted with #67), so
+  the upstream hunk has **no local counterpart** to port it into: the whole
+  function is a skip, not just that line.
 - **Do not port (upstream bug)**: upstream `replaceOptions.js` builds its option
   arrays by sparse index assignment (leaving holes once the current type is
   filtered out) and labels work-object entries with the actor action prefix

@@ -114,7 +114,12 @@ export class DomainStoryUpdater extends CommandInterceptor {
 
                 // to rework the child-parent relations if a group was moved, such that all Objects that are visually in the group are also associated with it
                 // since we do not have access to the standard-canvas object here, we cannot use the function correctGroupChildren() from DSLabelUtil
-                if (parent) {
+                //
+                // A group-teardown move is bookkeeping, not a user gesture: the
+                // delta is 0, so nothing changed geometrically, and re-adopting
+                // here would mutate parent/children outside the command stack
+                // and survive the undo the teardown exists to make possible.
+                if (parent && !context.hints?.groupTeardown) {
                     if (isBackground(parent) || isGroup(parent)) {
                         reworkGroupElements(parent, shape);
                     } else {
@@ -124,10 +129,16 @@ export class DomainStoryUpdater extends CommandInterceptor {
                     }
                 }
             }
-            if (shape && shape.parent && isGroup(shape.parent)) {
+            // Group membership is persisted, so a shape lifted out of a group
+            // must have it cleared — otherwise the export keeps naming a group
+            // the shape left, or one that no longer exists. Read `shape.parent`,
+            // not the `parent` const: the branch above may just have reassigned it.
+            if (shape.parent && isGroup(shape.parent)) {
                 assign(businessObject, {
                     parent: shape.parent.id,
                 });
+            } else {
+                delete businessObject.parent;
             }
         };
     }

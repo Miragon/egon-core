@@ -230,6 +230,9 @@ describe("update-handler commands (browser)", () => {
             expect(actor.parent).toBe(modeler.root);
             expect(modeler.elementRegistry.get(actor.id)).toBe(actor);
             expect(group.children).not.toContain(actor);
+            // …and the persisted containment goes with it: a stale
+            // `parent: <deletedGroupId>` would survive into the exported file.
+            expect(actor.businessObject.parent).toBeUndefined();
         });
 
         it("keeps the children when the whole removeGroup flow runs", () => {
@@ -245,9 +248,10 @@ describe("update-handler commands (browser)", () => {
                 group,
             );
 
-            // `removeGroup` is what the context pad calls: the custom command
-            // detaches the children, then a plain `elements.delete` removes the
-            // now-empty group. Two commandStack entries, so two undos.
+            // `removeGroup` is what the context pad calls. The teardown runs
+            // entirely in the command's `preExecute`, and nested commands
+            // inherit the outer action id — so it is *one* commandStack entry,
+            // and one Ctrl+Z has to put the whole thing back.
             modeler.modeling.removeGroup(group);
 
             expect(modeler.elementRegistry.get(group.id)).toBeUndefined();
@@ -259,36 +263,27 @@ describe("update-handler commands (browser)", () => {
             modeler.commandStack.undo();
 
             expect(modeler.elementRegistry.get(group.id)).toBe(group);
+            expect(actor.parent).toBe(group);
+            expect(workObject.parent).toBe(group);
+            expect(group.children).toContain(actor);
+            expect(group.children).toContain(workObject);
         });
 
         /**
-         * KNOWN BUG, shared with upstream — pinned rather than asserted-correct.
+         * Undo must be a true inverse: the children were the group's before the
+         * command ran, so they must be the group's again afterwards — otherwise
+         * the next export drops containment the user never removed.
          *
-         * Undo of this command should be a true inverse: the children were the
-         * group's before it ran, so they must be the group's again afterwards or
-         * the next export loses containment the user never removed. It is not.
-         * Two defects stack up in `RemoveGroupWithoutChildrenHandler.revert`:
-         *
-         * 1. it fires `shape.added` with no `gfx`, and diagram-js'
-         *    `InteractionEvents` listener dereferences `event.gfx` → the
-         *    `appendChild` TypeError below, which escapes `commandStack.undo()`;
-         * 2. even with that fixed the body is a no-op, because it iterates
-         *    `context.element.children` — which `execute` has already emptied
-         *    via `undoGroupRework` — instead of the `context.children` snapshot
-         *    `preExecute` took for exactly this purpose.
-         *
-         * Reachable from the UI: context pad → "Remove Group without
-         * Child-Elements" → Ctrl+Z twice (the first undo unwinds the
-         * `elements.delete` that `modeling.removeGroup` issues; the second
-         * throws).
-         *
-         * Recorded in SYNC.md under "Known, still shared with upstream" and
-         * pinned here the way `FormatCompatibilityMatrix.browser.spec.ts` pins
-         * its known deviations: a fix on either side turns this case red instead
-         * of passing silently. Fixing it means fixing this spec — invert the
-         * assertions to the two commented-out expectations.
+         * This case is the direct regression lock for issue #67. The old
+         * hand-rolled handler failed it twice over: `revert` fired `shape.added`
+         * with no `gfx` (diagram-js' `InteractionEvents` dereferences it → a
+         * `TypeError` that escaped `commandStack.undo()`), and its body iterated
+         * `element.children`, which `execute` had already emptied. Both are gone
+         * because the handler no longer writes its own inverse: the teardown is
+         * nested modeling calls in `preExecute`, so diagram-js' own
+         * `MoveShapeHandler.revert` / `DeleteShapeHandler.revert` undo it.
          */
-        it("undo of the custom command throws and re-adopts nothing (known bug)", () => {
+        it("undo re-adopts the children into the restored group", () => {
             modeler = createTestModeler();
             const group = addGroup(modeler, { point: { x: 400, y: 300 } });
             const actor = addActor(modeler, { point: { x: 400, y: 300 } });
@@ -298,15 +293,139 @@ describe("update-handler commands (browser)", () => {
                 element: group,
             });
 
-            expect(() => modeler!.commandStack.undo()).toThrow(
-                /Cannot read properties of undefined \(reading 'appendChild'\)/,
-            );
+            modeler.commandStack.undo();
 
-            // What it *should* be, once fixed:
-            //   expect(actor.parent).toBe(group);
-            //   expect(group.children).toContain(actor);
+            expect(actor.parent).toBe(group);
+            expect(group.children).toContain(actor);
+            // The business object mirrors the containment; the export reads
+            // this field, not the live parent reference.
+            expect(actor.businessObject.parent).toBe(group.id);
+        });
+
+        it("keeps an activity's bendpoints when its source is lifted out", () => {
+            modeler = createTestModeler();
+            const group = addGroup(modeler, { point: { x: 400, y: 300 } });
+            const actor = addActor(modeler, { point: { x: 400, y: 300 } });
+            const workObject = addWorkObject(modeler, {
+                point: { x: 900, y: 300 },
+            });
+            modeler.modeling.moveElements([actor], { x: 0, y: 0 }, group);
+            const activity = connect(modeler, actor, workObject)!;
+            // A bendpoint is what makes this case bite: only one endpoint moves,
+            // so `MoveHelper.moveClosure` would route through
+            // `modeling.layoutConnection` → `BaseLayouter`, which returns exactly
+            // two points. That is why the handler moves each child itself with
+            // `layout: false` instead of calling `modeling.moveElements`.
+            modeler.modeling.updateWaypoints(activity, [
+                { x: activity.waypoints[0].x, y: activity.waypoints[0].y },
+                { x: 650, y: 500 },
+                {
+                    x: activity.waypoints[activity.waypoints.length - 1].x,
+                    y: activity.waypoints[activity.waypoints.length - 1].y,
+                },
+            ]);
+            const waypointsBefore = activity.waypoints.map((point) => ({
+                x: point.x,
+                y: point.y,
+            }));
+            expect(waypointsBefore).toHaveLength(3);
+
+            modeler.modeling.removeGroup(group);
+
+            expect(
+                activity.waypoints.map((point) => ({
+                    x: point.x,
+                    y: point.y,
+                })),
+            ).toEqual(waypointsBefore);
+            // …and nothing flattened got written into the persisted model.
+            expect(
+                activity.businessObject.waypoints.map(
+                    (point: { x: number; y: number }) => ({
+                        x: point.x,
+                        y: point.y,
+                    }),
+                ),
+            ).toEqual(waypointsBefore);
+        });
+
+        it("keeps an activity that is parented to the group being removed", () => {
+            modeler = createTestModeler();
+            const group = addGroup(modeler, { point: { x: 400, y: 300 } });
+            const actor = addActor(modeler, { point: { x: 400, y: 300 } });
+            const workObject = addWorkObject(modeler, {
+                point: { x: 900, y: 300 },
+            });
+            modeler.modeling.moveElements([actor], { x: 0, y: 0 }, group);
+            const activity = connect(modeler, actor, workObject)!;
+
+            // The precondition this case exists for: `Modeling.connect` parents
+            // a connection to `source.parent`, so drawing from inside the group
+            // makes the activity a *child* of the group — and
+            // `DeleteShapeHandler.preExecute` deletes children.
+            expect(activity.parent).toBe(group);
+
+            modeler.modeling.removeGroup(group);
+
+            expect(modeler.elementRegistry.get(activity.id)).toBe(activity);
+            expect(activity.parent).toBe(modeler.root);
+        });
+
+        /**
+         * A group inside the group being torn down is the recursive case: it
+         * must be lifted out *with its own children still attached*, not
+         * flattened onto the root. `recurse: false` on the move is what keeps
+         * `MoveShapeHandler` from walking into it.
+         */
+        it("lifts out a child group with its own contents intact", () => {
+            modeler = createTestModeler();
+            const actor = addActor(modeler, { point: { x: 400, y: 300 } });
+            const childGroup = addGroup(modeler, {
+                point: { x: 400, y: 300 },
+                width: 120,
+                height: 100,
+            });
+            const group = addGroup(modeler, { point: { x: 400, y: 300 } });
+            expect(childGroup.children).toContain(actor);
+            expect(group.children).toContain(childGroup);
+
+            modeler.modeling.removeGroup(group);
+
+            expect(modeler.elementRegistry.get(group.id)).toBeUndefined();
+            expect(childGroup.parent).toBe(modeler.root);
+            expect(actor.parent).toBe(childGroup);
+        });
+
+        it("does not adopt a root shape into the child group it uncovers", () => {
+            modeler = createTestModeler();
+            const group = addGroup(modeler, { point: { x: 400, y: 300 } });
+            const childGroup = addGroup(modeler, {
+                point: { x: 400, y: 300 },
+                width: 120,
+                height: 100,
+            });
+            // A newly drawn group only adopts what it is drawn *over*, so the
+            // outer group has to be nudged before it takes the inner one in.
+            modeler.modeling.moveElements([group], { x: 0, y: 0 });
+            expect(childGroup.parent).toBe(group);
+
+            // Sits inside the child group's box but belongs to the canvas root:
+            // creating a plain shape over a group does not adopt it.
+            const actor = addActor(modeler, { point: { x: 400, y: 300 } });
             expect(actor.parent).toBe(modeler.root);
-            expect(group.children).not.toContain(actor);
+
+            modeler.modeling.removeGroup(group);
+
+            // Without the `groupTeardown` hint the child group's move would run
+            // `reworkGroupElements`, which rewrites parent/children outside the
+            // command stack — so the actor would be swallowed by a group it was
+            // never in, and no undo could give it back.
+            expect(actor.parent).toBe(modeler.root);
+            expect(childGroup.children).not.toContain(actor);
+
+            modeler.commandStack.undo();
+
+            expect(childGroup.parent).toBe(group);
         });
     });
 });
