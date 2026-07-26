@@ -26,7 +26,9 @@ import type { DomainStoryDocument } from "../../domain/DomainStoryDocument";
  * canonical v4.0.0 is asserted for all eight rows, and each row's business
  * objects must come back byte-identical to the fixture's own modulo the
  * documented canonicalizations. A red row here is a finding, not a reason to
- * loosen an expectation.
+ * loosen an expectation. Since #65 the renderer no longer writes to the model,
+ * so the per-row comparison allows no render-time drift at all — the only
+ * permitted difference is {@link CANONICALIZED_AWAY}.
  *
  * `egn_cinema_story.egn.json` is excluded on purpose: it encodes a different,
  * smaller story and is already covered by `EgonClientBoot.browser.spec.ts`.
@@ -88,45 +90,6 @@ const CANONICALIZED_AWAY = [
     "children",
 ] as const;
 
-/**
- * Deviations today's renderer writes back into the *persisted* model. Both are
- * pre-existing and shared with upstream Egon.io, and both are out of scope here
- * (fixing them changes what the canvas draws, not what the format means) — but
- * they are recorded as exact per-row data rather than papered over with a loose
- * assertion, so the fidelity comparison below stays byte-strict and a future fix
- * turns this spec red instead of passing silently.
- *
- * 1. `DomainStoryRenderer` stores its default colour on any business object that
- *    carried none (`:202` for groups → `#000000`, `:481` for activities →
- *    `black`), so a colourless pre-v1.1.0 file gains `pickedColor` on save.
- * 2. `checkIfPointOverlapsText` (`:562`) nudges an activity's start point down by
- *    the source's label line height *in place*. The connection's `waypoints` is
- *    the same array as the business object's, so the nudge is persisted — which
- *    is visible in the fixture family itself: v1.1.0→v1.4.0 record
- *    `connection_8174`'s start y as 172, 177, 182, 187, a 5px-per-round-trip
- *    creep that stops once the guard's `source.y + 75 + offset` ceiling is hit.
- */
-interface RenderTimeDrift {
-    /** id → colour the renderer stores because the file carried none. */
-    defaultColor?: Record<string, string>;
-    /** id → pixels added to waypoint 0's `y` to clear the source's label. */
-    startWaypointNudge?: Record<string, number>;
-}
-
-/** The colours a fully colourless file (v1.0.0) comes back with. */
-const RENDERER_DEFAULT_COLORS: Record<string, string> = Object.fromEntries(
-    Object.entries(CANONICAL_TYPES).flatMap(([id, type]) => {
-        // Actors and work objects only *read* pickedColor; groups and activities
-        // write their default back onto the model.
-        if (type === "domainStory:activity") return [[id, "black"]];
-        if (type === "domainStory:group") return [[id, "#000000"]];
-        return [];
-    }),
-);
-
-/** The one activity whose start point sits over its source actor's label. */
-const NUDGED_START_WAYPOINT = { connection_8174: 5 };
-
 interface MatrixRow {
     file: FixtureName;
     /** The version the file declares — every row still exports as 4.0.0. */
@@ -134,15 +97,7 @@ interface MatrixRow {
     title: string;
     description: string;
     scope: Record<string, string> | undefined;
-    drift?: RenderTimeDrift;
 }
-
-/**
- * Rows still short of the renderer's nudge ceiling, so importing them shifts
- * `connection_8174`'s start point once more. v1.4.0 onwards already sit at the
- * ceiling and come back unchanged.
- */
-const NUDGED_VERSIONS = ["1.0.0", "1.1.0", "1.2.0", "1.3.0"];
 
 const MATRIX: readonly MatrixRow[] = [
     ...(
@@ -155,15 +110,6 @@ const MATRIX: readonly MatrixRow[] = [
         title: "",
         description: `version ${version}`,
         scope: undefined,
-        drift: {
-            // v1.0.0 predates pickedColor entirely; every later file carries it.
-            ...(version === "1.0.0"
-                ? { defaultColor: RENDERER_DEFAULT_COLORS }
-                : {}),
-            ...(NUDGED_VERSIONS.includes(version)
-                ? { startWaypointNudge: NUDGED_START_WAYPOINT }
-                : {}),
-        },
     })),
     {
         file: "egn_export_version_4_0_0.json",
@@ -201,34 +147,6 @@ function expectedBusinessObjects(fixture: any) {
             ),
         )
         .sort((a: any, b: any) => a.id.localeCompare(b.id));
-}
-
-/** Folds the documented {@link RenderTimeDrift} into the expected objects. */
-function applyRenderTimeDrift(
-    businessObjects: any[],
-    drift: RenderTimeDrift = {},
-) {
-    return businessObjects.map((businessObject) => {
-        const color = drift.defaultColor?.[businessObject.id];
-        const nudge = drift.startWaypointNudge?.[businessObject.id];
-        if (color === undefined && nudge === undefined) {
-            return businessObject;
-        }
-        return {
-            ...businessObject,
-            ...(color !== undefined ? { pickedColor: color } : {}),
-            ...(nudge !== undefined
-                ? {
-                      waypoints: businessObject.waypoints.map(
-                          (waypoint: any, index: number) =>
-                              index === 0
-                                  ? { ...waypoint, y: waypoint.y + nudge }
-                                  : waypoint,
-                      ),
-                  }
-                : {}),
-        };
-    });
 }
 
 /**
@@ -313,7 +231,7 @@ describe("format compatibility matrix (browser)", () => {
 
     it.each(MATRIX)(
         "imports $file and exports canonical v4.0.0",
-        async ({ file, title, description, scope, drift }) => {
+        async ({ file, title, description, scope }) => {
             diagram = await createTestDiagram();
             const fixture = importFixture<any>(file);
 
@@ -327,14 +245,10 @@ describe("format compatibility matrix (browser)", () => {
             expect(exported.domainStory.scope).toEqual(scope);
 
             // Per-fixture fidelity: x/y/name/pickedColor/waypoints/number all
-            // survive the canvas verbatim, modulo the documented render-time
-            // drift. Derived from the fixture, never hand-written, so a
-            // coordinate typo cannot silently pass.
+            // survive the canvas verbatim. Derived from the fixture, never
+            // hand-written, so a coordinate typo cannot silently pass.
             expect(exported.domainStory.businessObjects).toEqual(
-                applyRenderTimeDrift(
-                    expectedBusinessObjects(importFixture<any>(file)),
-                    drift,
-                ),
+                expectedBusinessObjects(importFixture<any>(file)),
             );
         },
     );
