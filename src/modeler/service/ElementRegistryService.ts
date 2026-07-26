@@ -11,6 +11,7 @@ import {
     isGroup,
     isWorkObject,
 } from "../../story/domain/elementPredicates";
+import { activitiesFromActors } from "../../story/domain/activityNumbering";
 import { GroupCanvasObject } from "../../story/domain/groupCanvasObject";
 import { UsedIconList } from "../../story/domain/UsedIconList";
 
@@ -95,33 +96,7 @@ export class ElementRegistryService {
 
     // get a list of activities, that originate from an actor-type
     getActivitiesFromActors(): ActivityCanvasObject[] {
-        const activitiesFromActors: ActivityCanvasObject[] = [];
-        const activities = this.getAllActivities();
-
-        activities.forEach((activity: ActivityCanvasObject) => {
-            if (isActor(activity.source)) {
-                activitiesFromActors.push(activity);
-            }
-        });
-
-        // sort by activityBusinessObject number
-        activitiesFromActors.sort(
-            (
-                activityCanvasA: ActivityCanvasObject,
-                activityCanvasB: ActivityCanvasObject,
-            ) => {
-                const activityNumberA = Number(
-                    activityCanvasA.businessObject.number,
-                );
-                const activityNumberB = Number(
-                    activityCanvasB.businessObject.number,
-                );
-
-                return activityNumberA - activityNumberB;
-            },
-        );
-
-        return activitiesFromActors;
+        return activitiesFromActors(this.getAllActivities());
     }
 
     getActivityFromActorById(id: string): ActivityCanvasObject | undefined {

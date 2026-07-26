@@ -3,13 +3,23 @@ import { Element } from "diagram-js/lib/model/Types";
 
 import { ElementRegistryService } from "../../service/ElementRegistryService";
 import { ActivityCanvasObject } from "../../../story/domain/canvasObject";
-import CommandStack from "diagram-js/lib/command/CommandStack";
 import { ActivityBusinessObject } from "../../../story/domain/activityBusinessObject";
+import {
+    nextAvailableActivityNumber,
+    renumberOnNumberEdit,
+} from "../../../story/domain/activityNumbering";
 
+/**
+ * Applies the pure activity-numbering policy (`story/domain/activityNumbering`)
+ * to the live canvas: it owns the mutable multiple-number registry (mutable
+ * state must live on a didi-instantiated class, ADR 0012) and translates
+ * computed number assignments into business-object mutations plus
+ * `element.changed` events. The arithmetic itself is domain code — this class
+ * only wires it to diagram-js.
+ */
 export class DomainStoryNumberingRegistry {
     static $inject: string[] = [
         "eventBus",
-        "commandStack",
         "domainStoryElementRegistryService",
     ];
 
@@ -20,7 +30,6 @@ export class DomainStoryNumberingRegistry {
 
     constructor(
         private readonly eventBus: EventBus,
-        private readonly commandStack: CommandStack,
         private readonly domainStoryElementRegistryService: ElementRegistryService,
     ) {}
 
@@ -45,7 +54,7 @@ export class DomainStoryNumberingRegistry {
     /**
      * Get the IDs of activities with their associated number, only returns activities that are originating from an actor
      */
-    getNumbersAndIDs() {
+    getNumbersAndIDs(): { id: string; number: number | undefined }[] {
         const iDWithNumber = [];
         const activities =
             this.domainStoryElementRegistryService.getActivitiesFromActors();
@@ -62,58 +71,14 @@ export class DomainStoryNumberingRegistry {
      * Determine the next available number that is not yet used
      */
     generateAutomaticNumber(elementActivity: Element) {
-        const semantic = elementActivity.businessObject;
-        const usedNumbers = [0];
-        let wantedNumber = -1;
+        const usedNumbers = this.domainStoryElementRegistryService
+            .getActivitiesFromActors()
+            .map((activity) => activity.businessObject.number);
 
-        const activitiesFromActors =
-            this.domainStoryElementRegistryService.getActivitiesFromActors();
+        const wantedNumber = nextAvailableActivityNumber(usedNumbers);
 
-        activitiesFromActors.forEach((element) => {
-            if (element.businessObject.number) {
-                usedNumbers.push(+element.businessObject.number);
-            }
-        });
-        for (let i = 0; i < usedNumbers.length; i++) {
-            if (!usedNumbers.includes(i)) {
-                wantedNumber = i;
-                i = usedNumbers.length;
-            }
-        }
-        if (wantedNumber === -1) {
-            wantedNumber = usedNumbers.length;
-        }
-
-        this.updateExistingNumbersAtGeneration(
-            activitiesFromActors,
-            wantedNumber,
-        );
-        semantic.number = wantedNumber;
+        elementActivity.businessObject.number = wantedNumber;
         return wantedNumber;
-    }
-
-    /**
-     * update the numbers at the activities when generating a new activity
-     */
-    updateExistingNumbersAtGeneration(
-        activitiesFromActors: ActivityCanvasObject[],
-        wantedNumber: number,
-    ) {
-        activitiesFromActors.forEach((element) => {
-            const number = element.businessObject.number ?? 0;
-
-            if (number >= wantedNumber) {
-                wantedNumber++;
-                setTimeout(() => {
-                    this.commandStack.execute("activity.changed", {
-                        businessObject: element.businessObject,
-                        newLabel: element.businessObject.name,
-                        newNumber: number,
-                        element: element,
-                    });
-                }, 10);
-            }
-        });
     }
 
     /**
@@ -123,51 +88,33 @@ export class DomainStoryNumberingRegistry {
         activitiesFromActors: ActivityCanvasObject[],
         wantedNumber: number,
     ) {
-        // get a sorted list of all activities that could need changing
-        const sortedActivities: ActivityCanvasObject[][] = [[]];
-        activitiesFromActors.forEach((activity) => {
-            if (activity.businessObject.number) {
-                if (!sortedActivities[activity.businessObject.number]) {
-                    sortedActivities[activity.businessObject.number] = [];
-                }
-                sortedActivities[activity.businessObject.number].push(activity);
+        const { assignments, multipleAllowedUpdates } = renumberOnNumberEdit(
+            activitiesFromActors.map((activity) => ({
+                id: activity.businessObject.id,
+                number: activity.businessObject.number,
+            })),
+            wantedNumber,
+            this.multipleNumberRegistry,
+        );
+
+        multipleAllowedUpdates.forEach(
+            (update) =>
+                (this.multipleNumberRegistry[update.number] = update.allowed),
+        );
+
+        const activitiesById = new Map(
+            activitiesFromActors.map((activity) => [
+                activity.businessObject.id,
+                activity,
+            ]),
+        );
+        assignments.forEach(({ id, newNumber }) => {
+            const element = activitiesById.get(id);
+            if (!element) {
+                return;
             }
+            element.businessObject.number = newNumber;
+            this.eventBus.fire("element.changed", { element });
         });
-
-        // set the number of each activity to the next highest number, starting from the number, we overrode
-        const oldMultipleNumberRegistry = [...this.multipleNumberRegistry];
-        let currentNumber = wantedNumber;
-        for (
-            currentNumber;
-            currentNumber < sortedActivities.length;
-            currentNumber++
-        ) {
-            if (sortedActivities[currentNumber]) {
-                wantedNumber++;
-                this.multipleNumberRegistry[wantedNumber] =
-                    oldMultipleNumberRegistry[currentNumber];
-                this.setNumberOfActivity(
-                    sortedActivities[currentNumber],
-                    wantedNumber,
-                );
-            }
-        }
-    }
-
-    private setNumberOfActivity(
-        elementArray: ActivityCanvasObject[],
-        wantedNumber: number,
-    ) {
-        if (elementArray) {
-            elementArray.forEach((element) => {
-                if (element) {
-                    const businessObject = element.businessObject;
-                    if (businessObject) {
-                        businessObject.number = wantedNumber;
-                    }
-                    this.eventBus.fire("element.changed", { element });
-                }
-            });
-        }
     }
 }
