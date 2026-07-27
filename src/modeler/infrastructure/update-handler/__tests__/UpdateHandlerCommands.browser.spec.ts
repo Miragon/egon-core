@@ -115,7 +115,10 @@ describe("update-handler commands (browser)", () => {
 
     describe("activity.directionChange", () => {
         /** Mirrors DomainStoryContextPadProvider.changeDirection. */
-        function changeDirection(activity: Connection, newNumber: number) {
+        function changeDirection(
+            activity: Connection,
+            newNumber: number | null,
+        ) {
             modeler!.commandStack.execute("activity.directionChange", {
                 businessObject: activity.businessObject,
                 newNumber,
@@ -134,14 +137,15 @@ describe("update-handler commands (browser)", () => {
                 x: point.x,
                 y: point.y,
             }));
-            // Auto-numbering runs in the renderer, so this is only non-null
-            // because a real draw pass happened — see ADR 0014, blocker 2.
+            // Minted by the `connection.create` interceptor since #74; it used
+            // to take a real draw pass (ADR 0014, blocker 2 — now stale).
             expect(activity.businessObject.number).toBe(1);
 
-            // 0 is what the context pad passes when the *current* source is an
-            // actor: after the swap the activity starts at the work object, and
-            // only actor-initiated activities carry a number.
-            changeDirection(activity, 0);
+            // `null` is what the context pad passes when the *current* source is
+            // an actor: after the swap the activity starts at the work object,
+            // and only actor-initiated activities carry a number. It used to
+            // pass `0` and rely on the repaint to launder that into `null`.
+            changeDirection(activity, null);
 
             expect(activity.source).toBe(workObject);
             expect(activity.target).toBe(actor);
@@ -155,8 +159,9 @@ describe("update-handler commands (browser)", () => {
                     y: point.y,
                 })),
             ).toEqual([...waypointsBefore].reverse());
-            // `renderExternalNumber` nulls the number of any activity whose
-            // source is not an actor, so the badge disappears with the swap.
+            // The command itself nulls the number now, so the badge disappears
+            // with the swap whether or not anything repaints — and the exported
+            // bytes say `null`, never `0`.
             expect(activity.businessObject.number).toBeNull();
         });
 
@@ -190,9 +195,14 @@ describe("update-handler commands (browser)", () => {
                 x: point.x,
                 y: point.y,
             }));
+            // Read *after* the rename on purpose: until #74 `element.updateLabel`
+            // blanked an activity's number and only the following repaint put it
+            // back, so a renamed activity briefly had none. The label handler now
+            // writes only the half it was given, so this is still 1.
             const numberBefore = activity.businessObject.number;
+            expect(numberBefore).toBe(1);
 
-            changeDirection(activity, 0);
+            changeDirection(activity, null);
             modeler.commandStack.undo();
 
             expect(activity.source).toBe(actor);

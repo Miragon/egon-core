@@ -19,15 +19,15 @@ Upstream keeps the modeler embedded in an Angular app; this repo restructured th
 extracted core into a flat DDD feature layout (ADR 0010). File names may differ —
 where names were arbitrary we match upstream so diffs stay reviewable.
 
-| upstream (wps/egon.io)                                       | local                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/app/tools/modeler/diagram-js/features/*`                | `src/modeler/infrastructure/*` (change-icon→`replace`, copyPaste→`copy-paste`, shortcuts→`keyboard`+`editor-actions`, numbering→`popup`+`number-stash`, util/TextRenderer→`text-renderer`, rules→`rules` adapter + `rules/ruleVerdictAdapter` (the single verdict→wire mapping, ADR 0015) + the pure grammar/predicates/verdicts extracted to `src/story/domain/{elementPredicates,modelingRules,ruleVerdict}` and the numbering math extracted to `src/story/domain/activityNumbering`, which have no upstream counterpart) |
-| `src/app/domain/entities/*`                                  | `src/story/domain/*` (icon types→`src/iconSet/domain`, label entries→`src/labelDictionary/domain`)                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `src/app/domain/services` + `src/app/tools/modeler/services` | `src/modeler/service/*` (ModelerService/InitializerService ≈ `EgonClient`/`DiagramJsModelerAdapter`)                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `src/app/tools/icon-set-config/{domain,services}`            | `src/iconSet/{domain,service,infrastructure}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `src/app/tools/{import,export}/services`                     | `src/story/service/*` (the pure repair rules of `import-repair.service.ts` extracted to `src/story/domain/importRepair.ts`, mirroring the `elementPredicates`/`modelingRules`/`activityNumbering` extractions above; `ImportRepairService` remains as a thin facade keeping upstream's four method names so sync diffs stay reviewable)                                                                                                                                                                                      |
-| `src/app/tools/label-dictionary/services`                    | `src/labelDictionary/service/*`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `src/app/utils`                                              | `src/shared/domain/*` (pure helpers), `src/shared/infrastructure/*` (DOM/diagram-js-touching)                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| upstream (wps/egon.io)                                       | local                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/tools/modeler/diagram-js/features/*`                | `src/modeler/infrastructure/*` (change-icon→`replace`, copyPaste→`copy-paste`, shortcuts→`keyboard`+`editor-actions`, numbering→`popup` (the `number-stash` half was deleted with #74 — upstream's stash has no local counterpart any more), util/TextRenderer→`text-renderer`, rules→`rules` adapter + `rules/ruleVerdictAdapter` (the single verdict→wire mapping, ADR 0015) + the pure grammar/predicates/verdicts extracted to `src/story/domain/{elementPredicates,modelingRules,ruleVerdict}` and the numbering math extracted to `src/story/domain/activityNumbering`, which have no upstream counterpart) |
+| `src/app/domain/entities/*`                                  | `src/story/domain/*` (icon types→`src/iconSet/domain`, label entries→`src/labelDictionary/domain`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `src/app/domain/services` + `src/app/tools/modeler/services` | `src/modeler/service/*` (ModelerService/InitializerService ≈ `EgonClient`/`DiagramJsModelerAdapter`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `src/app/tools/icon-set-config/{domain,services}`            | `src/iconSet/{domain,service,infrastructure}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `src/app/tools/{import,export}/services`                     | `src/story/service/*` (the pure repair rules of `import-repair.service.ts` extracted to `src/story/domain/importRepair.ts`, mirroring the `elementPredicates`/`modelingRules`/`activityNumbering` extractions above; `ImportRepairService` remains as a thin facade keeping upstream's four method names so sync diffs stay reviewable)                                                                                                                                                                                                                                                                           |
+| `src/app/tools/label-dictionary/services`                    | `src/labelDictionary/service/*`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `src/app/utils`                                              | `src/shared/domain/*` (pure helpers), `src/shared/infrastructure/*` (DOM/diagram-js-touching)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 Not extracted (host concerns, no local counterpart): dialogs, snackbars,
 properties panel, replay, storage/autosave, drag&drop, download helpers, the
@@ -77,13 +77,18 @@ future round. Offer the fixes upstream separately.
   hack) and only the _export_ pass copies it onto `height`. So copy-pasting an
   annotation drawn in the current session dropped its height; it only worked for
   one round-tripped through a file, which is why the mock-based spec never saw
-  it. Fixed locally by falling back to `number` in
-  `DomainStoryPasteRestore.pasteElement`. Locked by
-  `CopyPasteIntegration.browser.spec.ts`, which asserts the precondition
-  (`number` set, `height` absent) so the two cannot drift apart again. Note the
-  local port already diverges on the apply side — it assigns `element.height`,
-  where upstream assigns `businessObject.height` and so leaves the shape at its
-  default size.
+  it. Note the local port already diverges on the apply side — it assigns
+  `element.height`, where upstream assigns `businessObject.height` and so leaves
+  the shape at its default size.
+
+    **Superseded by #74 — read that entry, not this fix.** The local fix was a
+    `?? number` fallback in `DomainStoryPasteRestore.pasteElement`; the field it
+    fell back on no longer exists, and the stash turned out to be redundant
+    outright (diagram-js carries `descriptor.height` and the element factory
+    honours it), so the whole height stash is gone. The upstream _bug_ is still
+    real and still must not be re-imported — it is just fixed by deletion now
+    rather than by a fallback.
+
 - **`util.ts` calls Array-less methods on `element.children`.**
   `reworkGroupElements` did `innerShape.children.remove(shape)`, which throws
   `TypeError` whenever `innerShape` carries no `children` at all, killing the
@@ -158,10 +163,8 @@ future round. Offer the fixes upstream separately.
   `querySelector("marker#" + id)` — which throws `SyntaxError` on an unescaped
   `#` and kills the drag. Upstream only ever hit that on a _coloured_ activity;
   making `#000000` the default would have broken every activity drag, so
-  `markerId` now folds anything a CSS identifier cannot carry to `_`. Note
-  `getIconSvg`'s `pickedColor !== DEFAULT_COLOR` check still mis-reads a
-  persisted literal `"black"` as a custom colour — pre-existing, tracked in
-  [#74](https://github.com/Miragon/egon-core/issues/74). Issue [#65](https://github.com/Miragon/egon-core/issues/65); locked
+  `markerId` now folds anything a CSS identifier cannot carry to `_`.
+  Issue [#65](https://github.com/Miragon/egon-core/issues/65); locked
   by `RendererModelPurity.browser.spec.ts` and the byte-strict matrix. Neither
   fix repairs history: a file that already accumulated drift keeps it (the v4.0.0
   fixture's `y: 370` against `original.y: 337`) — this stops the creep.
@@ -197,6 +200,70 @@ future round. Offer the fixes upstream separately.
   round trip exercisable at all: `checked` on the multiple checkbox (it always
   opened unchecked, so re-saving silently cleared the allowance) and `min="1"` on
   the number input.
+- **`DomainStoryRenderer` writes to the model it is only asked to paint — six
+  more times.** #65 stopped the two writes that _corrected_ something (the
+  overlap nudge, the default colour) and left the six that _own_ something,
+  because each needed a decision about who should own it instead. All six are
+  live upstream: `drawShape`/`drawConnection` stamp `businessObject.type`;
+  `renderExternalNumber` **mints** an activity number when an actor-sourced
+  activity has none and **clears** it for every other activity;
+  `drawAnnotation` mirrors the box height onto `businessObject.number`; and both
+  draw entry points flip the host's unsaved-changes flag. A repaint is not a user
+  action, runs an unbounded number of times, and — because
+  `import-domain-story.service.ts` aliases the business objects onto the elements
+  — writes straight into what the next export emits. Fixed locally by moving each
+  write to an owner undo can see: `DomainStoryCopyPaste` carries the `type` (paste
+  is the only path that left it unset); a new `DomainStoryActivityNumbering`
+  `CommandInterceptor` on `connection.create`/`connection.reconnect` owns the
+  number; the annotation height needed no owner at all (`element.height` was
+  already correct and the export pass already persists it); and a new
+  `DomainStoryDirtyFlagUpdater` derives the dirty flag from
+  `commandStack.changed` + `canUndo()`. Recorded as
+  [ADR 0016](docs/adr/0016-rendering-is-read-only.md) and locked twice — a
+  raw-source rule in `architecture.spec.ts` (rule I) and the repaint-and-diff
+  cases in `RendererModelPurity.browser.spec.ts`, which previously passed
+  _vacuously_ for four of the six because no fixture carries an annotation and
+  every fixture activity already holds the number the renderer would write.
+  Issue [#74](https://github.com/Miragon/egon-core/issues/74).
+
+    **Two format changes ride along, and a reader on either side must know
+    them.** Annotations no longer carry `number` — a pre-#74 file's value is
+    translated into `height` by `useLegacyAnnotationNumberAsHeight` on import and
+    then dropped, so it does not round-trip back out. And
+    `activity.directionChange` passes `null` instead of `0` for "no number":
+    upstream's `0` only ever worked because the following repaint laundered it
+    into `null`, and without that it would export as `"number": 0`.
+
+    **Two behaviours existed _only_ because a repaint ran, and had to be
+    re-homed** or the change would have been a silent regression. A hand-made
+    file's missing numbers were minted by the first paint; they are filled once
+    on import by `numberActivitiesFromActors`. And `element.updateLabel` blanks
+    an activity's number (`DomainStoryModeling` maps both `updateLabel` and
+    `updateNumber` onto that one command, each supplying half), which the repaint
+    put back — so upstream, renaming an activity drops it out of the sequence for
+    exactly as long as it is not drawn. `DomainStoryUpdateLabelHandler` now writes
+    only the half its caller supplied, which also retires the `context.name`
+    workaround `ActivityDirectionChangedHandler` carries for the mirror-image
+    name bug.
+
+    Three deletions go with it, all upstream-live code with no local counterpart
+    left to port into. `DomainStoryRenderer.getActivityPath` — no callers, not a
+    diagram-js contract name, body a no-op `map`. The **whole number-stash
+    mechanism** (`DomainStoryNumberStash`, its didi module, the
+    `stashNumber` call in `DomainStoryLabelEditingProvider`): it carried an
+    activity's number across the redraw that direct-editing triggers, its `use`
+    flag was only ever set by tests, and it became dead when #77 made
+    `activity.changed` one atomic command. And `DomainStoryPasteRestore`'s height
+    stash, which upstream still keeps — diagram-js copies `x/y/width/height` onto
+    the paste descriptor and `DomainStoryElementFactory` honours a supplied
+    height, so it was only ever needed because it read
+    `businessObject.height`/`number`, neither of which a live canvas maintains.
+    Verified by disabling the restore against
+    `CopyPasteIntegration.browser.spec.ts`, not by reading the diagram-js source.
+    Note this supersedes the "copy-paste.service.ts loses a pasted annotation's
+    height" row above: the local `?? number` fallback recorded there is gone,
+    because the field it fell back on no longer exists.
+
 - **A forbidden activity↔annotation reconnect was permitted** (issue
   [#66](https://github.com/Miragon/egon-core/issues/66)). Two defects, both still
   present upstream, and fixing either alone is not enough:
@@ -349,21 +416,6 @@ undefined (reading 'appendChild')`, which escapes `commandStack.undo()`. Even
   SVG re-parenting `undoGroupRework` performed, which is why it is not done here.
   Pinned by `UpdateHandlerCommands.browser.spec.ts` ("undo of the custom command
   throws and re-adopts nothing").
-- **Undoing a number edit does not restore the edited activity's own number.**
-  `DomainStoryPopupService.handleUpdate` writes
-  `element.businessObject.number = number` _before_ executing
-  `activity.changed`. `ActivityChangedHandler.preExecute` then snapshots
-  `getNumbersAndIDs()` and `context.oldNumber` from an already-mutated model, and
-  `modeling.updateNumber` no-ops because the number already matches — so no
-  nested `element.updateLabel` records the old value either. Measured with three
-  activities numbered 1/2/3 and the third edited to 1: the edit yields
-  `{a3:1, a1:2, a2:3}` correctly, but undo yields `{a1:1, a2:2, a3:1}` — the
-  cascade reverts, the edit does not, and two activities end up numbered 1. Fix
-  is to execute the command first and let the handler own the mutation, which
-  changes command semantics and so is left for a focused change.
-  `ActivityNumbering.browser.spec.ts` asserts only the cascade revert (what
-  `restoredNumberAssignments` exists for) and states the gap, deliberately not
-  asserting the buggy value — so a fix will not require editing that spec.
 - **`handleUpdate` mis-splices on an `indexOf` miss.**
   `activitiesFromActors.splice(indexOf(element), 1)` removes the _last_ entry
   when `indexOf` returns `-1`, reachable if the edited element is not in

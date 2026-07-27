@@ -16,10 +16,22 @@ import { DomainStoryNumberingRegistry } from "../../../popup/DomainStoryNumberin
  * that skips the cascade, an aliased flag snapshot) all live in the interaction
  * between the two. No canvas is involved, so this stays unit tier (ADR 0014).
  */
-const activity = (id: string, number: number | undefined, name = "") => ({
+const activity = (
+    id: string,
+    number: number | undefined,
+    name = "",
+    // Only the *source's* type matters: an activity is a numbered story step
+    // exactly when it starts at an actor. Left undefined by default, so a case
+    // that says nothing about the source gets no automatic re-mint.
+    source?: { type: string },
+) => ({
     id,
+    source,
     businessObject: { id, number, name, multipleNumberAllowed: false },
 });
+
+/** A source shape that makes its activity a numbered story step. */
+const ACTOR_SOURCE = { type: "domainStory:actorPerson" };
 
 /**
  * The element registry stub re-sorts on every call, exactly as the real
@@ -182,10 +194,41 @@ describe("ActivityChangedHandler", () => {
             handler.execute!(context);
 
             expect(first.businessObject.number).toBe(1);
-            expect(edited.businessObject.number).toBeUndefined();
+            // `null`, not `undefined` (#74): `JSON.stringify` drops `undefined`,
+            // so the key would disappear from the exported bytes, where every
+            // historical file writes `"number": null` for an unnumbered activity.
+            // This activity has no actor source, so nothing re-mints one.
+            expect(edited.businessObject.number).toBeNull();
             expect(numberingRegistry.snapshotMultipleNumberRegistry()).toEqual(
                 before,
             );
+        });
+
+        // T3.7 — until #74 the repaint that followed this command found
+        // `number == null` and minted one in `renderExternalNumber`. Drawing is a
+        // read now, so the transaction that clears the number has to be the one
+        // that replaces it, or clearing the field would drop the step out of the
+        // sequence entirely.
+        it("re-mints a number when an actor-sourced activity's field is cleared", () => {
+            const first = activity("a1", 1, "", ACTOR_SOURCE);
+            const third = activity("a3", 3, "", ACTOR_SOURCE);
+            const edited = activity("a2", 2, "", ACTOR_SOURCE);
+            const { handler } = makeSut([first, edited, third]);
+            const context = editContext(edited, { newLabel: "second" });
+
+            handler.preExecute!(context);
+            handler.execute!(context);
+
+            // The lowest free number, and *not* the one just cleared: clearing
+            // frees 2, so 2 is what the mint hands back — proof it read a
+            // registry the clear had already been applied to, rather than
+            // colliding with the activity's own stale number.
+            expect(edited.businessObject.number).toBe(2);
+            expect(numbersOf([first, third])).toEqual([1, 3]);
+
+            handler.revert!(context);
+
+            expect(edited.businessObject.number).toBe(2);
         });
 
         it("records the multiple-number allowance on the model and the registry", () => {

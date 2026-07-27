@@ -31,10 +31,13 @@ export class DomainStoryUpdateLabelHandler implements CommandHandler {
     }
 
     revert(context: CommandContext): ElementLike[] {
+        // Mirrors `execute`: restore only the half it actually wrote. Otherwise
+        // undoing a pure label edit would stamp `oldNumber` — which `getNumber`
+        // reports as `""` for an activity that has none — onto the model.
         return this.setText(
             context.element,
-            context.oldLabel,
-            context.oldNumber,
+            context.newLabel === undefined ? undefined : context.oldLabel,
+            context.newNumber === undefined ? undefined : context.oldNumber,
         );
     }
 
@@ -72,14 +75,32 @@ export class DomainStoryUpdateLabelHandler implements CommandHandler {
         }
     }
 
-    private setText(element: Element, text: string, textNumber: string) {
+    /**
+     * Writes the label and/or the number, skipping whichever the caller left
+     * undefined.
+     *
+     * WHY the skip (#74): `DomainStoryModeling` maps both `updateLabel` and
+     * `updateNumber` onto this one command, and each supplies only its own half —
+     * so writing both unconditionally made a label edit blank an activity's
+     * number and a number edit blank its name. The number half used to be
+     * invisible, because the repaint that followed re-minted the number in
+     * `renderExternalNumber`; with drawing reduced to a read it is not, and
+     * merely renaming an activity would drop it out of the sequence. (The name
+     * half was already worked around by hand: `ActivityDirectionChangedHandler`
+     * carries `context.name` across its own `updateNumber` call.)
+     */
+    private setText(element: Element, text?: string, textNumber?: string) {
         const label = element.label || element;
         const number = element["number"] || element;
         const labelTarget = element["labelTarget"] || element;
         const numberTarget = element["numberTarget"] || element;
 
-        setLabel(label, text);
-        setNumber(number, textNumber);
+        if (text !== undefined) {
+            setLabel(label, text);
+        }
+        if (textNumber !== undefined) {
+            setNumber(number, textNumber);
+        }
 
         return [label, labelTarget, number, numberTarget];
     }

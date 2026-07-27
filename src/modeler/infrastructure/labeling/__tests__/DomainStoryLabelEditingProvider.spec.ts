@@ -3,7 +3,6 @@ import { Shape } from "diagram-js/lib/model/Types";
 import { Rect } from "diagram-js/lib/util/Types";
 
 import { DomainStoryLabelEditingProvider } from "../DomainStoryLabelEditingProvider";
-import { DomainStoryNumberStash } from "../../number-stash/DomainStoryNumberStash";
 import { ElementTypes } from "../../../../story/domain/elementTypes";
 
 /**
@@ -12,8 +11,10 @@ import { ElementTypes } from "../../../../story/domain/elementTypes";
  * through `sanitizeTextForSVGExport`, mangling user input on canvas
  * ("--" → "––"). SVG-safety is an export-time concern, not a model concern.
  *
- * Also covers issue #12: the dblclick handler must stash an activity's number
- * into the injected DomainStoryNumberStash instance (formerly a module global).
+ * Also covers the dblclick handler's one job for an activity: close the inline
+ * editing box again, because an activity is edited through the numbering popup.
+ * It used to stash the number here for the renderer to read back on the next
+ * repaint; that hand-off died with #74, when numbering moved into commands.
  */
 
 /** Fixed bounding box so `update()`'s bounds math has non-zero denominators. */
@@ -24,8 +25,7 @@ const BBOX = { x: 0, y: 0, width: 100, height: 60 };
  * touch. The constructor registers handlers/listeners and completes direct
  * editing on dblclick, so `directEditing` gets `activate`/`complete` no-ops;
  * `update()` reads `canvas.getAbsoluteBBox` and writes through
- * `modeling.updateLabel`, which is the seam under test. A real
- * DomainStoryNumberStash is passed so the stash hand-off can be asserted.
+ * `modeling.updateLabel`, which is the seam under test.
  */
 function setup() {
     const updateLabel = vi.fn();
@@ -42,7 +42,6 @@ function setup() {
     } as any;
     const resizeHandles = { removeResizers: vi.fn() } as any;
     const commandStack = { registerHandler: vi.fn() } as any;
-    const numberStash = new DomainStoryNumberStash();
 
     const provider = new DomainStoryLabelEditingProvider(
         modeling,
@@ -53,10 +52,9 @@ function setup() {
         directEditing,
         resizeHandles,
         commandStack,
-        numberStash,
     );
 
-    return { provider, updateLabel, eventBus, numberStash };
+    return { provider, updateLabel, eventBus, directEditing };
 }
 
 /**
@@ -99,9 +97,9 @@ describe("DomainStoryLabelEditingProvider.update", () => {
     });
 });
 
-describe("DomainStoryLabelEditingProvider dblclick number stash", () => {
-    it("stashes an activity's number into the injected stash", () => {
-        const { eventBus, numberStash } = setup();
+describe("DomainStoryLabelEditingProvider dblclick", () => {
+    it("closes the inline editing box again for an activity", () => {
+        const { eventBus, directEditing } = setup();
         const dblclick = capturedHandler(eventBus, "element.dblclick");
 
         dblclick({
@@ -111,11 +109,19 @@ describe("DomainStoryLabelEditingProvider dblclick number stash", () => {
             },
         });
 
-        // stashNumber records the number and leaves `use` false — the hand-off
-        // the renderer later reads back.
-        expect(numberStash.getNumberStash()).toEqual({
-            use: false,
-            number: 5,
-        });
+        // An activity's label and number are edited through the numbering popup,
+        // so the box `activateDirectEdit` just opened is completed straight away.
+        expect(directEditing.activate).toHaveBeenCalledTimes(1);
+        expect(directEditing.complete).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves the editing box open for a work object", () => {
+        const { eventBus, directEditing } = setup();
+        const dblclick = capturedHandler(eventBus, "element.dblclick");
+
+        dblclick({ element: makeElement() });
+
+        expect(directEditing.activate).toHaveBeenCalledTimes(1);
+        expect(directEditing.complete).not.toHaveBeenCalled();
     });
 });

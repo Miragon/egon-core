@@ -21,3 +21,4 @@ and the rules (when to write one, how superseding works).
 | [0013](0013-two-tier-test-architecture.md)                      | Two-tier tests: unit (jsdom) + browser (chromium)  | accepted                                                                    |
 | [0014](0014-canvas-driving-specs-are-browser-tier.md)           | Canvas-driving specs are browser tier              | accepted                                                                    |
 | [0015](0015-typed-rule-verdicts-at-the-grammar-adapter-seam.md) | Typed rule verdicts at the grammar↔adapter seam    | accepted                                                                    |
+| [0016](0016-rendering-is-read-only.md)                          | Rendering is read-only; model writes are commands  | accepted                                                                    |

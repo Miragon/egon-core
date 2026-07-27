@@ -8,11 +8,22 @@ import {
     createTestDiagram,
     type TestDiagram,
 } from "../../../../__tests__/helpers/createTestDiagram";
+import {
+    createTestModeler,
+    type TestModeler,
+} from "../../../../__tests__/helpers/createTestModeler";
+import {
+    addActor,
+    addAnnotation,
+    addWorkObject,
+    connect,
+} from "../../../../__tests__/helpers/storyBuilder";
 import { importFixture } from "../../../../__tests__/helpers/importFixture";
 import type { DomainStoryDocument } from "../../../../story/domain/DomainStoryDocument";
+import type { DirtyFlagService } from "../../../service/DirtyFlagService";
 
 /**
- * Issue #65: drawing must not change the persisted model.
+ * Issues #65 and #74: drawing must not change the persisted model (ADR 0016).
  *
  * WHY this exists: `DomainStoryRenderer` used to write to the business objects
  * it was only asked to paint. For an *imported* story `element.waypoints` **is**
@@ -22,6 +33,13 @@ import type { DomainStoryDocument } from "../../../../story/domain/DomainStoryDo
  * open re-applied it. The fixture family records the creep: `connection_8174`'s
  * start `y` is 172 / 177 / 182 / 187 across v1.1.0→v1.4.0. The renderer also
  * stamped its default colour onto any element that carried none.
+ *
+ * #74 removed the five writes #65 left behind — the element type, the activity
+ * number (minted *and* cleared), the annotation height, and the host's dirty
+ * flag. The fixture-driven case above them passed **vacuously** for four of
+ * those: no fixture carries an annotation, and every fixture activity already
+ * holds exactly the number the renderer would have written. The cases in
+ * "nothing else survives a repaint" build the states the fixtures cannot.
  *
  * WHY browser tier and not jsdom (ADR 0013/0014): the nudge is measured out of
  * the DOM — `getLineOffset` reads the source label's last `<tspan>`'s `y` — and
@@ -280,6 +298,83 @@ describe("renderer model purity (browser)", () => {
             forceRender(probe.eventBus(), connection);
 
             expect(snapshotBusinessObjects(elementRegistry)).toEqual(before);
+        });
+    });
+
+    /**
+     * The four writes #74 removed that no fixture can reach.
+     *
+     * These drive a `createTestModeler` rather than an imported fixture: an
+     * annotation, a work-object-sourced activity carrying a number, the dirty
+     * flag and a paste are all states the eight historical files simply do not
+     * contain — which is why the byte-comparison above went green while four
+     * writes were still live.
+     */
+    describe("nothing else survives a repaint", () => {
+        let modeler: TestModeler | undefined;
+
+        afterEach(() => {
+            modeler?.cleanup();
+            modeler = undefined;
+        });
+
+        it("gains no `number` on an annotation, and keeps its height", () => {
+            modeler = createTestModeler();
+            const annotation = addAnnotation(modeler, {
+                point: { x: 200, y: 200 },
+                width: 100,
+                height: 80,
+            });
+            annotation.businessObject.text = "a note";
+
+            forceRender(modeler.eventBus, annotation);
+
+            // `drawAnnotation` used to mirror the height onto
+            // `businessObject.number` — "the keyword height is not exported",
+            // which stopped being true once the export pass wrote `height`
+            // itself. The field is retired: an annotation has no number.
+            expect("number" in annotation.businessObject).toBe(false);
+            // …and the height it was mirroring survives the paint on its own.
+            expect(annotation.height).toBe(80);
+        });
+
+        it("leaves a stale number on a work-object-sourced activity alone", () => {
+            modeler = createTestModeler();
+            const workObject = addWorkObject(modeler, {
+                point: { x: 200, y: 200 },
+            });
+            const other = addWorkObject(modeler, { point: { x: 500, y: 200 } });
+            const response = connect(modeler, workObject, other)!;
+            // A number this activity has no business carrying — the shape a
+            // hand-edited file or a future bug produces.
+            response.businessObject.number = 9;
+
+            forceRender(modeler.eventBus, response);
+
+            // `renderExternalNumber` used to overwrite it with `null` on sight.
+            // Silently correct-looking, and invisible to the fixture matrix only
+            // because every fixture already stores `null` here.
+            expect(response.businessObject.number).toBe(9);
+        });
+
+        it("does not report unsaved changes", () => {
+            modeler = createTestModeler();
+            const actor = addActor(modeler, { point: { x: 200, y: 200 } });
+            const dirtyFlagService = modeler.get<DirtyFlagService>(
+                "domainStoryDirtyFlagService",
+            );
+            // `clear()` rather than `undo()`: undoing `shape.create` removes the
+            // actor, and `forceRender`'s witness would then correctly report zero
+            // repaints and fail. Clearing empties the stack — the state a freshly
+            // opened story is in — while leaving the shape on the canvas to paint.
+            modeler.commandStack.clear();
+            expect(dirtyFlagService.dirty).toBe(false);
+
+            forceRender(modeler.eventBus, actor);
+
+            // `drawShape`/`drawConnection` each called `makeDirty()`, so a
+            // selection or a scroll-into-view reported unsaved changes.
+            expect(dirtyFlagService.dirty).toBe(false);
         });
     });
 

@@ -67,6 +67,17 @@ export class DomainStoryCopyPaste {
                     newBusinessObject,
                 );
 
+            // Paste is the one path that mints a business object without a
+            // `type`: `copyElement` is called with no `propertyNames`, so it
+            // copies nothing. Every other path is covered — the import carries
+            // `type` in the file, and `DomainStoryElementFactory.create` stamps
+            // it whenever it creates a fresh business object (palette, context-pad
+            // append, `shape.replace`). Until #74 the *renderer* patched it in
+            // while drawing; carrying the descriptor's own `type` (set by the
+            // `copyPaste.copyElement` listener above) does it here instead, so a
+            // pasted element is complete before anything paints it.
+            newBusinessObject["type"] = descriptor.type;
+
             // resolve references e.g. default sequence flow
             this.resolveReferences(descriptor, cache);
 

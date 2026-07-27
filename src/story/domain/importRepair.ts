@@ -1,7 +1,13 @@
 import { BusinessObject } from "./businessObject";
 import { ActivityBusinessObject } from "./activityBusinessObject";
 import { ElementTypes } from "./elementTypes";
-import { isActivity, isConnection } from "./elementPredicates";
+import {
+    isActivity,
+    isActor,
+    isAnnotation,
+    isConnection,
+} from "./elementPredicates";
+import { nextAvailableActivityNumber } from "./activityNumbering";
 
 /**
  * Repair rules that make a historical EGN file renderable.
@@ -12,6 +18,11 @@ import { isActivity, isConnection } from "./elementPredicates";
  * moddle, and stories whose edges point at elements that no longer exist. Every
  * one of those has to be normalized *before* diagram-js sees it, or the icon
  * lookup misses and the canvas gets a connection with undefined endpoints.
+ *
+ * Since #74 the file is also where two things the *renderer* used to do on every
+ * paint now happen exactly once: translating a legacy annotation height out of
+ * `number`, and completing an actor's activity sequence. Both are notation
+ * repairs, not drawing.
  *
  * These rules are notation knowledge, not canvas knowledge: they read plain
  * business objects and say nothing about rendering. Extracting them here (the
@@ -122,6 +133,92 @@ export function normalizeIconNameWhitespace(
             element.type = element.type.replace(/ /g, "-");
         }
     }
+    return elements;
+}
+
+/**
+ * Moves a legacy annotation height out of `number` and into `height`, then drops
+ * `number` entirely.
+ *
+ * WHY this is the only place that may know the old hack existed: until #74,
+ * `DomainStoryRenderer.drawAnnotation` stashed an annotation's box height in
+ * `businessObject.number` — commented as "the keyword height is not exported",
+ * which stopped being true once the export pass started writing `height` itself.
+ * Drawing is a read now, so nothing on a live canvas writes `number` for an
+ * annotation any more; a file that carries one was written by an older version
+ * and needs it translated on the way in.
+ *
+ * `number` is deleted unconditionally, not only when it was used: annotations
+ * take no part in activity numbering, so any `number` on one is a leftover, and
+ * leaving it in place would round-trip the retired field straight back out.
+ * `height` wins when both are present — it is the field the export pass owns.
+ *
+ * Mutates in place — see {@link renameLegacyWorkObjectTypes}.
+ */
+export function useLegacyAnnotationNumberAsHeight(
+    elements: BusinessObject[],
+): BusinessObject[] {
+    for (const element of elements) {
+        if (!isAnnotation(element)) {
+            continue;
+        }
+        const legacy = element as unknown as Record<string, unknown>;
+        const legacyHeight = legacy["number"];
+
+        if (!element.height && typeof legacyHeight === "number") {
+            element.height = legacyHeight;
+        }
+        delete legacy["number"];
+    }
+    return elements;
+}
+
+/**
+ * Gives every actor-sourced activity that has no number the lowest free one.
+ *
+ * WHY it exists at all: until #74 a *repaint* minted missing numbers, so opening
+ * a hand-made or hand-edited file silently completed its sequence. Numbering now
+ * belongs to `connection.create`/`connection.reconnect`, and import runs no
+ * command — so without this repair such a file would render numberless
+ * activities. Keeping the behaviour at import time rather than in the draw pass
+ * is the whole point: it happens once, before the canvas sees the story, instead
+ * of on every paint.
+ *
+ * Only an activity whose *source is an actor* is a story step (the rule
+ * `activitiesFromActors` encodes); a response arrow keeps whatever it had. The
+ * numbers already in the file are reserved first, so an existing sequence is
+ * never renumbered — the repair only fills gaps.
+ *
+ * Mutates in place — see {@link renameLegacyWorkObjectTypes}.
+ */
+export function numberActivitiesFromActors(
+    elements: BusinessObject[],
+): BusinessObject[] {
+    const typeById = new Map(elements.map((element) => [element.id, element]));
+
+    const stepsWithoutNumber: ActivityBusinessObject[] = [];
+    const usedNumbers: (number | undefined)[] = [];
+
+    for (const element of elements) {
+        if (!isActivity(element)) {
+            continue;
+        }
+        const activity = element as ActivityBusinessObject;
+        if (!isActor(typeById.get(activity.source))) {
+            continue;
+        }
+        if (activity.number == null) {
+            stepsWithoutNumber.push(activity);
+        } else {
+            usedNumbers.push(activity.number);
+        }
+    }
+
+    for (const activity of stepsWithoutNumber) {
+        activity.number = nextAvailableActivityNumber(usedNumbers);
+        usedNumbers.push(activity.number);
+    }
+
     return elements;
 }
 

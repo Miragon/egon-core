@@ -466,13 +466,22 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         ];
     }
 
+    /**
+     * Swaps an activity's ends, and hands the command the number the *swapped*
+     * activity will need: none when an actor is the current source (after the
+     * swap it starts at a work object), a freshly minted one otherwise.
+     *
+     * "None" is `null`, not `0` (#74). The `0` this used to pass was overwritten
+     * with `null` by the repaint that followed; now that drawing no longer writes
+     * to the model, it would be exported verbatim as `"number": 0`.
+     */
     private changeDirection(element: Connection) {
         const businessObject = element.businessObject;
         const source = element.source;
-        let newNumber;
+        let newNumber: number | null;
 
         if (isActor(source)) {
-            newNumber = 0;
+            newNumber = null;
         } else {
             newNumber = this.numberingRegistry.generateAutomaticNumber(element);
         }

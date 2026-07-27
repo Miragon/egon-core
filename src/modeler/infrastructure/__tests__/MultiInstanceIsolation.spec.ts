@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Injector } from "didi";
-import NumberStashModule from "../number-stash";
 import IdFactoryModule from "../id-factory";
 import IconSetModule from "../../../iconSet/service";
-import { DomainStoryNumberStash } from "../number-stash/DomainStoryNumberStash";
 import { DomainStoryIdFactory } from "../id-factory/DomainStoryIdFactory";
 import { IconDictionaryService } from "../../../iconSet/service";
 import { Dictionary } from "../../../story/domain/dictionary";
@@ -11,9 +9,11 @@ import { Dictionary } from "../../../story/domain/dictionary";
 /**
  * The headline regression for issue #12: two EgonClient instances on one page
  * must not share mutable state. This resolves the previously module-global
- * offenders — the number stash, the id factory's id list, and the icon
- * dictionary's custom-icon pool — through two independent didi injectors and
- * proves that mutating one leaves the other pristine.
+ * offenders — the id factory's id list and the icon dictionary's custom-icon
+ * pool — through two independent didi injectors and proves that mutating one
+ * leaves the other pristine. (A third offender, the activity-number stash, was
+ * covered here until #74 deleted the mechanism outright: the renderer that read
+ * it back no longer writes to the model at all.)
  *
  * It stops at the injector layer on purpose. A full two-`EgonClient`
  * boot/render test is infeasible under jsdom: rendering calls `getBBox`, which
@@ -21,12 +21,12 @@ import { Dictionary } from "../../../story/domain/dictionary";
  * in DiagramJsModelerAdapter.spec.ts, and EgonClient.spec.ts, which mocks the
  * ports rather than booting diagram-js). Once each offender is injector-owned,
  * non-leakage is structural — rule H in architecture.spec.ts locks it in — so
- * the injector-level proof is sufficient. These three modules need no diagram-js
- * primitives, so a bare injector over them resolves every service.
+ * the injector-level proof is sufficient. Neither module needs diagram-js
+ * primitives, so a bare injector over them plus a `config` value resolves every
+ * service.
  */
 function makeInjector(styleElement?: HTMLStyleElement): Injector {
     return new Injector([
-        NumberStashModule,
         IdFactoryModule,
         IconSetModule,
         // IconCssInjector injects `config.domainStoryIconStyleSheet`; didi
@@ -39,11 +39,6 @@ function makeInjector(styleElement?: HTMLStyleElement): Injector {
 
 /** Mutates every offending service in an injector, then discards its reference. */
 function mutateAll(injector: Injector): void {
-    const stash = injector.get<DomainStoryNumberStash>(
-        "domainStoryNumberStash",
-    );
-    stash.stashNumber(9);
-    stash.toggleStashUse(true);
     injector
         .get<DomainStoryIdFactory>("domainStoryIdFactory")
         .registerId("actor_0001");
@@ -87,11 +82,6 @@ function expectPristine(injector: Injector): void {
     // pristine id factory hands out actor_0001, a poisoned one skips to _0002.
     expect(
         injector
-            .get<DomainStoryNumberStash>("domainStoryNumberStash")
-            .getNumberStash(),
-    ).toEqual({ use: false, number: 0 });
-    expect(
-        injector
             .get<IconDictionaryService>("domainStoryIconDictionaryService")
             .getFullDictionary()
             .has("onlyInA"),
@@ -115,9 +105,6 @@ describe("multi-instance isolation (issue #12)", () => {
         const a = makeInjector();
         const b = makeInjector();
 
-        expect(a.get("domainStoryNumberStash")).not.toBe(
-            b.get("domainStoryNumberStash"),
-        );
         expect(a.get("domainStoryIdFactory")).not.toBe(
             b.get("domainStoryIdFactory"),
         );

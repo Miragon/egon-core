@@ -1,21 +1,13 @@
 import DomainStoryTextRenderer from "../text-renderer";
-import ElementRegistryService from "../../service";
-import DirtyFlagService from "../../service";
 import IconDictionaryService from "../../../iconSet/service";
-import DomainStoryNumberStash from "../number-stash";
 
 import { DomainStoryRenderer } from "./DomainStoryRenderer";
-import CommandStack from "diagram-js/lib/command";
 
+// Two dependencies, because the renderer only draws (ADR 0016). The element
+// registry, the dirty-flag service, the command stack and the number stash were
+// all here to serve writes that moved onto commands and import repairs in #74.
 export default {
-    __depends__: [
-        DomainStoryTextRenderer,
-        ElementRegistryService,
-        DirtyFlagService,
-        IconDictionaryService,
-        CommandStack,
-        DomainStoryNumberStash,
-    ],
+    __depends__: [DomainStoryTextRenderer, IconDictionaryService],
     __init__: ["domainStoryRenderer"],
     domainStoryRenderer: ["type", DomainStoryRenderer],
 };

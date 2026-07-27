@@ -78,8 +78,12 @@ describe("copy-paste integration (browser)", () => {
 
     /**
      * A text annotation as the app produces one: sized, given text, then
-     * redrawn — the redraw is what makes `drawAnnotation` stamp the height onto
-     * `businessObject.number`, which is the only place a live story keeps it.
+     * redrawn.
+     *
+     * The redraw used to be load-bearing — `drawAnnotation` stamped the height
+     * onto `businessObject.number`, the only place a live story kept it. Since
+     * #74 drawing writes nothing, and `element.height` is the single source of
+     * truth; the repaint is kept only because it is what the app does.
      *
      * Both dimensions are passed because `DomainStoryElementFactory`'s
      * `alreadyHasSize` guard is `attrs.height || attrs.width`: supplying one
@@ -126,17 +130,18 @@ describe("copy-paste integration (browser)", () => {
         expect(pasted.businessObject.name).toBe("Alice");
     });
 
-    it("keeps a text annotation's text and height, carrying height in `number`", () => {
+    it("keeps a text annotation's text and height, and mints no `number`", () => {
         modeler = bootWithManualDragging();
         const annotation = annotationWithText(modeler, "a note", 80, {
             x: 150,
             y: 150,
         });
-        // Precondition, and the reason this case needs a real canvas: the only
-        // record of an annotation's height on a live story is
-        // `businessObject.number`; `businessObject.height` is written by the
-        // export pass alone.
-        expect(annotation.businessObject.number).toBe(80);
+        // Preconditions, inverted by #74 and the reason this case needs a real
+        // canvas: a *drawn* annotation's height lives on the element alone. The
+        // business object carries neither `number` (the renderer's retired
+        // height hack) nor `height` (written by the export pass alone).
+        expect(annotation.height).toBe(80);
+        expect("number" in annotation.businessObject).toBe(false);
         expect(annotation.businessObject.height).toBeUndefined();
 
         copyAndPaste(modeler, [annotation], { x: 500, y: 150 });
@@ -147,9 +152,38 @@ describe("copy-paste integration (browser)", () => {
         ).find((element) => element.id !== annotation.id);
         expect(pasted.businessObject.text).toBe("a note");
         expect(pasted.height).toBe(80);
-        // The renderer persists annotation height via `number`, because `height`
-        // is not part of the exported annotation shape (drawAnnotation contract).
-        expect(pasted.businessObject.number).toBe(80);
+        // The retired field must not come back on the copy either.
+        expect("number" in pasted.businessObject).toBe(false);
+    });
+
+    it("carries a height the annotation grew into after it was created", () => {
+        // The case that decides whether the paste needs a height stash at all:
+        // here `element.height` did *not* come from the create attrs but from a
+        // later `shape.resize` — which is how a real annotation gets its height
+        // (`DomainStoryUpdateLabelHandler.postExecute` resizes to fit the text).
+        // diagram-js copies the live `element.height` onto the descriptor, and
+        // the element factory honours a supplied height, so the copy arrives
+        // correctly sized on its own.
+        modeler = bootWithManualDragging();
+        const annotation = annotationWithText(modeler, "a note", 80, {
+            x: 150,
+            y: 150,
+        });
+        modeler.modeling.resizeShape(annotation, {
+            x: annotation.x,
+            y: annotation.y,
+            width: annotation.width,
+            height: 140,
+        });
+        expect(annotation.height).toBe(140);
+
+        copyAndPaste(modeler, [annotation], { x: 500, y: 150 });
+
+        const pasted = elementsOfType(
+            modeler,
+            ElementTypes.TEXTANNOTATION,
+        ).find((element) => element.id !== annotation.id);
+        expect(pasted.height).toBe(140);
     });
 
     it("lands colours on the right elements in a mixed multi-select paste", () => {
@@ -209,6 +243,11 @@ describe("copy-paste integration (browser)", () => {
             (element) => element.id !== activity.id,
         )!;
         expect(pasted.type).toBe(ElementTypes.ACTIVITY);
+        // On the *business object* too — the half the renderer used to patch in
+        // while drawing ("fixes activities that were copy-pasted"), and so the
+        // half an unrendered paste used to export untyped. `DomainStoryCopyPaste`
+        // owns it since #74; its unit spec proves no render is involved.
+        expect(pasted.businessObject.type).toBe(ElementTypes.ACTIVITY);
         // Fresh endpoints: the copy must not reference the originals.
         expect(pasted.source.id).not.toBe(actor.id);
         expect(pasted.target.id).not.toBe(workObject.id);

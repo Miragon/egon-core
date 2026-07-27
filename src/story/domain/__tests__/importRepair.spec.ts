@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
     needsPreV050Repair,
     normalizeIconNameWhitespace,
+    numberActivitiesFromActors,
     pruneUnreferencedConnections,
     renameLegacyWorkObjectTypes,
     stripBpmnProperties,
+    useLegacyAnnotationNumberAsHeight,
 } from "../importRepair";
 import { ElementTypes } from "../elementTypes";
 import { BusinessObject } from "../businessObject";
@@ -258,5 +260,148 @@ describe("needsPreV050Repair", () => {
         },
     ])("$version → $expected ($why)", ({ version, expected }) => {
         expect(needsPreV050Repair(version)).toBe(expected);
+    });
+});
+
+/**
+ * The two repairs #74 moved off the render pass.
+ *
+ * Both used to happen on *every repaint* inside `DomainStoryRenderer`: the
+ * annotation height was smuggled through `businessObject.number`, and a missing
+ * activity number was minted in `renderExternalNumber`. Import runs no command,
+ * so without these a hand-made or pre-#74 file would open degraded.
+ */
+
+/** An annotation business object, optionally carrying the legacy fields. */
+const annotation = (id: string, extra: Record<string, unknown> = {}) =>
+    ({
+        id,
+        type: ElementTypes.TEXTANNOTATION,
+        ...extra,
+    }) as unknown as BusinessObject;
+
+/** An actor-sourced activity, i.e. a numbered story step. */
+const step = (
+    id: string,
+    source: string,
+    number?: number | null,
+): BusinessObject =>
+    ({
+        id,
+        type: ElementTypes.ACTIVITY,
+        source,
+        target: "w1",
+        ...(number === undefined ? {} : { number }),
+    }) as unknown as BusinessObject;
+
+describe("useLegacyAnnotationNumberAsHeight", () => {
+    it("moves a legacy `number` into `height` and retires the field", () => {
+        const element = annotation("t1", { number: 80 });
+
+        useLegacyAnnotationNumberAsHeight([element]);
+
+        expect(element).toEqual({
+            id: "t1",
+            type: ElementTypes.TEXTANNOTATION,
+            height: 80,
+        });
+    });
+
+    it("prefers an existing `height` but still drops `number`", () => {
+        // A file written by a version that had *both* writers: the export pass
+        // wrote `height` while the renderer wrote `number`. `height` is the field
+        // the export owns, so it wins — and the leftover must not round-trip out
+        // again, or the format never actually narrows.
+        const element = annotation("t1", { height: 120, number: 80 });
+
+        useLegacyAnnotationNumberAsHeight([element]);
+
+        expect(element.height).toBe(120);
+        expect("number" in element).toBe(false);
+    });
+
+    it("leaves an unusable `height` of 0 to be replaced", () => {
+        // `0` is what `drawAnnotation` guarded against too: a height of zero is
+        // no height at all, so the legacy value is still the better one.
+        const element = annotation("t1", { height: 0, number: 45 });
+
+        useLegacyAnnotationNumberAsHeight([element]);
+
+        expect(element.height).toBe(45);
+    });
+
+    it("ignores a non-numeric `number` rather than writing nonsense height", () => {
+        const element = annotation("t1", { number: "80" });
+
+        useLegacyAnnotationNumberAsHeight([element]);
+
+        expect(element.height).toBeUndefined();
+        expect("number" in element).toBe(false);
+    });
+
+    it("touches nothing that is not an annotation", () => {
+        // An *activity's* number is its sequence number and must survive.
+        const activityStep = step("a1", "actor1", 3);
+
+        useLegacyAnnotationNumberAsHeight([activityStep]);
+
+        expect((activityStep as unknown as { number: number }).number).toBe(3);
+    });
+});
+
+describe("numberActivitiesFromActors", () => {
+    it("fills the gaps without renumbering the sequence already in the file", () => {
+        const elements = [
+            shape("actor1"),
+            step("a1", "actor1", 1),
+            step("a2", "actor1"),
+            step("a3", "actor1", 3),
+            step("a4", "actor1", null),
+        ];
+
+        numberActivitiesFromActors(elements);
+
+        // 1 and 3 are reserved before anything is handed out, so the two
+        // unnumbered steps take the lowest free slots — 2, then 4.
+        expect(elements.map((element) => (element as any).number)).toEqual([
+            undefined,
+            1,
+            2,
+            3,
+            4,
+        ]);
+    });
+
+    it("leaves a work-object-sourced activity unnumbered", () => {
+        // Only an activity whose *source* is an actor is a story step; a
+        // response arrow keeps whatever it had, including nothing.
+        const response = step("a1", "w1");
+        const elements = [
+            shape("w1", ElementTypes.WORKOBJECT + "Document"),
+            response,
+        ];
+
+        numberActivitiesFromActors(elements);
+
+        expect("number" in response).toBe(false);
+    });
+
+    it("leaves an activity whose source is not in the story unnumbered", () => {
+        // Pruning normally removes these first; if one survives, it is not a
+        // step and inventing a number for it would inflate the sequence.
+        const dangling = step("a1", "gone");
+
+        numberActivitiesFromActors([dangling]);
+
+        expect("number" in dangling).toBe(false);
+    });
+
+    it("numbers a story that carries no numbers at all from 1", () => {
+        const first = step("a1", "actor1");
+        const second = step("a2", "actor1");
+
+        numberActivitiesFromActors([shape("actor1"), first, second]);
+
+        expect([(first as any).number, (second as any).number]).toEqual([1, 2]);
     });
 });

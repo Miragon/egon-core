@@ -2,9 +2,11 @@ import { BusinessObject } from "../domain/businessObject";
 import {
     PrunedStory,
     normalizeIconNameWhitespace,
+    numberActivitiesFromActors,
     pruneUnreferencedConnections,
     renameLegacyWorkObjectTypes,
     stripBpmnProperties,
+    useLegacyAnnotationNumberAsHeight,
 } from "../domain/importRepair";
 
 /**
@@ -17,6 +19,10 @@ import {
  * can diff upstream's file against this one line for line instead of against a
  * reshaped call site (see SYNC.md). It holds no state and adds no logic — every
  * method is one delegation.
+ *
+ * The last two methods have **no upstream counterpart**: they took over work the
+ * renderer used to do on every paint (#74), so they are named for what they do
+ * rather than matched to an upstream name.
  */
 export class ImportRepairService {
     /**
@@ -55,5 +61,24 @@ export class ImportRepairService {
         elements: BusinessObject[],
     ): BusinessObject[] {
         return stripBpmnProperties(elements);
+    }
+
+    /**
+     * Translates a pre-#74 annotation whose box height was smuggled through
+     * `number` into a plain `height`, and retires the field.
+     */
+    restoreAnnotationHeights(elements: BusinessObject[]): BusinessObject[] {
+        return useLegacyAnnotationNumberAsHeight(elements);
+    }
+
+    /**
+     * Completes an actor's activity sequence, which the renderer used to do on
+     * every paint. Runs after the dangling-edge prune so a dropped activity does
+     * not reserve a number.
+     */
+    numberUnnumberedActivitiesFromActors(
+        elements: BusinessObject[],
+    ): BusinessObject[] {
+        return numberActivitiesFromActors(elements);
     }
 }

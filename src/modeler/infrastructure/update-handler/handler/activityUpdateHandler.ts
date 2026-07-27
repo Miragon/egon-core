@@ -5,6 +5,7 @@ import { Connection, Element, ElementLike } from "diagram-js/lib/model/Types";
 import { ElementRegistryService } from "../../../service/ElementRegistryService";
 import { ActivityCanvasObject } from "../../../../story/domain/canvasObject";
 import { restoredNumberAssignments } from "../../../../story/domain/activityNumbering";
+import { isActor } from "../../../../story/domain/elementPredicates";
 import { DomainStoryModeling } from "../../modeling/DomainStoryModeling";
 import { DomainStoryNumberingRegistry } from "../../popup/DomainStoryNumberingRegistry";
 
@@ -61,6 +62,12 @@ export class ActivityChangedHandler implements CommandHandler {
      * - The truthiness guard on `newNumber` is load-bearing: `PopupMenu` maps an
      *   empty number field to `0`, and cascading from `0` would walk the registry
      *   from its `[false]` sentinel slot and renumber everything.
+     * - Clearing the number field of an actor-sourced activity **re-mints** one.
+     *   That is not new behaviour: until #74 the repaint that followed this
+     *   command found `number == null` and minted it in `renderExternalNumber`.
+     *   Drawing is a read now, so the transaction that cleared the number has to
+     *   be the one that replaces it, or the step would silently leave the
+     *   sequence.
      */
     execute(context: CommandContext): ElementLike[] {
         const businessObject = context.businessObject;
@@ -71,9 +78,18 @@ export class ActivityChangedHandler implements CommandHandler {
             this.elementRegistryService.getActivitiesFromActors();
 
         businessObject.name = context.newLabel;
-        businessObject.number = context.newNumber;
+        // `null`, never `undefined`: `JSON.stringify` drops `undefined`, and every
+        // fixture persists `"number": null` for an unnumbered activity.
+        businessObject.number = context.newNumber ?? null;
         businessObject.multipleNumberAllowed =
             context.newMultipleNumberAllowed ?? false;
+
+        // Written *after* the clear above, so `generateAutomaticNumber` reads a
+        // registry in which this activity holds no number and cannot collide
+        // with itself.
+        if (!context.newNumber && isActor(element["source"])) {
+            this.numberingRegistry.generateAutomaticNumber(element);
+        }
 
         if (context.newNumber) {
             this.numberingRegistry.updateExistingNumbersAtEditing(activities, {
@@ -127,14 +143,20 @@ export class ActivityDirectionChangedHandler implements CommandHandler {
         private readonly eventBus: EventBus,
     ) {}
 
+    /**
+     * `null`, not `0`, is "this activity has no number" (#74).
+     *
+     * The `0` this used to normalize to was laundered away by the repaint that
+     * followed: `renderExternalNumber` overwrote the number of every
+     * non-actor-sourced activity with `null`. With drawing reduced to a read,
+     * that `0` would survive into the exported file as `"number": 0` — a value
+     * no other writer produces and no reader expects.
+     */
     preExecute(context: CommandContext) {
-        context.oldNumber = context.businessObject.number;
+        context.oldNumber = context.businessObject.number ?? null;
         context.oldWaypoints = context.element.waypoints;
         context.name = context.businessObject.name;
 
-        if (!context.oldNumber) {
-            context.oldNumber = 0;
-        }
         this.modeling.updateNumber(context.businessObject, context.newNumber);
     }
 
@@ -155,7 +177,9 @@ export class ActivityDirectionChangedHandler implements CommandHandler {
         businessObject.target = swapSource?.id;
 
         businessObject.name = context.name;
-        businessObject.number = context.newNumber;
+        // See `preExecute`: the context pad passes `null` for "the swap makes a
+        // work object the source", and nothing downstream normalizes it any more.
+        businessObject.number = context.newNumber ?? null;
         element.waypoints = newWaypoints;
 
         this.eventBus.fire("element.changed", { element });

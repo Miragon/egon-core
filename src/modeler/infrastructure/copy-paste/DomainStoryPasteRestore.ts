@@ -2,7 +2,7 @@ import EventBus from "diagram-js/lib/core/EventBus";
 import { isAnnotation } from "../../../story/domain/elementPredicates";
 
 // Run before DomainStoryCopyPaste (default priority 1000) deletes the
-// descriptor's `oldBusinessObject` — that is where the copied color/text/height
+// descriptor's `oldBusinessObject` — that is where the copied color and text
 // still live, so we must stash them first.
 const HIGH_PRIORITY = 10000;
 
@@ -15,13 +15,23 @@ const LOW_PRIORITY = 250;
 /**
  * Restores per-element visual state that diagram-js copy-paste drops on paste.
  *
- * WHY: `pickedColor` and a text annotation's `text`/`height` live on the
- * businessObject, not on properties diagram-js knows how to carry across a
- * copy-paste. Without this, a pasted colored element renders black (the
- * renderer falls back to `DEFAULT_COLOR` when `pickedColor` is unset) and a
- * pasted text annotation loses its text and box height. Issue #9 ports this
- * behavior — previously host-side Angular code in WPS/egon.io (commit
- * 62f5835d) — into the plugin so every host inherits it for free.
+ * WHY: `pickedColor` and a text annotation's `text` live on the businessObject,
+ * not on properties diagram-js knows how to carry across a copy-paste. Without
+ * this, a pasted colored element renders black (the renderer falls back to
+ * `DEFAULT_COLOR` when `pickedColor` is unset) and a pasted text annotation
+ * loses its text. Issue #9 ports this behavior — previously host-side Angular
+ * code in WPS/egon.io (commit 62f5835d) — into the plugin so every host inherits
+ * it for free.
+ *
+ * **Not** the height, since #74. Upstream stashes it, and so did this class, but
+ * diagram-js already copies `x/y/width/height` onto the paste descriptor and
+ * `DomainStoryElementFactory` honours a supplied height — so the copy arrives
+ * correctly sized on its own. The stash was only ever needed because it was
+ * reading `businessObject.height`/`number`, neither of which a live canvas
+ * maintains. Verified by disabling the restore against
+ * `CopyPasteIntegration.browser.spec.ts`, whose "grew into after it was created"
+ * case pastes an annotation whose height came from a `shape.resize` rather than
+ * its create attrs — the case a factory default could not cover.
  *
  * HOW: `copyPaste.pasteElement` fires once per pasted descriptor while the
  * copied `oldBusinessObject` is still attached; we stash its values there
@@ -43,7 +53,6 @@ export class DomainStoryPasteRestore {
     private pasteColor: (string | undefined)[] = [];
     // One entry per pasted text annotation, consumed in FIFO order via shift().
     private pasteText: string[] = [];
-    private pasteHeight: (number | undefined)[] = [];
 
     constructor(private readonly eventBus: EventBus) {
         // Deviation from upstream: reset the stash when a paste starts. Upstream
@@ -76,16 +85,6 @@ export class DomainStoryPasteRestore {
             // `text ?? ""` mirrors the renderer, which treats a missing
             // annotation text as empty rather than undefined.
             this.pasteText.push(oldBusinessObject.text ?? "");
-            // `?? number` is load-bearing, not defensive. Nothing on a live
-            // canvas ever writes `businessObject.height` for an annotation:
-            // `drawAnnotation` persists the height as `number` (the documented
-            // "height is not exported" hack) and only the *export* pass copies it
-            // to `height`. Reading `height` alone — as upstream does — therefore
-            // lost the height of every annotation drawn in the current session,
-            // and only worked for one round-tripped through a file.
-            this.pasteHeight.push(
-                oldBusinessObject.height ?? oldBusinessObject.number,
-            );
         }
     }
 
@@ -106,12 +105,7 @@ export class DomainStoryPasteRestore {
 
             if (isAnnotation(element)) {
                 element.businessObject.text = this.pasteText[0];
-                // The renderer persists annotation height via `number` because
-                // the `height` keyword is not exported (drawAnnotation contract).
-                element.businessObject.number = this.pasteHeight[0];
-                element.height = this.pasteHeight[0];
                 this.pasteText.shift();
-                this.pasteHeight.shift();
             }
 
             element.businessObject.pickedColor =
@@ -126,6 +120,5 @@ export class DomainStoryPasteRestore {
     private resetStashes() {
         this.pasteColor = [];
         this.pasteText = [];
-        this.pasteHeight = [];
     }
 }

@@ -15,18 +15,24 @@ import type { DomainStoryNumberingRegistry } from "../DomainStoryNumberingRegist
 /**
  * Automatic activity numbering, end to end (issue #55).
  *
- * WHY this cannot be a unit spec: numbering is not in a command handler. A new
- * activity gets its number inside `DomainStoryRenderer.renderExternalNumber`,
- * reached from `drawActivity` — so only a real *draw pass* assigns it, and the
- * numbers are the product of renderer, `DomainStoryNumberingRegistry`,
- * `ElementRegistryService` and `ActivityChangedHandler` agreeing. Mocking any of
- * them tests the mock. The pure arithmetic already has its own spec
- * (`story/domain/__tests__` for `activityNumbering`); this spec proves the wiring.
+ * WHY this cannot be a unit spec: a number is the product of
+ * `DomainStoryActivityNumbering`, `DomainStoryNumberingRegistry`,
+ * `ElementRegistryService` and `ActivityChangedHandler` agreeing across the
+ * command stack. Mocking any of them tests the mock. The pure arithmetic already
+ * has its own spec (`story/domain/__tests__` for `activityNumbering`); this spec
+ * proves the wiring.
  *
- * WHY browser tier (ADR 0014): the draw pass is the point. `canvas.addConnection`
- * reaches tiny-svg `translate()` → `SVGSVGElement.createSVGTransform`, and the
- * number is laid out with `getBBox` — neither exists in jsdom, so in the unit
- * tier no activity is ever drawn and no number is ever generated.
+ * WHY browser tier (ADR 0014): every case runs `modeling.*`, which reaches
+ * `canvas.addShape`/`addConnection` → tiny-svg `translate()` →
+ * `SVGSVGElement.createSVGTransform`, absent in jsdom.
+ *
+ * **Inverted by #74.** Numbering used to happen inside
+ * `DomainStoryRenderer.renderExternalNumber`, so only a real *draw pass*
+ * assigned it — ADR 0014's second blocker, now superseded as fact. It is a
+ * command interceptor on `connection.create`/`connection.reconnect` now, so the
+ * number exists before anything paints, and undo takes it away again. The cases
+ * below assert the model *before* forcing a render wherever the distinction
+ * matters.
  */
 describe("activity numbering (browser)", () => {
     let modelers: TestModeler[] = [];
@@ -85,16 +91,16 @@ describe("activity numbering (browser)", () => {
     }
 
     describe("automatic numbers", () => {
-        it("numbers the first activity 1 during its draw pass", () => {
+        it("numbers the first activity 1 during connection.create", () => {
             const modeler = boot();
             const { actor, workObjects } = addStoryCast(modeler, 1);
 
             const activity = connect(modeler, actor, workObjects[0])!;
 
-            // No further command ran — creating the connection drew it, and the
-            // draw is what assigned the number.
+            // The command assigned it. Before #74 this line was only true
+            // because creating the connection also drew it.
             expect(numberOf(activity)).toBe(1);
-            // Visible proof that the number came from the renderer, not a handler.
+            // …and the badge still reaches the canvas, drawn from the model.
             const gfx = modeler.container.querySelector(
                 `[data-element-id="${activity.id}"]`,
             )!;
@@ -103,6 +109,48 @@ describe("activity numbering (browser)", () => {
                     (text) => text.textContent,
                 ),
             ).toContain("1");
+        });
+
+        it("assigns the number without needing anything to be drawn", () => {
+            // The distinction #74 turns on: the write happens inside the
+            // command, so it is already visible to a listener that runs before
+            // the canvas repaints. A renderer-minted number could not be.
+            const modeler = boot();
+            const { actor, workObjects } = addStoryCast(modeler, 1);
+            let numberAtExecuted: number | null | undefined = "unset" as never;
+
+            modeler.eventBus.on(
+                "commandStack.connection.create.executed",
+                (event: any) => {
+                    numberAtExecuted = event.context.connection.businessObject
+                        .number as number;
+                },
+            );
+
+            connect(modeler, actor, workObjects[0]);
+
+            expect(numberAtExecuted).toBe(1);
+        });
+
+        it("undo of connection.create takes the number back, redo re-mints it", () => {
+            const modeler = boot();
+            const { actor, workObjects } = addStoryCast(modeler, 2);
+            const first = connect(modeler, actor, workObjects[0])!;
+            const second = connect(modeler, actor, workObjects[1])!;
+            expect([numberOf(first), numberOf(second)]).toEqual([1, 2]);
+
+            modeler.commandStack.undo();
+
+            // `null`, not `undefined`: `JSON.stringify` drops `undefined`, and
+            // every fixture persists `"number": null` for an unnumbered activity.
+            expect(numberOf(second)).toBeNull();
+            expect(numberOf(first)).toBe(1);
+
+            modeler.commandStack.redo();
+
+            // Redo re-runs `execute` and re-fires `executed` but never
+            // `preExecute`, so the whole decision has to live in `executed`.
+            expect(numberOf(second)).toBe(2);
         });
 
         it("counts up for each following activity from an actor", () => {
@@ -144,12 +192,112 @@ describe("activity numbering (browser)", () => {
             const response = connect(modeler, workObjects[0], workObjects[1])!;
 
             // Only an activity whose *source* is an actor is a story step; the
-            // renderer explicitly nulls the number on every other activity.
+            // `connection.create` interceptor nulls the number on every other
+            // activity — the renderer used to, on every paint.
             expect(numberOf(response)).toBeNull();
             expect(numberOf(numbered)).toBe(1);
             // …and it stays out of the sequence, so the next step is 2, not 3.
             const nextStep = connect(modeler, actor, workObjects[1])!;
             expect(numberOf(nextStep)).toBe(2);
+        });
+    });
+
+    /**
+     * The paths that can change *which shape an activity starts at*.
+     *
+     * These are what the interceptor exists for, and the risk #74 carries: while
+     * numbering lived in the draw pass, any route that re-pointed a connection
+     * got renumbered for free simply by being repainted. Each route now has to
+     * be named explicitly, so each gets a case.
+     */
+    describe("connection.reconnect", () => {
+        it("clears the number when the source stops being an actor", () => {
+            const modeler = boot();
+            const { actor, workObjects } = addStoryCast(modeler, 2);
+            const activity = connect(modeler, actor, workObjects[0])!;
+            expect(numberOf(activity)).toBe(1);
+
+            modeler.modeling.reconnectStart(activity, workObjects[1], {
+                x: workObjects[1].x + 37,
+                y: workObjects[1].y + 37,
+            });
+
+            expect(activity.source).toBe(workObjects[1]);
+            expect(numberOf(activity)).toBeNull();
+
+            modeler.commandStack.undo();
+
+            expect(activity.source).toBe(actor);
+            expect(numberOf(activity)).toBe(1);
+        });
+
+        it("mints a number when the source becomes an actor", () => {
+            const modeler = boot();
+            const { actor, workObjects } = addStoryCast(modeler, 2);
+            // Occupy 1 so a mint is visibly different from "the first number".
+            connect(modeler, actor, workObjects[0]);
+            const response = connect(modeler, workObjects[0], workObjects[1])!;
+            expect(numberOf(response)).toBeNull();
+
+            modeler.modeling.reconnectStart(response, actor, {
+                x: actor.x + 37,
+                y: actor.y + 37,
+            });
+
+            expect(numberOf(response)).toBe(2);
+
+            modeler.commandStack.undo();
+
+            expect(numberOf(response)).toBeNull();
+        });
+
+        it("leaves the number alone when only the target moves", () => {
+            // The `== null` guard: re-pointing the far end is not a renumbering
+            // event, and a repaint-driven implementation could not tell them
+            // apart without help.
+            const modeler = boot();
+            const { actor, workObjects } = addStoryCast(modeler, 3);
+            connect(modeler, actor, workObjects[0]);
+            const second = connect(modeler, actor, workObjects[1])!;
+            expect(numberOf(second)).toBe(2);
+
+            modeler.modeling.reconnectEnd(second, workObjects[2], {
+                x: workObjects[2].x + 37,
+                y: workObjects[2].y + 37,
+            });
+
+            expect(second.target).toBe(workObjects[2]);
+            expect(numberOf(second)).toBe(2);
+        });
+
+        it("clears the number when the source actor is replaced by a work object", () => {
+            // `shape.replace` never touches numbering itself: diagram-js'
+            // `ReplaceShapeHandler.preExecute` re-points the attached connections
+            // through `modeling.reconnectStart`/`reconnectEnd`, so the
+            // `connection.reconnect` interceptor covers replace for free. If that
+            // ever stops being true, this is where it surfaces.
+            const modeler = boot();
+            const { actor, workObjects } = addStoryCast(modeler, 1);
+            const activity = connect(modeler, actor, workObjects[0])!;
+            expect(numberOf(activity)).toBe(1);
+
+            // `modeling.replaceShape` directly, not the `ds-replace` menu: that
+            // menu only offers icons of the *same* family, so an actor can never
+            // become a work object through it. The command is the route under
+            // test either way.
+            modeler.modeling.replaceShape(
+                actor,
+                {
+                    type: workObjects[0]["type"],
+                    x: actor.x,
+                    y: actor.y,
+                    width: actor.width,
+                    height: actor.height,
+                } as never,
+                {},
+            );
+
+            expect(numberOf(activity)).toBeNull();
         });
     });
 
