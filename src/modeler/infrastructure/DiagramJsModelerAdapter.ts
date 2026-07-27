@@ -8,11 +8,13 @@ import {
     DomainStoryImportService,
     DomainStoryExportService,
 } from "../../story/service";
+import {
+    createDebouncedCallback,
+    type DebouncedCallback,
+} from "../../shared/infrastructure/debounce";
 
 import { ModelerPort } from "../domain/ports";
 import { DomainStoryDocument, ViewportData } from "../domain";
-
-const DEFAULT_DEBOUNCE_MS = 100;
 
 /**
  * Infrastructure adapter that implements ModelerPort using diagram-js.
@@ -22,9 +24,18 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     private readonly diagram: Diagram;
     private readonly eventBus: EventBus;
     private readonly canvas: Canvas;
-    private readonly callbackRegistry: Map<
-        (() => void) | ((viewport: ViewportData) => void),
-        (event?: unknown) => void
+    private readonly iconStyleElement: HTMLStyleElement;
+
+    // Two maps, not one union-keyed map: `EgonEventMap` makes a zero-arg
+    // callback assignable to both events, so `on("story.changed", f)` followed
+    // by `on("viewport.changed", f)` typechecks — with a single map the second
+    // registration would overwrite the first handle, leaving an uncancellable
+    // timer alive past destroy(). That is the very defect #69 removes.
+    private readonly storyCallbacks: Map<() => void, DebouncedCallback> =
+        new Map();
+    private readonly viewportCallbacks: Map<
+        (viewport: ViewportData) => void,
+        DebouncedCallback
     > = new Map();
 
     constructor(
@@ -33,14 +44,19 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         height: string,
         additionalModules: ModuleDeclaration[] = [],
     ) {
-        this.initializeContainer(container);
+        // Must exist before `new Diagram`: IconCssInjector is constructed during
+        // boot (IconDictionaryService.$inject) and takes the node by reference.
+        this.iconStyleElement = this.createIconStyleElement(container);
 
         // diagram-js injects `config.canvas` into its Canvas, so container/size
         // must be nested under `canvas` — passed at the top level they are
         // silently ignored and the canvas renders into document.body instead of
         // the host-provided element, breaking multi-instance isolation.
+        // `domainStoryIconStyleSheet` rides the same mechanism to hand this
+        // instance's own <style> node to its own IconCssInjector.
         this.diagram = new Diagram({
             canvas: { container, width, height },
+            domainStoryIconStyleSheet: { styleElement: this.iconStyleElement },
             modules: [EgonPlugin, ...additionalModules],
         });
 
@@ -85,39 +101,53 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     }
 
     onStoryChanged(callback: () => void): void {
-        const wrapped = (event: any) =>
-            this.createDebouncedCallback(() => callback())(event);
-        this.callbackRegistry.set(callback, wrapped);
+        // Built once and reused for every event: a debouncer created per event
+        // shares no timer with the previous one, so nothing coalesces and each
+        // command reaches the host a full window late.
+        const wrapped = createDebouncedCallback(() => callback());
+        this.storyCallbacks.set(callback, wrapped);
         (this.eventBus.on as any)("commandStack.changed", wrapped);
     }
 
     onViewportChanged(callback: (viewport: ViewportData) => void): void {
-        const wrapped = this.createDebouncedCallback((event: any) =>
+        const wrapped = createDebouncedCallback((event: any) =>
             callback(event.viewbox),
         );
-        this.callbackRegistry.set(callback, wrapped);
+        this.viewportCallbacks.set(callback, wrapped);
         (this.eventBus.on as any)("canvas.viewbox.changed", wrapped);
     }
 
     offStoryChanged(callback: () => void): void {
-        const wrapped = this.callbackRegistry.get(callback);
+        const wrapped = this.storyCallbacks.get(callback);
         if (wrapped) {
             (this.eventBus.off as any)("commandStack.changed", wrapped);
-            this.callbackRegistry.delete(callback);
+            // Cancel too, or unsubscribing drops the only handle to an armed
+            // timer and the host is still called ~100 ms after off().
+            wrapped.cancel();
+            this.storyCallbacks.delete(callback);
         }
     }
 
     offViewportChanged(callback: (viewport: ViewportData) => void): void {
-        const wrapped = this.callbackRegistry.get(callback);
+        const wrapped = this.viewportCallbacks.get(callback);
         if (wrapped) {
             (this.eventBus.off as any)("canvas.viewbox.changed", wrapped);
-            this.callbackRegistry.delete(callback);
+            wrapped.cancel();
+            this.viewportCallbacks.delete(callback);
         }
     }
 
+    /**
+     * Teardown order is deliberate: unsubscribe (and disarm) first, so no event
+     * raised by diagram-js' own teardown — `diagram.destroy` fires
+     * `canvas.destroy` on a still-live bus — can reach a host handler; then drop
+     * the diagram; then remove the <style> node, which lives in the *host's*
+     * container and so survives `diagram.destroy()`.
+     */
     destroy(): void {
-        this.callbackRegistry.clear();
+        this.unsubscribeAll();
         this.diagram.destroy();
+        this.iconStyleElement.remove();
     }
 
     /** Expose diagram instance for IconAdapter to access services */
@@ -125,12 +155,36 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         return this.diagram;
     }
 
-    private initializeContainer(container: HTMLElement): void {
-        if (!container.querySelector("#iconsCss")) {
-            const style = document.createElement("style");
-            style.id = "iconsCss";
-            container.appendChild(style);
-        }
+    /**
+     * Creates this instance's own icon stylesheet node inside the host
+     * container.
+     *
+     * Unconditional — no "already there?" guard: two clients sharing one
+     * container must get two nodes, otherwise the second writes its icon rules
+     * into the first's sheet and destroying either deletes rules the other
+     * depends on. Marked by attribute rather than `id` for the same reason: ids
+     * must be document-unique.
+     */
+    private createIconStyleElement(container: HTMLElement): HTMLStyleElement {
+        const style = document.createElement("style");
+        style.setAttribute("data-egon-icons-css", "");
+        container.appendChild(style);
+        return style;
+    }
+
+    /** Detaches and disarms every host subscription, both event kinds. */
+    private unsubscribeAll(): void {
+        this.storyCallbacks.forEach((wrapped) => {
+            (this.eventBus.off as any)("commandStack.changed", wrapped);
+            wrapped.cancel();
+        });
+        this.storyCallbacks.clear();
+
+        this.viewportCallbacks.forEach((wrapped) => {
+            (this.eventBus.off as any)("canvas.viewbox.changed", wrapped);
+            wrapped.cancel();
+        });
+        this.viewportCallbacks.clear();
     }
 
     /**
@@ -149,15 +203,5 @@ export class DiagramJsModelerAdapter implements ModelerPort {
      */
     private initializeRootElement(): void {
         this.canvas.getRootElement();
-    }
-
-    private createDebouncedCallback(
-        callback: (event?: unknown) => void,
-    ): (event?: unknown) => void {
-        let timeoutId: ReturnType<typeof setTimeout> | null = null;
-        return (event?: unknown) => {
-            if (timeoutId) clearTimeout(timeoutId);
-            timeoutId = setTimeout(() => callback(event), DEFAULT_DEBOUNCE_MS);
-        };
     }
 }

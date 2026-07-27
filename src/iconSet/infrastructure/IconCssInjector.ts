@@ -1,19 +1,37 @@
 import { IconStyleSheetPort } from "../domain/ports/IconStyleSheetPort";
 
 /**
+ * The `<style>` node this injector writes into, handed in through diagram-js'
+ * DI config (`config.domainStoryIconStyleSheet`).
+ *
+ * Declared here rather than in `iconSet/domain/` — `HTMLStyleElement` is a DOM
+ * type and domain folders must stay framework-free — and not on the service
+ * barrel, which would add a cross-feature edge for a single field.
+ */
+export interface IconStyleSheetConfig {
+    styleElement?: HTMLStyleElement;
+}
+
+/**
  * Infrastructure adapter that turns an icon's CSS class + SVG into a live rule
- * on the shared `#iconsCss` stylesheet. This is the DOM/CSSOM half the icon
+ * on this instance's icon stylesheet. This is the DOM/CSSOM half the icon
  * service must not own: the browser-only `btoa`, the SVG attribute reshaping,
  * and the `insertRule` call live here, behind {@link IconStyleSheetPort}.
+ *
+ * The node is per-EgonClient, created by `DiagramJsModelerAdapter` and injected
+ * by reference, so two clients on one page never write into the same sheet.
+ *
+ * Note this buys *ownership*, not isolation: the rules themselves are
+ * document-global wherever the `<style>` sits, so two clients with different
+ * SVGs for one icon name still collide. Real isolation needs selector
+ * prefixing (`.egon-<id> .icon-x::before`) — that is issue #12, not this one.
  */
 export class IconCssInjector implements IconStyleSheetPort {
-    addIconStyle(cssClassName: string, svgMarkup: string): void {
-        // Looked up per call (not cached in the constructor) because the
-        // `<style id="iconsCss">` element is created later, by
-        // DiagramJsModelerAdapter.initializeContainer(); an early adapter would
-        // otherwise bind to a null sheet forever.
-        const sheetEl = document.getElementById("iconsCss");
+    static $inject = ["config.domainStoryIconStyleSheet"];
 
+    constructor(private readonly config?: IconStyleSheetConfig) {}
+
+    addIconStyle(cssClassName: string, svgMarkup: string): void {
         // Remove width and height attributes from SVG tag to ensure consistent scaling
         const scalableSvg = svgMarkup.replace(/<svg[^>]+>/, (match: string) => {
             return match.replace(/ (width|height)="[^"]*"/g, "");
@@ -27,14 +45,11 @@ export class IconCssInjector implements IconStyleSheetPort {
             }
         `;
 
-        // getElementById types the node as HTMLElement; the "iconsCss"
-        // node is a <style> element, so cast to reach its CSSOM sheet.
-        // Typing it properly (vs. @ts-expect-error) keeps the suppression
-        // from breaking when Prettier wraps this call across lines.
-        const styleSheet = (sheetEl as HTMLStyleElement | null)?.sheet;
+        const styleSheet = this.config?.styleElement?.sheet;
         if (styleSheet) {
-            // Silent no-op when the sheet is absent: icons loaded before the
-            // canvas mounts simply have no rule yet, which is expected.
+            // Silent no-op when the sheet is absent: a host that configured no
+            // element has none, and a detached <style> — which is what the node
+            // becomes after `destroy()` removes it — reports `sheet === null`.
             styleSheet.insertRule(iconStyle, styleSheet.cssRules.length);
         }
     }

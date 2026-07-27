@@ -48,8 +48,10 @@ export interface TestModeler {
  *
  * Built **on `DiagramJsModelerAdapter`**, not a hand-rolled `new Diagram(...)`:
  * the adapter owns the production bootstrap — the `canvas: { container, width,
- * height }` nesting (whose absence was a real bug, #59), the `#iconsCss` node,
- * and realizing the implicit canvas root (which `isBackground` depends on). A
+ * height }` nesting (whose absence was a real bug, #59), the per-instance
+ * `[data-egon-icons-css]` node and the DI config that hands it to the icon
+ * stylesheet adapter, and realizing the implicit canvas root (which
+ * `isBackground` depends on). A
  * harness that boots differently would test a fiction. Icons load through the
  * production `DiagramJsIconAdapter` for the same reason.
  *
@@ -78,7 +80,10 @@ export function createTestModeler(
 
     // Before any shape exists: the renderer resolves an actor's icon at draw
     // time and tiny-svg throws InvalidCharacterError on the "" a miss returns.
-    new DiagramJsIconAdapter(diagram).loadIcons(options.icons ?? TEST_ICON_SET);
+    // Held, not dropped: the adapter owns subscriptions and timers that
+    // cleanup() must be able to disarm.
+    const iconAdapter = new DiagramJsIconAdapter(diagram);
+    iconAdapter.loadIcons(options.icons ?? TEST_ICON_SET);
 
     const get = <T>(token: string): T => diagram.get<T>(token);
     const canvas = get<Canvas>("canvas");
@@ -98,6 +103,8 @@ export function createTestModeler(
         rules: get<Rules>("rules"),
         get,
         cleanup: () => {
+            // Icon port before modeler port, mirroring EgonClient.destroy().
+            iconAdapter.destroy();
             adapter.destroy();
             container.remove();
         },

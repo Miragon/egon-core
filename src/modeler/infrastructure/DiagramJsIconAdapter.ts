@@ -7,6 +7,10 @@ import {
 } from "../../iconSet/service";
 import { ElementTypes } from "../../story/domain/elementTypes";
 import { Dictionary } from "../../story/domain/dictionary";
+import {
+    createDebouncedCallback,
+    type DebouncedCallback,
+} from "../../shared/infrastructure/debounce";
 
 import { IconPort } from "../domain/ports";
 import {
@@ -14,8 +18,6 @@ import {
     IconSet,
     IconSetData,
 } from "../../iconSet/domain/IconTypes";
-
-const DEFAULT_DEBOUNCE_MS = 100;
 
 /**
  * Infrastructure adapter that implements IconPort using diagram-js icon services.
@@ -27,7 +29,7 @@ export class DiagramJsIconAdapter implements IconPort {
     private readonly eventBus: EventBus;
     private readonly callbackRegistry: Map<
         (icons: IconSet) => void,
-        (event?: unknown) => void
+        DebouncedCallback
     > = new Map();
 
     constructor(diagram: Diagram) {
@@ -87,7 +89,7 @@ export class DiagramJsIconAdapter implements IconPort {
     }
 
     onIconsChanged(callback: (icons: IconSet) => void): void {
-        const wrapped = this.createDebouncedCallback(() =>
+        const wrapped = createDebouncedCallback(() =>
             callback(this.getIcons()),
         );
         this.callbackRegistry.set(callback, wrapped);
@@ -98,8 +100,26 @@ export class DiagramJsIconAdapter implements IconPort {
         const wrapped = this.callbackRegistry.get(callback);
         if (wrapped) {
             (this.eventBus.off as any)("dst.config.changed", wrapped);
+            // Cancel too: dropping the registry entry would otherwise leave an
+            // armed timer nobody can reach, firing ~100 ms after off().
+            wrapped.cancel();
             this.callbackRegistry.delete(callback);
         }
+    }
+
+    /**
+     * Detaches and disarms every subscription.
+     *
+     * Must run before the modeler port tears the injector down: this adapter's
+     * callback reads `getIcons()` off injector-owned services, so a timer that
+     * survives teardown queries a destroyed injector.
+     */
+    destroy(): void {
+        this.callbackRegistry.forEach((wrapped) => {
+            (this.eventBus.off as any)("dst.config.changed", wrapped);
+            wrapped.cancel();
+        });
+        this.callbackRegistry.clear();
     }
 
     private toElementType(category: IconCategory): ElementTypes {
@@ -116,15 +136,5 @@ export class DiagramJsIconAdapter implements IconPort {
 
     private fireIconsChangedEvent(): void {
         this.eventBus.fire("dst.config.changed", { iconSet: this.getIcons() });
-    }
-
-    private createDebouncedCallback(
-        callback: (event?: unknown) => void,
-    ): (event?: unknown) => void {
-        let timeoutId: ReturnType<typeof setTimeout> | null = null;
-        return (event: any) => {
-            if (timeoutId) clearTimeout(timeoutId);
-            timeoutId = setTimeout(() => callback(event), DEFAULT_DEBOUNCE_MS);
-        };
     }
 }

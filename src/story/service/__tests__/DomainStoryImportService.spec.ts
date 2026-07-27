@@ -17,7 +17,7 @@ import type { IconStyleSheetPort } from "../../../iconSet/domain/ports/IconStyle
 import { DomainStoryPropertiesService } from "../../../modeler/service/DomainStoryPropertiesService";
 
 // The import path under test never renders, so CSS injection is irrelevant here
-// (and jsdom has no #iconsCss sheet anyway — the real injector no-ops).
+// (and with no style element configured the real injector no-ops anyway).
 const noopStyleSheet: IconStyleSheetPort = { addIconStyle() {} };
 
 /**
