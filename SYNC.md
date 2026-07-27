@@ -256,6 +256,47 @@ future round. Offer the fixes upstream separately.
     `parent`/`children` outside any command, so group adoption from _moving or
     creating_ a group remains non-undoable.
 
+- **Debounced host callbacks outlived `destroy()`, and the debounce did not
+  debounce.** _Local-only, no upstream counterpart — upstream's Angular host owns
+  the debounce._ Each adapter kept a private `createDebouncedCallback` whose
+  `timeoutId` was closure-private, so nothing could cancel an armed timer:
+  `DiagramJsModelerAdapter.destroy()` cleared its registry but left the timers
+  running, and `DiagramJsIconAdapter` had no `destroy()` at all. A host disposing
+  inside the 100 ms window still got `story.changed`/`icons.changed`, and the
+  icons callback read services off a destroyed injector. `onStoryChanged`
+  additionally built a **fresh** debouncer per event, so nothing coalesced — the
+  window was pure added latency. Fixed locally by one cancellable
+  `createDebouncedCallback` in `src/shared/infrastructure/debounce.ts`, hoisted
+  per subscription; `IconPort` gained `destroy()` and `EgonClient.destroy()` now
+  tears down the icon port before the modeler port (which disposes the injector
+  both read from). `off*()` cancels too, so unsubscribing cannot orphan a timer.
+  The modeler adapter's registry is split into one map per event kind: a zero-arg
+  function is assignable to both `story.changed` and `viewport.changed`, and a
+  single union-keyed map lost the first handle on the second `on()`. Issue
+  [#69](https://github.com/Miragon/egon-core/issues/69); locked by
+  `debounce.spec.ts`, the debounce/teardown cases in `DiagramJsModelerAdapter.spec.ts`
+  and `DiagramJsIconAdapter.spec.ts`, and the `destroy` cases in
+  `EgonClient.browser.spec.ts`.
+- **`destroy()` left the icon `<style>` node behind, and two instances shared one
+  sheet.** _Local-only, no upstream counterpart — upstream's Angular host owns the
+  container._ `initializeContainer` appended `<style id="iconsCss">` to the
+  _host's_ element, which `diagram.destroy()` never removes (`Canvas._destroy`
+  takes out only its own `.djs-container`), so a host reusing a container kept the
+  previous session's rules. The id also made it document-global: `IconCssInjector`
+  resolved it with `document.getElementById`, so with two clients the **first**
+  node won and instance B wrote into instance A's sheet — which is why
+  remove-on-destroy could not land alone. Fixed locally by creating one
+  unmarked-by-id `[data-egon-icons-css]` node per adapter, handing it to that
+  instance's `IconCssInjector` by reference through diagram-js' DI config
+  (`config.domainStoryIconStyleSheet`, the mechanism `config.canvas.container`
+  already uses), and removing it in `destroy()`. Note this is ownership, not CSS
+  isolation — the rules stay document-global, so selector prefixing is still open
+  as [#12](https://github.com/Miragon/egon-core/issues/12). Issue
+  [#69](https://github.com/Miragon/egon-core/issues/69); locked by
+  `IconCssInjector.spec.ts`, the sheet-isolation case in
+  `MultiInstanceIsolation.spec.ts`, and the container-empty case in
+  `EgonClient.browser.spec.ts`.
+
 ### Known, still shared with upstream
 
 **Not** fixed here — each needs a design decision rather than a one-liner, so
@@ -311,20 +352,6 @@ undefined (reading 'appendChild')`, which escapes `commandStack.undo()`. Even
   when `indexOf` returns `-1`, reachable if the edited element is not in
   `getActivitiesFromActors()` (e.g. a work-object-sourced activity). Latent, not
   pinned.
-- **Debounced host callbacks fire after `destroy()`.**
-  `DiagramJsModelerAdapter.destroy()` clears its callback registry but never
-  cancels the pending `setTimeout` from `createDebouncedCallback`, and
-  `DiagramJsIconAdapter` has no `destroy()` at all — so its timer cannot be
-  cancelled. A host that disposes within the 100 ms window still gets
-  `story.changed`/`icons.changed`, and the icons callback reads services off a
-  destroyed injector. (Local-only shape: upstream's Angular host owns the
-  debounce, so there is no upstream line to re-import.) `EgonClient.browser.spec.ts`
-  scopes its `destroy` case to listeners with nothing in flight and says so.
-- **`destroy()` leaves the `#iconsCss` style node in the host container.**
-  `initializeContainer` appends it to the _host's_ element; `diagram.destroy()`
-  only removes diagram-js' own `.djs-container`. A host reusing one container
-  across sessions keeps the previous session's icon rules. Low severity — the
-  `#iconsCss` id guard prevents duplicates — but it is not a clean teardown.
 
 ## Standing skip reasons
 

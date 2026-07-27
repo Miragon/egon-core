@@ -6,6 +6,7 @@ import IconSetModule from "../../../iconSet/service";
 import { DomainStoryNumberStash } from "../number-stash/DomainStoryNumberStash";
 import { DomainStoryIdFactory } from "../id-factory/DomainStoryIdFactory";
 import { IconDictionaryService } from "../../../iconSet/service";
+import { Dictionary } from "../../../story/domain/dictionary";
 
 /**
  * The headline regression for issue #12: two EgonClient instances on one page
@@ -23,8 +24,17 @@ import { IconDictionaryService } from "../../../iconSet/service";
  * the injector-level proof is sufficient. These three modules need no diagram-js
  * primitives, so a bare injector over them resolves every service.
  */
-function makeInjector(): Injector {
-    return new Injector([NumberStashModule, IdFactoryModule, IconSetModule]);
+function makeInjector(styleElement?: HTMLStyleElement): Injector {
+    return new Injector([
+        NumberStashModule,
+        IdFactoryModule,
+        IconSetModule,
+        // IconCssInjector injects `config.domainStoryIconStyleSheet`; didi
+        // throws `No provider for "config"!` when the whole `config` provider
+        // is missing (a missing *key* on a present config is fine), so a bare
+        // injector must supply one.
+        { config: ["value", { domainStoryIconStyleSheet: { styleElement } }] },
+    ]);
 }
 
 /** Mutates every offending service in an injector, then discards its reference. */
@@ -40,6 +50,35 @@ function mutateAll(injector: Injector): void {
     injector
         .get<IconDictionaryService>("domainStoryIconDictionaryService")
         .addIMGToIconDictionary("<svg/>", "onlyInA");
+}
+
+/**
+ * A `<style>` node inside an attached container — `sheet` is `null` while the
+ * node sits outside a document, which would silence every insert.
+ */
+function createAttachedStyleElement(): HTMLStyleElement {
+    const container = document.createElement("div");
+    container.setAttribute("data-isolation-fixture", "");
+    document.body.appendChild(container);
+
+    const style = document.createElement("style");
+    container.appendChild(style);
+    return style;
+}
+
+/** Publishes one custom icon's CSS rule through an injector's icon service. */
+function addIcon(injector: Injector, name: string): void {
+    const icons = new Dictionary<string>();
+    icons.set(name, "<svg/>");
+    injector
+        .get<IconDictionaryService>("domainStoryIconDictionaryService")
+        .addIconsToCss(icons);
+}
+
+function selectorsOf(style: HTMLStyleElement): string[] {
+    return Array.from(style.sheet!.cssRules).map(
+        (rule) => (rule as CSSStyleRule).selectorText,
+    );
 }
 
 /** Asserts none of the offending services in an injector carry foreign state. */
@@ -67,6 +106,9 @@ function expectPristine(injector: Injector): void {
 describe("multi-instance isolation (issue #12)", () => {
     afterEach(() => {
         vi.restoreAllMocks();
+        document
+            .querySelectorAll("[data-isolation-fixture]")
+            .forEach((fixture) => fixture.remove());
     });
 
     it("gives each injector its own service instances", () => {
@@ -92,6 +134,26 @@ describe("multi-instance isolation (issue #12)", () => {
         mutateAll(a);
 
         expectPristine(b);
+    });
+
+    it("writes each injector's icon CSS into that injector's own sheet", () => {
+        // The stylesheet half of the same charter: before #69 both injectors
+        // resolved one document-global `<style id="iconsCss">`, so B's icon
+        // rules landed in A's sheet.
+        const styleA = createAttachedStyleElement();
+        const styleB = createAttachedStyleElement();
+        const a = makeInjector(styleA);
+        const b = makeInjector(styleB);
+
+        addIcon(a, "only-in-a");
+        addIcon(b, "only-in-b");
+
+        expect(selectorsOf(styleA)).toEqual([
+            ".icon-domain-story-only-in-a::before",
+        ]);
+        expect(selectorsOf(styleB)).toEqual([
+            ".icon-domain-story-only-in-b::before",
+        ]);
     });
 
     it("leaves no residue after an injector is discarded", () => {

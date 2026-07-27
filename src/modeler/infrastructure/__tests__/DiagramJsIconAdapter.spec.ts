@@ -15,36 +15,14 @@ import {
 } from "../../../iconSet/domain/IconTypes";
 import type Diagram from "diagram-js";
 import { ElementTypes } from "../../../story/domain/elementTypes";
+import { DEFAULT_DEBOUNCE_MS } from "../../../shared/infrastructure/debounce";
+import { createRecordingEventBus } from "./helpers/createRecordingEventBus";
 
 /**
  * Creates mock diagram-js services for testing DiagramJsIconAdapter.
  */
 function createMockDiagramServices() {
-    const listeners = new Map<string, ((...args: unknown[]) => void)[]>();
-
-    const mockEventBus = {
-        on: vi.fn((event: string, callback: (...args: unknown[]) => void) => {
-            if (!listeners.has(event)) {
-                listeners.set(event, []);
-            }
-            listeners.get(event)!.push(callback);
-        }),
-        off: vi.fn((event: string, callback: (...args: unknown[]) => void) => {
-            const eventListeners = listeners.get(event);
-            if (eventListeners) {
-                const index = eventListeners.indexOf(callback);
-                if (index > -1) {
-                    eventListeners.splice(index, 1);
-                }
-            }
-        }),
-        fire: vi.fn((event: string, data?: unknown) => {
-            const eventListeners = listeners.get(event);
-            if (eventListeners) {
-                eventListeners.forEach((cb) => cb(data));
-            }
-        }),
-    };
+    const mockEventBus = createRecordingEventBus();
 
     const mockIconDictionaryService = {
         addIMGToIconDictionary: vi.fn(),
@@ -85,7 +63,6 @@ function createMockDiagramServices() {
         mockEventBus,
         mockIconDictionaryService,
         mockIconSetImportExportService,
-        listeners,
     };
 }
 
@@ -100,6 +77,7 @@ describe("DiagramJsIconAdapter", () => {
 
     afterEach(() => {
         vi.clearAllMocks();
+        vi.useRealTimers();
     });
 
     describe("loadIcons", () => {
@@ -323,6 +301,64 @@ describe("DiagramJsIconAdapter", () => {
                 "dst.config.changed",
                 expect.any(Function),
             );
+        });
+    });
+
+    /**
+     * Timer-level teardown (#69). Fake timers are legal in this tier only
+     * (ADR 0014); nothing here drives a real canvas.
+     */
+    describe("debouncing and teardown", () => {
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+
+        it("collapses a burst of dst.config.changed into one callback", () => {
+            const iconsChanged = vi.fn();
+            adapter.onIconsChanged(iconsChanged);
+
+            for (let index = 0; index < 5; index++) {
+                mocks.mockEventBus.fire("dst.config.changed");
+            }
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+
+            // Five before the fix: the debouncer was rebuilt per event.
+            expect(iconsChanged).toHaveBeenCalledTimes(1);
+        });
+
+        it("cancels a callback already in flight when destroyed", () => {
+            const iconsChanged = vi.fn();
+            adapter.onIconsChanged(iconsChanged);
+            mocks.mockEventBus.fire("dst.config.changed");
+
+            adapter.destroy();
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS * 10);
+
+            // Would otherwise call getIcons() on a torn-down injector.
+            expect(iconsChanged).not.toHaveBeenCalled();
+        });
+
+        it("unsubscribes every handler on destroy", () => {
+            adapter.onIconsChanged(vi.fn());
+            adapter.onIconsChanged(vi.fn());
+            const subscribed = mocks.mockEventBus.on.mock.calls;
+
+            adapter.destroy();
+
+            // Identity-matched: eventBus.off ignores a handle it never saw.
+            expect(mocks.mockEventBus.off.mock.calls).toEqual(subscribed);
+            expect(mocks.mockEventBus.listenerCount()).toBe(0);
+        });
+
+        it("delivers nothing after off(), even mid-window", () => {
+            const iconsChanged = vi.fn();
+            adapter.onIconsChanged(iconsChanged);
+
+            mocks.mockEventBus.fire("dst.config.changed");
+            adapter.offIconsChanged(iconsChanged);
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+
+            expect(iconsChanged).not.toHaveBeenCalled();
         });
     });
 });

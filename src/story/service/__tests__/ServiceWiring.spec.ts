@@ -21,6 +21,10 @@ const diagramPrimitives = {
     canvas: ["value", {}],
     elementRegistry: ["value", { getAll: () => [], find: () => undefined }],
     elementFactory: ["value", {}],
+    // Real diagram-js always registers `config`; IconCssInjector injects
+    // `config.domainStoryIconStyleSheet`, and didi throws outright when the
+    // `config` provider itself is absent.
+    config: ["value", {}],
 };
 
 describe("service DI wiring", () => {

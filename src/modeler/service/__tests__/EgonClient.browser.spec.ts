@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type CommandStack from "diagram-js/lib/command/CommandStack";
+import type EventBus from "diagram-js/lib/core/EventBus";
 import type { ModuleDeclaration } from "didi";
 
 import {
@@ -167,6 +168,37 @@ function commandStackProbe(): {
     };
 }
 
+/**
+ * Reaches the diagram's own eventBus through `additionalModules`.
+ *
+ * Needed because no *public* call produces an event burst: `alignToOrigin()`
+ * emits exactly one `commandStack.changed`, so it cannot tell a working
+ * debounce from a broken one. Firing the raw event is the only way to prove
+ * coalescing end-to-end, and it rides the production boot like the commandStack
+ * probe does.
+ */
+function eventBusProbe(): {
+    module: ModuleDeclaration;
+    eventBus(): EventBus;
+} {
+    let captured: EventBus | undefined;
+
+    function capture(eventBus: EventBus): void {
+        captured = eventBus;
+    }
+    capture.$inject = ["eventBus"];
+
+    return {
+        module: { __init__: [capture] },
+        eventBus: () => {
+            if (!captured) {
+                throw new Error("eventBus was never injected");
+            }
+            return captured;
+        },
+    };
+}
+
 describe("EgonClient on real adapters (browser)", () => {
     let diagram: TestDiagram | undefined;
 
@@ -196,8 +228,28 @@ describe("EgonClient on real adapters (browser)", () => {
             );
             await settle();
 
-            // Still one: the debounce collapses the command's event burst
-            // (align nests a moveElements plus a canvas scroll) into one call.
+            // Still one — align raises exactly one commandStack.changed, so
+            // this pins delivery-once, not coalescing. The burst case below is
+            // what actually exercises the debounce.
+            expect(storyChanged).toHaveBeenCalledTimes(1);
+        });
+
+        it("collapses a burst of diagram events into one callback", async () => {
+            const probe = eventBusProbe();
+            diagram = await createTestDiagram({}, [probe.module]);
+
+            const storyChanged = vi.fn();
+            diagram.client.on("story.changed", storyChanged);
+
+            // Fired directly rather than through the public API: no public call
+            // emits more than one commandStack.changed, so a real burst is the
+            // only thing that can distinguish a debounce that coalesces from one
+            // that merely delays (the pre-#69 behaviour delivered 5).
+            for (let index = 0; index < 5; index++) {
+                probe.eventBus().fire("commandStack.changed", {});
+            }
+            await settle();
+
             expect(storyChanged).toHaveBeenCalledTimes(1);
         });
 
@@ -359,7 +411,7 @@ describe("EgonClient on real adapters (browser)", () => {
             diagram.client.loadIcons(TEST_ICON_SET);
             const styleSheet =
                 diagram.container.querySelector<HTMLStyleElement>(
-                    "#iconsCss",
+                    "[data-egon-icons-css]",
                 )!.sheet!;
             const rulesBefore = styleSheet.cssRules.length;
 
@@ -402,7 +454,15 @@ describe("EgonClient on real adapters (browser)", () => {
     });
 
     describe("destroy", () => {
-        it("removes the rendered canvas and delivers no further events", async () => {
+        /**
+         * Hands teardown only the DOM node, because each case below destroys the
+         * client itself — otherwise `afterEach` would destroy it twice.
+         */
+        function ownDestroy(current: TestDiagram): TestDiagram {
+            return { ...current, cleanup: () => current.container.remove() };
+        }
+
+        it("empties the host container and delivers no further events", async () => {
             diagram = await createTestDiagram();
             const { client, container } = diagram;
             client.import(storyAt({ x: -400, y: -300 }));
@@ -413,24 +473,58 @@ describe("EgonClient on real adapters (browser)", () => {
             client.on("story.changed", storyChanged);
             client.on("viewport.changed", viewportChanged);
 
-            // destroy() is the subject, so this case owns it; hand teardown only
-            // the DOM node, or afterEach would destroy the client twice.
-            diagram = { ...diagram, cleanup: () => container.remove() };
+            diagram = ownDestroy(diagram);
             client.destroy();
 
-            // The canvas goes, but the container itself is *not* emptied: the
-            // `<style id="iconsCss">` node the adapter injects survives destroy.
+            // `children.length === 0`, not "no .djs-container": diagram-js
+            // removes only its own node, so the adapter must take its icon
+            // `<style>` back out itself. Asserting emptiness rather than the
+            // marker keeps this case honest if the marker is ever renamed.
+            expect(container.children.length).toBe(0);
             expect(container.querySelector("svg")).toBeNull();
-            expect(container.querySelector(".djs-container")).toBeNull();
 
-            // Teardown must also silence the subscriptions, or a host that
-            // destroys the client still gets called back. Scoped honestly: this
-            // covers listeners with nothing in flight — a callback whose debounce
-            // timer was already running at destroy() time is *not* cancelled.
             await settle();
 
             expect(storyChanged).not.toHaveBeenCalled();
             expect(viewportChanged).not.toHaveBeenCalled();
+        });
+
+        it("cancels a story callback that was in flight at destroy() time", async () => {
+            diagram = await createTestDiagram();
+            const { client } = diagram;
+            client.import(storyAt({ x: -400, y: -300 }));
+
+            const storyChanged = vi.fn();
+            client.on("story.changed", storyChanged);
+
+            // Destroyed inside the debounce window, with a timer already armed —
+            // the case the old teardown could not cover, because the pending
+            // timeout was closure-private and nothing could clear it.
+            diagram = ownDestroy(diagram);
+            client.alignToOrigin();
+            client.destroy();
+            await settle();
+
+            expect(storyChanged).not.toHaveBeenCalled();
+        });
+
+        it("cancels an icons callback that was in flight at destroy() time", async () => {
+            diagram = await createTestDiagram();
+            const { client } = diagram;
+
+            const iconsChanged = vi.fn();
+            client.on("icons.changed", iconsChanged);
+
+            // `loadIcons` fires dst.config.changed unconditionally, so the timer
+            // is certainly armed. This is the case that proves EgonClient.destroy()
+            // reaches the *icon* port — whose callback would otherwise read
+            // services off the injector the modeler port has just torn down.
+            diagram = ownDestroy(diagram);
+            client.loadIcons(TEST_ICON_SET);
+            client.destroy();
+            await settle();
+
+            expect(iconsChanged).not.toHaveBeenCalled();
         });
     });
 });

@@ -43,4 +43,9 @@ export interface IconPort {
      * Unsubscribe from icon changes.
      */
     offIconsChanged(callback: (icons: IconSet) => void): void;
+
+    /**
+     * Clean up resources.
+     */
+    destroy(): void;
 }

@@ -236,8 +236,13 @@ export class EgonClient {
 
     /**
      * Destroy the client and clean up resources.
+     *
+     * Icon port first: the modeler port tears down the diagram-js injector both
+     * ports read from, so an icon callback still in flight afterwards would
+     * query destroyed services.
      */
     destroy(): void {
+        this.iconPort.destroy();
         this.modelerPort.destroy();
     }
 }

@@ -9,7 +9,7 @@ import { IconStyleSheetPort } from "../../../iconSet/domain/ports/IconStyleSheet
 import type { ElementRegistryService } from "../../../modeler/service/ElementRegistryService";
 
 // The round-trip proves metadata/icon-set-name survival, not CSS injection; a
-// no-op port matches today's jsdom behavior (no #iconsCss sheet → silent no-op).
+// no-op port matches the real injector with no style element configured.
 const noopStyleSheet: IconStyleSheetPort = { addIconStyle() {} };
 
 /**

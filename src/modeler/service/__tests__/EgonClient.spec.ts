@@ -47,6 +47,7 @@ function createMockPorts() {
         hasIcon: vi.fn(),
         onIconsChanged: vi.fn(),
         offIconsChanged: vi.fn(),
+        destroy: vi.fn(),
     };
 
     return { mockModelerPort, mockIconPort };
@@ -295,8 +296,12 @@ describe("EgonClient (Application Service)", () => {
     });
 
     describe("lifecycle", () => {
-        it("should delegate destroy to modeler port", () => {
+        it("should destroy both ports", () => {
             client.destroy();
+
+            // Both, not just the modeler: the icon port owns its own
+            // subscriptions and debounce timers (#69).
+            expect(mockIconPort.destroy).toHaveBeenCalledTimes(1);
             expect(mockModelerPort.destroy).toHaveBeenCalledTimes(1);
         });
     });
