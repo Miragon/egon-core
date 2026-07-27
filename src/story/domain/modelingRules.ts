@@ -52,9 +52,10 @@ export interface Bounds {
 /**
  * Decides whether `source` may connect to `target` and, if so, which connection
  * type results: an annotation connection when the target is a text annotation,
- * an activity otherwise. The guard order is load-bearing and matches the
- * historical rule exactly. Never defers — a connection the grammar does not
- * describe is denied, not left to someone else.
+ * an activity otherwise. The guard order is load-bearing: each denial keeps its
+ * own reason, and the annotation guards run last so an annotation is only ever
+ * an edge *target*, never a source of an activity. Never defers — a connection
+ * the grammar does not describe is denied, not left to someone else.
  */
 export function judgeConnection(
     source: GrammarElement,
@@ -85,6 +86,13 @@ export function judgeConnection(
         return DENIED;
     }
     if (isConnection(source) || isConnection(target)) {
+        return DENIED;
+    }
+
+    // An annotation is only ever an edge *target*: its context pad cannot start
+    // a connection and `elementUpdateHandler` reads its edge as `incoming[0]`,
+    // so an activity out of an annotation is a shape the model cannot express.
+    if (isAnnotation(source) && !isAnnotation(target)) {
         return DENIED;
     }
 

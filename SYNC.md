@@ -223,6 +223,30 @@ future round. Offer the fixes upstream separately.
   longer hand diagram-js a raw `undefined`. That shape has no upstream
   counterpart, so there is nothing to reconcile on a sync; the `judge*` names are
   the local equivalents of upstream's `can*` grammar helpers.
+- **`canConnect` invented an activity out of an annotation source** (issue
+  [#72](https://github.com/Miragon/egon-core/issues/72), the follow-up #66
+  deliberately left out). Upstream still has the asymmetry: `canConnect` guards
+  only the annotation _target_, so `canConnect(annotation, actor)` answers
+  `{ type: ACTIVITY }` — a shape neither the context pad (annotations get only
+  delete + colour, so they can never _start_ a connection) nor
+  `elementUpdateHandler` (reads an annotation's edge as `incoming[0]`) can
+  represent. Fixed locally by one guard in `judgeConnection`
+  (`src/story/domain/modelingRules.ts` — the local `judge*` equivalent of
+  upstream's `canConnect`, per the bullet above): deny when the source is an
+  annotation and the target is not.
+  `isForbiddenAnnotationEdge` is unchanged — the gap is closed downstream of it,
+  so each predicate keeps its own responsibility. The observable change is a
+  `connection.reconnect` denial that `isForbiddenAnnotationEdge` misses: for
+  `(source=annotation, target=workObject, connection=CONNECTION)` its activity
+  clause needs an activity, its two-annotation clause needs an annotation
+  target, and its third clause needs an actor/work-object source — none match,
+  so `judgeReconnect` fell through to `judgeConnection` and the verdict reached
+  diagram-js as **allowed**. Reachable only for a _pre-existing_
+  annotation-sourced edge (legacy or hand-edited file), the same legacy-edge
+  caveat the #66 bullet carries. Deliberately out of scope:
+  `annotation → annotation` still yields `allowedAs(ElementTypes.CONNECTION)`
+  from `judgeConnection` (`isForbiddenAnnotationEdge` clause 2 denies it on
+  reconnect).
 - **"Remove Group without Child-Elements" was hand-rolled, and undoing it threw.**
   `elementUpdateHandler.js`'s `removeGroupWithoutChildren` did its own teardown:
   `execute` called `undoGroupRework` (raw `document.querySelector` SVG surgery)

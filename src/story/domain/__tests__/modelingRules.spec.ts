@@ -68,6 +68,10 @@ describe("modelingRules", () => {
                 "secondAnnotation",
                 allowedAs(ElementTypes.CONNECTION),
             ],
+            // an annotation is only ever an edge target, never a source…
+            ["annotation", "actor", DENIED],
+            ["annotation", "workObject", DENIED],
+            // …but an annotation *target* is unaffected (pinned above and here)
             // ordinary pairs ⇒ activity
             ["actor", "workObject", allowedAs(ElementTypes.ACTIVITY)],
             ["workObject", "actor", allowedAs(ElementTypes.ACTIVITY)],
