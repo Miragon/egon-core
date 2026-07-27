@@ -3,20 +3,23 @@ import { ElementTypes } from "../elementTypes";
 import {
     Bounds,
     GROUP_MIN_SIZE,
-    canConnect,
-    canCreate,
-    canResize,
-    canStartConnection,
     clampGroupBounds,
     isForbiddenAnnotationEdge,
+    judgeConnection,
+    judgeConnectionStart,
+    judgeCreation,
+    judgeReconnect,
+    judgeResize,
 } from "../modelingRules";
+import { ALLOWED, DENIED, RuleVerdict, allowedAs } from "../ruleVerdict";
 
 /**
- * Exhaustive grammar tests. `canConnect` is pinned as a full source/target
+ * Exhaustive grammar tests. `judgeConnection` is pinned as a full source/target
  * matrix (including the historical quirk that a group *source* is allowed and
  * yields an activity), and `clampGroupBounds` is pinned per corner plus its
  * purity contract — these are the two rules most likely to regress under the
- * domain extraction.
+ * domain extraction. The verdicts are asserted as whole objects so a kind
+ * silently changing to another kind (the #66 failure mode) cannot pass.
  */
 
 const ELEMENTS = {
@@ -35,54 +38,69 @@ const ELEMENTS = {
     background: { id: "__implicitroot" },
 };
 
-type ConnectResult = false | { type: ElementTypes };
-
 describe("modelingRules", () => {
-    describe("canConnect", () => {
+    describe("judgeConnection", () => {
         const cases: [
             keyof typeof ELEMENTS,
             keyof typeof ELEMENTS,
-            ConnectResult,
+            RuleVerdict,
         ][] = [
             // background either end is always denied
-            ["background", "workObject", false],
-            ["workObject", "background", false],
+            ["background", "workObject", DENIED],
+            ["workObject", "background", DENIED],
             // group as target is denied…
-            ["workObject", "group", false],
+            ["workObject", "group", DENIED],
             // …but group as source is allowed and yields an activity (pinned)
-            ["group", "workObject", { type: ElementTypes.ACTIVITY }],
-            ["group", "annotation", { type: ElementTypes.CONNECTION }],
+            ["group", "workObject", allowedAs(ElementTypes.ACTIVITY)],
+            ["group", "annotation", allowedAs(ElementTypes.CONNECTION)],
             // actor↔actor denied
-            ["actor", "secondActor", false],
+            ["actor", "secondActor", DENIED],
             // activity/connection can never be an endpoint
-            ["activity", "workObject", false],
-            ["workObject", "activity", false],
-            ["connection", "workObject", false],
-            ["workObject", "connection", false],
+            ["activity", "workObject", DENIED],
+            ["workObject", "activity", DENIED],
+            ["connection", "workObject", DENIED],
+            ["workObject", "connection", DENIED],
             // annotation target ⇒ annotation connection
-            ["actor", "annotation", { type: ElementTypes.CONNECTION }],
-            ["workObject", "annotation", { type: ElementTypes.CONNECTION }],
+            ["actor", "annotation", allowedAs(ElementTypes.CONNECTION)],
+            ["workObject", "annotation", allowedAs(ElementTypes.CONNECTION)],
             [
                 "annotation",
                 "secondAnnotation",
-                { type: ElementTypes.CONNECTION },
+                allowedAs(ElementTypes.CONNECTION),
             ],
             // ordinary pairs ⇒ activity
-            ["actor", "workObject", { type: ElementTypes.ACTIVITY }],
-            ["workObject", "actor", { type: ElementTypes.ACTIVITY }],
-            ["workObject", "secondWorkObject", { type: ElementTypes.ACTIVITY }],
+            ["actor", "workObject", allowedAs(ElementTypes.ACTIVITY)],
+            ["workObject", "actor", allowedAs(ElementTypes.ACTIVITY)],
+            [
+                "workObject",
+                "secondWorkObject",
+                allowedAs(ElementTypes.ACTIVITY),
+            ],
         ];
 
         it.each(cases)("%s → %s", (source, target, expected) => {
-            expect(canConnect(ELEMENTS[source], ELEMENTS[target])).toEqual(
+            expect(judgeConnection(ELEMENTS[source], ELEMENTS[target])).toEqual(
                 expected,
             );
         });
 
         it("denies a self-connection (same element reference)", () => {
-            expect(canConnect(ELEMENTS.workObject, ELEMENTS.workObject)).toBe(
-                false,
+            expect(
+                judgeConnection(ELEMENTS.workObject, ELEMENTS.workObject),
+            ).toEqual(DENIED);
+        });
+
+        // The grammar never defers: a "no opinion" would reach diagram-js as
+        // `undefined`, which `Rules.allowed` reads as *allowed* (issue #66).
+        it("never answers with a deferral", () => {
+            const kinds = new Set(
+                cases.map(
+                    ([source, target]) =>
+                        judgeConnection(ELEMENTS[source], ELEMENTS[target])
+                            .kind,
+                ),
             );
+            expect([...kinds].sort()).toEqual(["allowed", "denied"]);
         });
     });
 
@@ -157,51 +175,106 @@ describe("modelingRules", () => {
         });
     });
 
-    describe("canResize", () => {
-        it("permits only groups", () => {
-            expect(canResize(ELEMENTS.group)).toBe(true);
-            expect(canResize(ELEMENTS.workObject)).toBe(false);
-            expect(canResize(null)).toBe(false);
+    describe("judgeReconnect", () => {
+        // A forbidden edge must be `denied`, never `noOpinion` — the whole point
+        // of issue #66 was that a deferral here reaches diagram-js as *allowed*.
+        it("denies a forbidden annotation edge in both orientations", () => {
+            expect(
+                judgeReconnect(
+                    ELEMENTS.actor,
+                    ELEMENTS.annotation,
+                    ELEMENTS.activity,
+                ),
+            ).toEqual(DENIED);
+            expect(
+                judgeReconnect(
+                    ELEMENTS.annotation,
+                    ELEMENTS.actor,
+                    ELEMENTS.activity,
+                ),
+            ).toEqual(DENIED);
+        });
+
+        it("falls through to the connection grammar otherwise", () => {
+            expect(
+                judgeReconnect(
+                    ELEMENTS.actor,
+                    ELEMENTS.workObject,
+                    ELEMENTS.activity,
+                ),
+            ).toEqual(allowedAs(ElementTypes.ACTIVITY));
+            expect(
+                judgeReconnect(
+                    ELEMENTS.actor,
+                    ELEMENTS.secondActor,
+                    ELEMENTS.activity,
+                ),
+            ).toEqual(DENIED);
         });
     });
 
-    describe("canCreate", () => {
+    describe("judgeResize", () => {
+        it("permits only groups", () => {
+            expect(judgeResize(ELEMENTS.group)).toEqual(ALLOWED);
+            expect(judgeResize(ELEMENTS.workObject)).toEqual(DENIED);
+            expect(judgeResize(null)).toEqual(DENIED);
+        });
+    });
+
+    describe("judgeCreation", () => {
         it.each([
-            ["on the background", "workObject", "background", true],
-            ["group shape onto anything", "group", "actor", true],
-            ["anything onto a group", "workObject", "group", true],
+            ["on the background", "workObject", "background", ALLOWED],
+            ["group shape onto anything", "group", "actor", ALLOWED],
+            ["anything onto a group", "workObject", "group", ALLOWED],
             [
                 "ordinary shape onto ordinary shape",
                 "workObject",
                 "actor",
-                false,
+                DENIED,
             ],
-        ] as [string, keyof typeof ELEMENTS, keyof typeof ELEMENTS, boolean][])(
-            "%s",
-            (_label, shape, target, expected) => {
-                expect(canCreate(ELEMENTS[shape], ELEMENTS[target])).toBe(
-                    expected,
-                );
-            },
-        );
+        ] as [
+            string,
+            keyof typeof ELEMENTS,
+            keyof typeof ELEMENTS,
+            RuleVerdict,
+        ][])("%s", (_label, shape, target, expected) => {
+            expect(judgeCreation(ELEMENTS[shape], ELEMENTS[target])).toEqual(
+                expected,
+            );
+        });
 
-        it("returns strict false when no target is present (adapter owns the tri-state)", () => {
-            expect(canCreate(ELEMENTS.workObject, undefined)).toBe(false);
+        // The deferral the adapter used to invent for itself now belongs to the
+        // grammar; denying here would forbid dragging any non-group over canvas.
+        it("defers with no hover target, unless the shape is a group", () => {
+            expect(judgeCreation(ELEMENTS.workObject, undefined)).toEqual({
+                kind: "noOpinion",
+                reason: "noHoverTarget",
+            });
+            expect(judgeCreation(ELEMENTS.group, undefined)).toEqual(ALLOWED);
         });
     });
 
-    describe("canStartConnection", () => {
+    describe("judgeConnectionStart", () => {
         it("ignores a missing element or a label", () => {
-            expect(canStartConnection(undefined)).toBeNull();
-            expect(canStartConnection(null)).toBeNull();
+            expect(judgeConnectionStart(undefined)).toEqual({
+                kind: "ignored",
+                reason: "missingElement",
+            });
+            expect(judgeConnectionStart(null)).toEqual({
+                kind: "ignored",
+                reason: "missingElement",
+            });
             expect(
-                canStartConnection({ label: { labelTarget: {} } }),
-            ).toBeNull();
+                judgeConnectionStart({ label: { labelTarget: {} } }),
+            ).toEqual({
+                kind: "ignored",
+                reason: "labelOwnedByAnotherElement",
+            });
         });
 
         it("denies starting from a real, non-label element", () => {
-            expect(canStartConnection({})).toBe(false);
-            expect(canStartConnection({ label: undefined })).toBe(false);
+            expect(judgeConnectionStart({})).toEqual(DENIED);
+            expect(judgeConnectionStart({ label: undefined })).toEqual(DENIED);
         });
     });
 

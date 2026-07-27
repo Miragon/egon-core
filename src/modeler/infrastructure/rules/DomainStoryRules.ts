@@ -2,15 +2,23 @@ import { every, reduce } from "min-dash";
 import { Connection, Element, Shape } from "diagram-js/lib/model/Types";
 import EventBus from "diagram-js/lib/core/EventBus";
 import RuleProvider from "diagram-js/lib/features/rules/RuleProvider";
-import { isConnection, isGroup } from "../../../story/domain/elementPredicates";
+import { isConnection } from "../../../story/domain/elementPredicates";
 import {
-    canConnect,
-    canCreate,
-    canResize,
-    canStartConnection,
     clampGroupBounds,
-    isForbiddenAnnotationEdge,
+    judgeConnection,
+    judgeConnectionStart,
+    judgeCreation,
+    judgeReconnect,
+    judgeResize,
 } from "../../../story/domain/modelingRules";
+import {
+    ALLOWED,
+    DENIED,
+    RuleVerdict,
+    allowedAs,
+    noOpinion,
+} from "../../../story/domain/ruleVerdict";
+import { toRuleResult } from "./ruleVerdictAdapter";
 import { getBusinessObject } from "../../../shared/infrastructure/util";
 
 const HIGH_PRIORITY = 1500;
@@ -19,14 +27,16 @@ const HIGH_PRIORITY = 1500;
  * diagram-js adapter for the Domain Storytelling notation grammar.
  *
  * WHY: the grammar itself lives in `story/domain/modelingRules` (pure and
- * tested); this class only wires it into diagram-js's rule protocol and
- * preserves the framework-specific contracts the pure functions cannot express —
- * the legacy `undefined` tri-state that `elements.move` depends on (returning
- * `false` would forbid moving a non-group over empty canvas), and the in-place
- * mutation of `context.newBounds` that diagram-js's resize expects. That
- * tri-state is deliberately confined to `elements.move`/`*.create`: everywhere
- * else a denial must be an explicit `false`, because `Rules.allowed` reads
- * `undefined` as "allowed".
+ * tested); this class only wires it into diagram-js's rule protocol. Every rule
+ * is registered through {@link DomainStoryRules.addVerdictRule}, which types the
+ * callback as returning a `RuleVerdict` and funnels it through `toRuleResult` —
+ * so a bare `return false`/`return undefined` inside a rule does not compile and
+ * the wire mapping cannot drift per rule (issue #66; ADR 0015).
+ *
+ * What is left that the grammar cannot express: the in-place mutation of
+ * `context.newBounds` that diagram-js's resize expects, and the per-action
+ * *folds* over several elements — which differ, deliberately, in how they treat
+ * a "no opinion" (see `elements.create` vs `elements.move`).
  */
 
 /**
@@ -46,23 +56,33 @@ export class DomainStoryRules extends RuleProvider {
     }
 
     override init() {
-        this.addRule("elements.create", (context) => {
+        this.addVerdictRule("elements.create", (context: any) => {
             const elements = context.elements,
                 target = context.target;
 
-            return every(elements, (element: Element) => {
+            // Only an outright "allowed" passes here. A deferral collapses to
+            // *denied* for a bulk create, unlike `elements.move` below where it
+            // stays a deferral — that asymmetry is the historical behaviour
+            // (min-dash `every` coerced the old `undefined` to falsy) and is
+            // kept deliberately rather than silently "fixed".
+            const everyElementAllowed = every(elements, (element: Element) => {
                 if (isConnectionShape(element)) {
                     if (!element.source || !element.target) {
                         return false;
                     }
-                    return canConnect(element.source, element.target);
+                    return (
+                        judgeConnection(element.source, element.target).kind ===
+                        "allowed"
+                    );
                 }
 
-                return this.canCreate(element, target);
+                return judgeCreation(element, target).kind === "allowed";
             });
+
+            return everyElementAllowed ? ALLOWED : DENIED;
         });
 
-        this.addRule("elements.move", HIGH_PRIORITY, (context: any) => {
+        this.addVerdictRule("elements.move", HIGH_PRIORITY, (context: any) => {
             const target = context.target,
                 shapes = context.shapes;
 
@@ -73,53 +93,55 @@ export class DomainStoryRules extends RuleProvider {
             // to move large selections
             return reduce(
                 shapes,
-                (result: any, s: Element) => {
-                    if (result === false) {
-                        return false;
+                (verdict: RuleVerdict, shape: Element) => {
+                    if (verdict.kind === "denied") {
+                        return verdict;
                     }
-                    return this.canCreate(s, target);
+                    return judgeCreation(shape, target);
                 },
-                undefined,
+                noOpinion("noShapesSelected"),
             );
         });
 
-        this.addRule("shape.create", HIGH_PRIORITY, (context: any) => {
+        this.addVerdictRule("shape.create", HIGH_PRIORITY, (context: any) => {
             const target = context.target,
                 shape = context.shape;
 
-            return this.canCreate(shape, target);
+            return judgeCreation(shape, target);
         });
 
-        this.addRule("connection.create", HIGH_PRIORITY, (context) => {
-            const source = context.source,
-                target = context.target;
+        this.addVerdictRule(
+            "connection.create",
+            HIGH_PRIORITY,
+            (context: any) => {
+                const source = context.source,
+                    target = context.target;
 
-            return canConnect(source, target);
-        });
+                return judgeConnection(source, target);
+            },
+        );
 
-        this.addRule("connection.reconnect", HIGH_PRIORITY, (context: any) => {
-            const connection: Connection = context.connection,
-                source: Element = context.hover || context.source,
-                target: Element = context.target;
+        this.addVerdictRule(
+            "connection.reconnect",
+            HIGH_PRIORITY,
+            (context: any) => {
+                const connection: Connection = context.connection,
+                    source: Element = context.hover || context.source,
+                    target: Element = context.target;
 
-            // `false`, not `undefined`: `Rules.allowed` maps `undefined` to
-            // `true` and no lower-priority `connection.reconnect` provider
-            // exists to defer to.
-            if (isForbiddenAnnotationEdge(source, target, connection)) {
-                return false;
-            }
+                return judgeReconnect(source, target, connection);
+            },
+        );
 
-            return canConnect(source, target);
-        });
-
-        this.addRule("shape.resize", function (context: any) {
+        this.addVerdictRule("shape.resize", (context: any) => {
             const shape: Shape = context.shape,
                 newBounds: Shape = context.newBounds;
 
             // `getBusinessObject` preserves the historical reading of
             // `businessObject.type` (falling back to the element itself).
-            if (!canResize(getBusinessObject(shape))) {
-                return false;
+            const verdict = judgeResize(getBusinessObject(shape));
+            if (verdict.kind !== "allowed") {
+                return verdict;
             }
 
             // diagram-js resizes by mutating `newBounds` in place, so apply the
@@ -128,38 +150,57 @@ export class DomainStoryRules extends RuleProvider {
                 Object.assign(newBounds, clampGroupBounds(shape, newBounds));
             }
 
-            return true;
+            return verdict;
         });
 
-        this.addRule("connection.start", function (context: any) {
+        this.addVerdictRule("connection.start", (context: any) => {
             const source = context.source;
 
-            return canStartConnection(source);
+            return judgeConnectionStart(source);
         });
 
-        this.addRule("connection.updateWaypoints", function (context: any) {
-            return {
-                type: context.connection.type,
-            };
+        this.addVerdictRule("connection.updateWaypoints", (context: any) => {
+            return allowedAs(context.connection.type);
         });
 
         // CopyPaste.js requires this empty-looking rule to exist
-        this.addRule("element.copy", function () {
-            return true;
-        });
+        this.addVerdictRule("element.copy", () => ALLOWED);
     }
 
     /**
-     * Bridges the pure `canCreate` to diagram-js's tri-state: with no hover
-     * target the move/create rules must return `undefined` ("keep evaluating"),
-     * not `false`, unless the shape is a group (always allowed). A naive
-     * strict-boolean rewrite here would forbid moving a plain shape over empty
-     * canvas.
+     * Registers a rule whose callback must answer with a {@link RuleVerdict},
+     * translating it once through {@link toRuleResult}.
+     *
+     * WHY: this is the seam issue #66 slipped through. With the callback typed as
+     * `=> RuleVerdict`, no rule can hand diagram-js a raw wire value — the
+     * compiler rejects `return false` / `return undefined` — so every answer
+     * passes the exhaustive mapping and an unnamed "no opinion" (which
+     * `Rules.allowed` would read as *allowed*) becomes impossible to write.
      */
-    private canCreate(shape: Element, target: Element) {
-        if (!target) {
-            return isGroup(shape) ? true : undefined;
+    private addVerdictRule(
+        action: string,
+        judge: (context: any) => RuleVerdict,
+    ): void;
+    private addVerdictRule(
+        action: string,
+        priority: number,
+        judge: (context: any) => RuleVerdict,
+    ): void;
+    private addVerdictRule(
+        action: string,
+        priorityOrJudge: number | ((context: any) => RuleVerdict),
+        maybeJudge?: (context: any) => RuleVerdict,
+    ): void {
+        const judge =
+            typeof priorityOrJudge === "number"
+                ? (maybeJudge as (context: any) => RuleVerdict)
+                : priorityOrJudge;
+        const rule = (context: any) => toRuleResult(judge(context));
+
+        if (typeof priorityOrJudge === "number") {
+            this.addRule(action, priorityOrJudge, rule);
+        } else {
+            this.addRule(action, rule);
         }
-        return canCreate(shape, target);
     }
 }

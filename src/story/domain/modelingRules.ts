@@ -8,6 +8,14 @@ import {
     isGroup,
     isWorkObject,
 } from "./elementPredicates";
+import {
+    ALLOWED,
+    DENIED,
+    RuleVerdict,
+    allowedAs,
+    ignored,
+    noOpinion,
+} from "./ruleVerdict";
 
 /**
  * The Domain Storytelling notation grammar: which elements may connect, be
@@ -15,11 +23,12 @@ import {
  *
  * WHY: these are the rules of the notation, not of diagram-js. Keeping them here
  * — pure, framework-free, tested exhaustively — lets `DomainStoryRules` shrink to
- * a thin diagram-js adapter and makes the grammar the same in every host. All
- * functions take structural parameters and return strict values; the adapter is
- * responsible for translating those into diagram-js's rule protocol (notably its
- * `undefined` "continue evaluating" tri-state and the in-place `newBounds`
- * mutation contract), which are framework concerns, not grammar.
+ * a thin diagram-js adapter and makes the grammar the same in every host. Every
+ * `judge*` function answers with a {@link RuleVerdict}, including the "no
+ * opinion" and "ignore" outcomes the adapter used to invent for itself; the
+ * adapter's only remaining job is the wire mapping and diagram-js' in-place
+ * `newBounds` mutation contract. They are named `judge*` rather than `can*`
+ * because the answer is no longer yes/no.
  */
 
 /** Minimum edge length of a group, in canvas units. */
@@ -44,47 +53,48 @@ export interface Bounds {
  * Decides whether `source` may connect to `target` and, if so, which connection
  * type results: an annotation connection when the target is a text annotation,
  * an activity otherwise. The guard order is load-bearing and matches the
- * historical rule exactly. `false` denies the connection.
+ * historical rule exactly. Never defers — a connection the grammar does not
+ * describe is denied, not left to someone else.
  */
-export function canConnect(
+export function judgeConnection(
     source: GrammarElement,
     target: GrammarElement,
-): false | { type: ElementTypes } {
+): RuleVerdict {
     // Never connect to the background; a dragged activity can reverse direction,
     // so both ends must be checked.
     if (isBackground(target) || isBackground(source)) {
-        return false;
+        return DENIED;
     }
 
     if (isGroup(target)) {
-        return false;
+        return DENIED;
     }
 
     // No self-connections.
     if (source === target) {
-        return false;
+        return DENIED;
     }
 
     // No connection between two actors.
     if (isActor(source) && isActor(target)) {
-        return false;
+        return DENIED;
     }
 
     // An activity/connection is itself an edge and cannot be an endpoint.
     if (isActivity(source) || isActivity(target)) {
-        return false;
+        return DENIED;
     }
     if (isConnection(source) || isConnection(target)) {
-        return false;
+        return DENIED;
     }
 
     // Connecting to an annotation yields an annotation connection, not an
     // activity.
     if (isAnnotation(target)) {
-        return { type: ElementTypes.CONNECTION };
+        return allowedAs(ElementTypes.CONNECTION);
     }
 
-    return { type: ElementTypes.ACTIVITY };
+    return allowedAs(ElementTypes.ACTIVITY);
 }
 
 /**
@@ -125,9 +135,29 @@ export function isForbiddenAnnotationEdge(
     );
 }
 
+/**
+ * Judges moving an existing edge's endpoint onto `source`/`target`: the extra
+ * annotation-edge prohibitions first, then the ordinary connection grammar.
+ *
+ * WHY it lives here and not in the adapter: composing the two used to be the
+ * adapter's job, and it got the deny half wrong (#66). A reconnect is a single
+ * grammatical question, so the grammar answers it in one call.
+ */
+export function judgeReconnect(
+    source: GrammarElement,
+    target: GrammarElement,
+    connection: GrammarElement,
+): RuleVerdict {
+    if (isForbiddenAnnotationEdge(source, target, connection)) {
+        return DENIED;
+    }
+
+    return judgeConnection(source, target);
+}
+
 /** Only groups are resizable. */
-export function canResize(shape: GrammarElement): boolean {
-    return isGroup(shape);
+export function judgeResize(shape: GrammarElement): RuleVerdict {
+    return isGroup(shape) ? ALLOWED : DENIED;
 }
 
 /**
@@ -185,32 +215,47 @@ export function clampGroupBounds(current: Bounds, requested: Bounds): Bounds {
 }
 
 /**
- * Whether `shape` may be created on `target`: on the canvas background, or when
- * either the shape or the target is a group (groups may nest anything and be
- * nested anywhere). Strict boolean — the adapter adds the legacy "no target"
- * tri-state that diagram-js's move rule relies on.
+ * Whether `shape` may be created on (or moved onto) `target`: on the canvas
+ * background, or when either the shape or the target is a group (groups may nest
+ * anything and be nested anywhere).
+ *
+ * With no hover target at all the grammar has nothing to say — a plain shape
+ * over empty canvas is neither described nor forbidden, so it defers. Denying it
+ * would forbid dragging any non-group across the canvas. That deferral used to
+ * live in the adapter as a hand-rolled tri-state; owning it here is why
+ * `RuleVerdict` has a `noOpinion` kind.
  */
-export function canCreate(
+export function judgeCreation(
     shape: GrammarElement,
     target: GrammarElement,
-): boolean {
-    return isBackground(target) || isGroup(shape) || isGroup(target);
+): RuleVerdict {
+    if (!target) {
+        return isGroup(shape) ? ALLOWED : noOpinion("noHoverTarget");
+    }
+
+    return isBackground(target) || isGroup(shape) || isGroup(target)
+        ? ALLOWED
+        : DENIED;
 }
 
 /**
- * A connection may only start from a real, non-label element. `null` signals
- * "ignore" (a missing element or a label — a label's own connection is handled
- * elsewhere); `false` denies it. Never returns `true`: starting is otherwise
- * decided by lower-priority rules.
+ * A connection may only start from a real, non-label element. A missing element
+ * or a label is not ours to judge — a label's own connection is handled
+ * elsewhere — so those are ignored rather than denied. Never allows: starting is
+ * otherwise decided by lower-priority rules, which the plain denial lets stand
+ * as the last word.
  */
-export function canStartConnection(
+export function judgeConnectionStart(
     element:
         | { label?: { labelTarget?: unknown }; [key: string]: unknown }
         | null
         | undefined,
-): null | false {
-    if (!element || !!element.label?.labelTarget) {
-        return null;
+): RuleVerdict {
+    if (!element) {
+        return ignored("missingElement");
     }
-    return false;
+    if (element.label?.labelTarget) {
+        return ignored("labelOwnedByAnotherElement");
+    }
+    return DENIED;
 }
