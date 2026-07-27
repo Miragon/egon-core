@@ -218,6 +218,19 @@ describe("DomainStoryRules", () => {
             ).toBe(false);
         });
 
+        // `isForbiddenAnnotationEdge` does not catch an *annotation*-sourced
+        // annotation connection (its actor/work-object clause misses it), so
+        // this denial comes from `judgeConnection` — the reachable half of #72.
+        it("denies reconnecting an annotation connection out of an annotation", () => {
+            expect(
+                fireRule("connection.reconnect", {
+                    connection: { type: ElementTypes.CONNECTION, id: "c-1" },
+                    source: ANNOTATION,
+                    target: WORK_OBJECT,
+                }),
+            ).toBe(false);
+        });
+
         it("re-evaluates an allowed reconnect through canConnect", () => {
             expect(
                 fireRule("connection.reconnect", {
