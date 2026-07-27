@@ -13,7 +13,6 @@ import {
 } from "tiny-svg";
 import { query as domQuery } from "min-dom";
 import { assign, isObject } from "min-dash";
-import { DomainStoryNumberStash } from "../number-stash/DomainStoryNumberStash";
 import {
     Box,
     numberBoxDefinitions,
@@ -38,22 +37,29 @@ import {
     isCustomSvgIcon,
 } from "../../../shared/infrastructure/util";
 import { DomainStoryTextRenderer } from "../text-renderer/DomainStoryTextRenderer";
-import { DomainStoryNumberingRegistry } from "../popup/DomainStoryNumberingRegistry";
-import { DirtyFlagService } from "../../service/DirtyFlagService";
 import { IconDictionaryService } from "../../../iconSet/service";
+import { DEFAULT_COLOR, isDefaultColor } from "../../../story/domain/color";
 
-const DEFAULT_COLOR = "#000000";
-
+/**
+ * Draws Domain Storytelling elements — and **only** draws them.
+ *
+ * Rendering is a read (ADR 0016). Every write this class used to make on the way
+ * past — the overlap nudge and the default colour (#65), then the element type,
+ * the activity number, the annotation height and the host's dirty flag (#74) —
+ * belonged to a command handler, an import repair or the export pass, somewhere
+ * undo could see it. A repaint is not a user action, happens an unbounded number
+ * of times, and for an imported story writes straight into the persisted model,
+ * so anything mutated here corrupts the file format silently.
+ * `RendererModelPurity.browser.spec.ts` and a raw-source rule in
+ * `architecture.spec.ts` hold the line.
+ */
 export class DomainStoryRenderer extends BaseRenderer {
     static $inject: string[] = [
         "eventBus",
         "styles",
         "canvas",
         "domainStoryTextRenderer",
-        "domainStoryNumberingRegistry",
-        "domainStoryDirtyFlagService",
         "domainStoryIconDictionaryService",
-        "domainStoryNumberStash",
     ];
 
     // Per-instance so SVG marker ids never collide between two renderers on one
@@ -68,10 +74,7 @@ export class DomainStoryRenderer extends BaseRenderer {
         private readonly styles: Styles,
         private readonly canvas: Canvas,
         private readonly domainStoryTextRenderer: DomainStoryTextRenderer,
-        private readonly domainStoryNumberingRegistry: DomainStoryNumberingRegistry,
-        private readonly dirtyFlagService: DirtyFlagService,
         private readonly iconDictionaryService: IconDictionaryService,
-        private readonly numberStash: DomainStoryNumberStash,
     ) {
         super(eventBus, 2000);
 
@@ -104,11 +107,6 @@ export class DomainStoryRenderer extends BaseRenderer {
                 },
             });
         }
-
-        const type = shape["type"];
-        shape.businessObject.type = type;
-
-        this.dirtyFlagService.makeDirty();
 
         if (isActor(shape)) {
             return this.drawActor(visuals, shape);
@@ -143,14 +141,6 @@ export class DomainStoryRenderer extends BaseRenderer {
         visuals: SVGElement,
         connection: Connection,
     ): SVGElement {
-        const type = connection["type"];
-
-        this.dirtyFlagService.makeDirty();
-
-        // fixes activities that were copy-pasted
-        if (!connection.businessObject.type) {
-            connection.businessObject.type = type;
-        }
         if (isActivity(connection)) {
             return this.drawActivity(visuals, connection);
         } else if (isConnection(connection)) {
@@ -266,23 +256,13 @@ export class DomainStoryRenderer extends BaseRenderer {
             stroke: "none",
         };
 
+        // `element.height` is read, never written (#74). It is already correct
+        // by the time anything paints: the element factory honours a supplied
+        // height, `DomainStoryUpdateLabelHandler.postExecute` resizes through the
+        // undoable `modeling.resizeShape`, the export pass persists it as
+        // `businessObject.height`, and a pre-#74 file's `number` was translated
+        // into it by `useLegacyAnnotationNumberAsHeight` on import.
         const text = element.businessObject.text || "";
-        if (element.businessObject.text) {
-            let height = element.height ?? 0;
-
-            if (height === 0 && element.businessObject.number) {
-                height = element.businessObject.number;
-            }
-            assign(element, {
-                height: height,
-            });
-
-            // for some reason, the keyword height is not exported, so we use another, which we know will be exported,
-            // to ensure persistent annotation heights between sessions
-            assign(element.businessObject, {
-                number: height,
-            });
-        }
 
         const textElement = this.drawRect(
             parentGfx,
@@ -308,22 +288,6 @@ export class DomainStoryRenderer extends BaseRenderer {
         });
 
         return textElement;
-    }
-
-    getActivityPath(connection: Connection) {
-        const waypoints = connection.waypoints.map(function (p) {
-            // return p.original || p;
-            return p;
-        });
-
-        const activityPath = [["M", waypoints[0].x, waypoints[0].y]];
-
-        waypoints.forEach(function (waypoint, index) {
-            if (index !== 0) {
-                activityPath.push(["L", waypoint.x, waypoint.y]);
-            }
-        });
-        return componentsToPath(activityPath);
     }
 
     private getPath(shape: Shape) {
@@ -410,7 +374,12 @@ export class DomainStoryRenderer extends BaseRenderer {
                 dataURL = this.applyColorToCustomSvgIcon(pickedColor, icon);
             } else {
                 dataURL = icon;
-                if (pickedColor && pickedColor !== DEFAULT_COLOR) {
+                // `isDefaultColor`, not `!== DEFAULT_COLOR` (#74): files written
+                // before #65 persist the literal `"black"`, which *is* the
+                // default in intent but not by string equality — so a raster
+                // custom icon in such a file used to fire this error for a colour
+                // the user never picked.
+                if (!isDefaultColor(pickedColor)) {
                     document.dispatchEvent(
                         new CustomEvent("errorColoringOnlySvg"),
                     );
@@ -709,23 +678,19 @@ export class DomainStoryRenderer extends BaseRenderer {
     }
 
     /**
-     * Generate the automatic Number for an activity originating from an actor
+     * Draws the number badge of an activity originating from an actor.
+     *
+     * Renders the number the model already carries; it does not decide it. Since
+     * #74 the number is minted and cleared by `DomainStoryActivityNumbering`
+     * (`connection.create`/`connection.reconnect`), `ActivityChangedHandler` and
+     * `ActivityDirectionChangedHandler` — all commands, all undoable.
      */
-    private generateActivityNumber(
+    private drawActivityNumber(
         parentGfx: SVGElement,
         element: Element,
         box: Box,
     ) {
-        // whenever we want to edit an activity, it gets redrawn as a new object
-        // and the custom information is lost,
-        // so we stash it before the editing occurs and set the value here
-
-        const numberStash = this.numberStash.getNumberStash();
         const semantic = element.businessObject;
-
-        if (numberStash.use) {
-            semantic.number = numberStash.number;
-        }
 
         box.x -= 26;
         box.y -= 16;
@@ -782,30 +747,29 @@ export class DomainStoryRenderer extends BaseRenderer {
     }
 
     /**
-     * render the number associated with an activity
+     * Renders the number badge of an activity that has one.
+     *
+     * Purely a read since #74. It used to *mint* a number when an actor-sourced
+     * activity had none and *clear* the number of every other activity — two
+     * writes performed by a repaint, invisible to undo, and (for an imported
+     * story, whose business objects the canvas shares) written straight into the
+     * persisted model. Both moved onto the commands that change an activity's
+     * source; an imported file's gaps are filled once by
+     * `numberActivitiesFromActors`.
      */
     private renderExternalNumber(
         parentGfx: SVGElement,
         element: Connection,
         waypoints: Point[],
     ) {
-        if (element && element.source) {
-            const semantic = element.businessObject;
+        const semantic = element?.businessObject;
 
-            const box = numberBoxDefinitions(waypoints);
-
-            if (semantic.number == null && isActor(element.source)) {
-                this.domainStoryNumberingRegistry.generateAutomaticNumber(
-                    element,
-                );
-            }
-
-            // render the background for the number
-            if (semantic.number && isActor(element.source)) {
-                this.generateActivityNumber(parentGfx, element, box);
-            } else {
-                semantic.number = null;
-            }
+        if (semantic?.number && isActor(element.source)) {
+            this.drawActivityNumber(
+                parentGfx,
+                element,
+                numberBoxDefinitions(waypoints),
+            );
         }
     }
 

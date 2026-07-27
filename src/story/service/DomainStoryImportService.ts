@@ -107,6 +107,15 @@ export class DomainStoryImportService {
             prunedElements,
         );
 
+        // Two repairs the *renderer* used to perform on every paint (#74).
+        // Drawing is a read now, so they happen here — once, before the canvas
+        // sees the story. Order matters only in that both run after the type
+        // rename above, so they classify against today's type names.
+        this.importRepairService.restoreAnnotationHeights(domainStoryElements);
+        this.importRepairService.numberUnnumberedActivitiesFromActors(
+            domainStoryElements,
+        );
+
         const connections: Connection[] = [],
             groups: Shape[] = [],
             otherElementTypes: ElementLike[] = [];

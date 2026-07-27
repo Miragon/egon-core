@@ -20,6 +20,7 @@ import DomainStoryUpdateHandler from "./update-handler";
 import DomainStoryCopyPaste from "./copy-paste";
 import DomainStoryKeyboardBindings from "./keyboard";
 import DomainStoryPopupService from "./popup";
+import DomainStoryDirtyFlag from "./dirty-flag";
 import { StoryExportModule, StoryImportModule } from "../../story/service";
 
 const buildInModules = [
@@ -47,6 +48,7 @@ const domainStoryModules = [
     DomainStoryCopyPaste,
     DomainStoryKeyboardBindings,
     DomainStoryPopupService,
+    DomainStoryDirtyFlag,
     StoryExportModule,
     StoryImportModule,
 ];

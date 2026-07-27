@@ -204,6 +204,36 @@ const MODULE_STATE_PATTERNS: readonly RegExp[] = [
  */
 const MODULE_STATE_ALLOWLIST: readonly string[] = [];
 
+/**
+ * Writes a renderer may not perform (rule I / ADR 0016), in the two shapes the
+ * historical ones actually took.
+ *
+ * 1. A direct assignment through `businessObject`/`semantic` — the local name
+ *    every removed write used (`shape.businessObject.type = type`,
+ *    `semantic.number = null`). `=(?!=)` keeps `==`/`===` out; `!==`/`>=`/`<=`
+ *    cannot match because their leading character is not an accepted operator.
+ * 2. `assign(` whose **first** argument is not an object or array literal.
+ *    min-dash writes into that argument, which is how `drawAnnotation` stamped a
+ *    height onto the element and its business object. The whitespace lives
+ *    *inside* the lookaheads on purpose: with `\s*` before them the engine simply
+ *    backtracks off the spaces and every call matches. The second lookahead
+ *    tolerates the Prettier-wrapped `assign(\n    { … }` form, whose argument the
+ *    scan sees because it joins each line with the next.
+ *
+ * Syntactic and therefore conservative: an alias (`const bo = element.businessObject`)
+ * would slip past. This is a ratchet against the regression, not a proof of
+ * purity — `RendererModelPurity.browser.spec.ts` repaints and diffs for that.
+ */
+const RENDERER_WRITE_PATTERNS: readonly RegExp[] = [
+    /\b(?:businessObject|semantic)(?:\.\w+|\[[^\]]*\])+\s*(?:\+|-|\*|\/|\?\?|\|\||&&)?=(?!=)/,
+    /\bassign\((?!\s*[{[])(?!\s*$)/,
+];
+
+/** A file under some feature's `renderer/` folder (not `text-renderer/`). */
+function isRendererFile(repoRelativePath: string): boolean {
+    return /(^|\/)renderer\//.test(repoRelativePath);
+}
+
 describe("architecture", () => {
     let edges: Edge[] = [];
 
@@ -450,7 +480,7 @@ describe("architecture", () => {
     // module scope is for pure functions and frozen config only. A shared
     // module-level binding cross-contaminates two clients on one page (e.g. one
     // custom-icon pool for both). Upstream WPS free-function state must be
-    // converted into an injected service (see DomainStoryNumberStash). A raw
+    // converted into an injected service (see DomainStoryIdFactory). A raw
     // line scan, because the mutation is invisible to archunit's import graph;
     // only column-0 declarations count, since class members are indented.
     describe("no module-level mutable state", () => {
@@ -472,6 +502,56 @@ describe("architecture", () => {
                 offenders,
                 `module scope must hold only pure functions and frozen ` +
                     `config — move mutable state onto a didi-instantiated class`,
+            ).toEqual([]);
+        });
+    });
+
+    // ─── I. Rendering is read-only ───────────────────────────────────────────
+    //
+    // ADR 0016: drawing must not change the model. A repaint is not a user
+    // action, runs an unbounded number of times, and for an imported story the
+    // canvas *shares* the business objects with the file — so a write on the draw
+    // path is silent, unbounded corruption of the persisted format (#65: an
+    // activity's start point crept 5px per open; #74: five more writes). Every
+    // mutation belongs to a command handler, an import repair, or the export
+    // pass — somewhere undo can see it.
+    //
+    // A raw line scan, because archunit's graph sees imports, not assignments.
+    // Deliberately syntactic and therefore conservative: it catches the shapes
+    // the historical writes actually took, not every conceivable aliasing route.
+    // It is a ratchet against regression, not a proof of purity — the real proof
+    // is `RendererModelPurity.browser.spec.ts`, which repaints and diffs.
+    describe("rendering is read-only", () => {
+        it("no renderer file writes to a business object or an element", () => {
+            const offenders = listSourceFiles()
+                .filter(isRendererFile)
+                .flatMap((file) => {
+                    const lines = readSource(file).split("\n");
+                    const writes = (text: string): boolean =>
+                        RENDERER_WRITE_PATTERNS.some((pattern) =>
+                            pattern.test(text),
+                        );
+                    return lines.flatMap((line, index) => {
+                        const nextLine = lines[index + 1] ?? "";
+                        const offence = `${file}:${index + 1} → ${line.trim()}`;
+                        if (writes(line)) {
+                            return [offence];
+                        }
+                        // Only now consider the line joined with the next, so a
+                        // Prettier-wrapped statement is still seen — and skip it
+                        // when the next line is the one that really offends, or
+                        // every write would also be reported against its
+                        // innocent predecessor.
+                        return writes(`${line} ${nextLine}`) &&
+                            !writes(nextLine)
+                            ? [offence]
+                            : [];
+                    });
+                });
+            expect(
+                offenders,
+                `drawing is a read (ADR 0016) — move the write onto a command ` +
+                    `handler, an import repair, or the export pass`,
             ).toEqual([]);
         });
     });

@@ -10,7 +10,10 @@ import { ElementTypes } from "../../../../story/domain/elementTypes";
  * Regression tests for the issue #9 paste-restore port. They drive a real
  * diagram-js EventBus with synthetic copy-paste events (no diagram bootstrap,
  * precedent: labeling/__tests__/utils.spec.ts) to prove that pasted elements
- * keep their color and that pasted text annotations keep their text/height.
+ * keep their color and that pasted text annotations keep their text. Since #74
+ * the height is not restored here at all — diagram-js carries it on the paste
+ * descriptor and the element factory honours it, which
+ * `CopyPasteIntegration.browser.spec.ts` proves end to end.
  * The two documented deviations from upstream — the length guard on
  * `create.end` and the stash reset on `copyPaste.pasteElements` — are locked in
  * by the "palette create" and "cancelled paste" cases.
@@ -91,12 +94,36 @@ describe("DomainStoryPasteRestore", () => {
         expect(element.businessObject.pickedColor).toBe("#00ff00");
     });
 
-    it("restores text, height and the persisted number on a text annotation", () => {
+    it("restores text onto a pasted text annotation, and touches no height", () => {
+        eventBus.fire(
+            "copyPaste.pasteElement",
+            pasteElementEvent({ type: ANNOTATION_TYPE, text: "note" }),
+        );
+
+        const element = createdElement(ANNOTATION_TYPE);
+        eventBus.fire("create.end", { elements: [element] });
+
+        expect(element.businessObject.text).toBe("note");
+        // Inverted with #74. The height used to be restored here *and* mirrored
+        // onto `businessObject.number` so it would survive an export. Neither
+        // happens now: diagram-js carries `descriptor.height` and the element
+        // factory honours it, so the height needs no help — and the export pass
+        // writes `businessObject.height` itself, so `number` is retired.
+        expect(element.height).toBeUndefined();
+        expect("number" in element.businessObject).toBe(false);
+    });
+
+    it("ignores a legacy `number` on the copied business object", () => {
+        // A pre-#74 file's annotation still carries the old height-in-`number`
+        // hack; `useLegacyAnnotationNumberAsHeight` translates it away on import,
+        // so by paste time it is meaningless. Reading it here would resurrect the
+        // retired field and, when the two disagree, the wrong height.
         eventBus.fire(
             "copyPaste.pasteElement",
             pasteElementEvent({
                 type: ANNOTATION_TYPE,
                 text: "note",
+                number: 25,
                 height: 80,
             }),
         );
@@ -104,31 +131,8 @@ describe("DomainStoryPasteRestore", () => {
         const element = createdElement(ANNOTATION_TYPE);
         eventBus.fire("create.end", { elements: [element] });
 
-        expect(element.businessObject.text).toBe("note");
-        expect(element.height).toBe(80);
-        // renderer persists annotation height via `number` (drawAnnotation).
-        expect(element.businessObject.number).toBe(80);
-    });
-
-    it("reads the height off `number` when the copy carries no `height`", () => {
-        // This is the *normal* case on a live canvas: `drawAnnotation` records
-        // the height as `number` and only the export pass ever writes `height`,
-        // so a session-drawn annotation reaches paste with `number` alone.
-        // Covered end to end by CopyPasteIntegration.browser.spec.ts.
-        eventBus.fire(
-            "copyPaste.pasteElement",
-            pasteElementEvent({
-                type: ANNOTATION_TYPE,
-                text: "note",
-                number: 80,
-            }),
-        );
-
-        const element = createdElement(ANNOTATION_TYPE);
-        eventBus.fire("create.end", { elements: [element] });
-
-        expect(element.height).toBe(80);
-        expect(element.businessObject.number).toBe(80);
+        expect(element.height).toBeUndefined();
+        expect("number" in element.businessObject).toBe(false);
     });
 
     it("falls back to empty text for an annotation copied without text", () => {
@@ -156,11 +160,7 @@ describe("DomainStoryPasteRestore", () => {
         );
         eventBus.fire(
             "copyPaste.pasteElement",
-            pasteElementEvent({
-                type: ANNOTATION_TYPE,
-                text: "note",
-                height: 90,
-            }),
+            pasteElementEvent({ type: ANNOTATION_TYPE, text: "note" }),
         );
 
         const first = createdElement(ACTOR_TYPE);
@@ -173,7 +173,6 @@ describe("DomainStoryPasteRestore", () => {
         expect(first.businessObject.pickedColor).toBe("#111111");
         expect(second.businessObject.pickedColor).toBe("#222222");
         expect(annotation.businessObject.text).toBe("note");
-        expect(annotation.height).toBe(90);
         expect(changed).toEqual([first, second, annotation]);
 
         // stashes are empty, so a subsequent palette-create stays untouched.
