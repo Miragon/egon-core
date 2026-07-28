@@ -242,16 +242,50 @@ describe("extractIconSetConfiguration", () => {
         });
     });
 
-    it("prefers iconSet over domain", () => {
-        const config = extractIconSetConfiguration({
-            iconSet: { name: "new", actors: {}, workObjects: {} },
-            domain: '{"name":"old","actors":{},"workObjects":{}}',
-        });
+    it("decodes the oldest key, a stringified `config`", () => {
+        // `{ config, dst }` is the original export shape. Ignoring `config`
+        // imported these files with no icons at all, and the next export wrote
+        // the empty set back over them.
+        const parsed = {
+            config: JSON.stringify({
+                name: "c",
+                actors: { Person: "<svg/>" },
+                workObjects: { Document: "<svg/>" },
+            }),
+            dst: [{ type: "domainStory:actorPerson" }],
+        };
 
-        expect(config!.name).toBe("new");
+        expect(extractIconSetConfiguration(parsed)).toEqual({
+            name: "c",
+            actors: { Person: "<svg/>" },
+            workObjects: { Document: "<svg/>" },
+        });
     });
 
-    it("returns undefined when neither key is present", () => {
+    it("reads an object-valued `config` as-is", () => {
+        const config = { name: "c", actors: {}, workObjects: {} };
+
+        expect(extractIconSetConfiguration({ config })).toEqual(config);
+    });
+
+    it("prefers iconSet over domain, and domain over config", () => {
+        expect(
+            extractIconSetConfiguration({
+                iconSet: { name: "new", actors: {}, workObjects: {} },
+                domain: '{"name":"old","actors":{},"workObjects":{}}',
+                config: '{"name":"oldest","actors":{},"workObjects":{}}',
+            })!.name,
+        ).toBe("new");
+
+        expect(
+            extractIconSetConfiguration({
+                domain: '{"name":"old","actors":{},"workObjects":{}}',
+                config: '{"name":"oldest","actors":{},"workObjects":{}}',
+            })!.name,
+        ).toBe("old");
+    });
+
+    it("returns undefined when no icon-set key is present", () => {
         expect(extractIconSetConfiguration([{ type: "a" }])).toBeUndefined();
         expect(extractIconSetConfiguration({})).toBeUndefined();
     });
