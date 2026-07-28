@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { DomainStoryNumberingRegistry } from "../DomainStoryNumberingRegistry";
 import type EventBus from "diagram-js/lib/core/EventBus";
-import type { Element } from "diagram-js/lib/model/Types";
 import type { ElementRegistryService } from "../../../service/ElementRegistryService";
 
 /**
@@ -33,24 +32,32 @@ function makeSut(activitiesFromActors: unknown[] = []) {
 
 describe("DomainStoryNumberingRegistry", () => {
     describe("generateAutomaticNumber", () => {
-        it("assigns and returns the lowest free number", () => {
+        it("returns the lowest free number", () => {
             const { registry } = makeSut([
                 activityWithNumber("a", 1),
                 activityWithNumber("b", 3),
             ]);
-            const element = { businessObject: {} } as unknown as Element;
 
-            const result = registry.generateAutomaticNumber(element);
-
-            expect(result).toBe(2);
-            expect(element.businessObject.number).toBe(2);
+            expect(registry.generateAutomaticNumber()).toBe(2);
         });
 
         it("returns 1 for the first activity when none exist yet", () => {
             const { registry } = makeSut([]);
-            const element = { businessObject: {} } as unknown as Element;
 
-            expect(registry.generateAutomaticNumber(element)).toBe(1);
+            expect(registry.generateAutomaticNumber()).toBe(1);
+        });
+
+        it("is a pure query — it writes nothing to the model", () => {
+            const activity = activityWithNumber("a", 1);
+            const { registry } = makeSut([activity]);
+
+            registry.generateAutomaticNumber();
+            registry.generateAutomaticNumber();
+
+            // Whoever runs the command owns the write; minting a number here
+            // ahead of a command left the handler snapshotting a mutated model,
+            // so an undo restored the new number instead of the old one.
+            expect(activity.businessObject.number).toBe(1);
         });
     });
 

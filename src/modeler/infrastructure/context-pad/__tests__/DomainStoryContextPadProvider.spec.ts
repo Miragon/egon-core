@@ -6,6 +6,7 @@ import {
     DomainStoryContextPadProvider,
 } from "../DomainStoryContextPadProvider";
 import { ElementTypes } from "../../../../story/domain/elementTypes";
+import { DomainStoryNumberingRegistry } from "../../popup/DomainStoryNumberingRegistry";
 
 /**
  * Regression tests for the replace ("Change type") popup positioning (issue #6,
@@ -129,7 +130,11 @@ function provider() {
         {} as any, // elementFactory
         {} as any, // modeling
         {} as any, // replaceMenuProvider
-        {} as any, // numberingRegistry
+        // The real registry against an empty canvas, so "does anything write to
+        // the model before the command runs" is actually observable.
+        new DomainStoryNumberingRegistry(eventBus, {
+            getActivitiesFromActors: () => [],
+        } as any),
         dirtyFlagService as any,
         // iconDictionaryService: no icons, so the append-actor/work-object
         // entries stay empty and do not obscure the entries under test.
@@ -250,6 +255,42 @@ describe("DomainStoryContextPadProvider color change", () => {
         ]);
 
         expect(entries).toHaveProperty("colorChange");
+    });
+});
+
+/**
+ * Changing an activity's direction has to reach the model through the command,
+ * not before it: `ActivityDirectionChangedHandler.preExecute` snapshots the
+ * activity's current number so an undo can put it back.
+ */
+describe("DomainStoryContextPadProvider change direction", () => {
+    /** A work-object-sourced activity: after the swap it starts at an actor. */
+    function workObjectSourcedActivity() {
+        return {
+            id: "Activity_1",
+            type: ElementTypes.ACTIVITY,
+            businessObject: { id: "Activity_1", number: null },
+            source: { type: ElementTypes.WORKOBJECT + "Document" },
+            waypoints: [],
+        } as any;
+    }
+
+    it("leaves the number to the command instead of minting it into the model", () => {
+        const { instance, commandStack } = provider();
+        const activity = workObjectSourcedActivity();
+        let numberAtExecute: unknown = "not executed";
+        commandStack.execute.mockImplementation(() => {
+            numberAtExecute = activity.businessObject.number;
+        });
+
+        const entries = instance.getContextPadEntries(activity);
+        (entries["changeDirection"].action as any).click({}, activity);
+
+        expect(numberAtExecute).toBeNull();
+        expect(commandStack.execute).toHaveBeenCalledWith(
+            "activity.directionChange",
+            expect.objectContaining({ newNumber: 1, element: activity }),
+        );
     });
 });
 

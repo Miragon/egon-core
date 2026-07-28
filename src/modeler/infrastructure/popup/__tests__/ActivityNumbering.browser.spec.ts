@@ -467,6 +467,47 @@ describe("activity numbering (browser)", () => {
         });
     });
 
+    /**
+     * Swapping an activity's ends is the one numbering path that starts in the
+     * context pad rather than in an interceptor, so it is driven through the pad
+     * entry here: the defect was in how the provider *prepared* the command, and
+     * executing `activity.directionChange` directly would step right over it.
+     */
+    describe("activity.directionChange", () => {
+        function changeDirectionThroughContextPad(
+            modeler: TestModeler,
+            activity: Connection,
+        ) {
+            const provider = modeler.get<{
+                getContextPadEntries(element: unknown): Record<string, any>;
+            }>("domainStoryContextPadProvider");
+
+            provider
+                .getContextPadEntries(activity)
+                ["changeDirection"].action.click({}, activity);
+        }
+
+        it("undo restores the unnumbered state of a work-object-sourced activity", () => {
+            const modeler = boot();
+            const { actor, workObjects } = addStoryCast(modeler, 2);
+            // Occupy 1, so the number the swap mints is visibly a fresh one.
+            connect(modeler, actor, workObjects[0]);
+            const response = connect(modeler, workObjects[0], workObjects[1])!;
+            expect(numberOf(response)).toBeNull();
+
+            changeDirectionThroughContextPad(modeler, response);
+
+            expect(numberOf(response)).toBe(2);
+
+            modeler.commandStack.undo();
+
+            // The number must never have touched the model before the command
+            // ran — otherwise preExecute snapshots 2 as the "old" number and the
+            // work-object-sourced activity keeps it forever, exported verbatim.
+            expect(numberOf(response)).toBeNull();
+        });
+    });
+
     describe("multi-instance isolation (extends issue #12)", () => {
         it("numbers and mints ids per instance, with no pool shared", () => {
             // Pin the id factory's randomness so both instances *want* the same

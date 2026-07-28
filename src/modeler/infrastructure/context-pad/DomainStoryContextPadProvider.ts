@@ -494,6 +494,10 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
      * "None" is `null`, not `0` (#74). The `0` this used to pass was overwritten
      * with `null` by the repaint that followed; now that drawing no longer writes
      * to the model, it would be exported verbatim as `"number": 0`.
+     *
+     * The number is only *computed* here and travels in the command context —
+     * `ActivityDirectionChangedHandler` performs the write, so its `preExecute`
+     * snapshots the number the activity really had and an undo restores it.
      */
     private changeDirection(element: Connection) {
         const businessObject = element.businessObject;
@@ -503,7 +507,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         if (isActor(source)) {
             newNumber = null;
         } else {
-            newNumber = this.numberingRegistry.generateAutomaticNumber(element);
+            newNumber = this.numberingRegistry.generateAutomaticNumber();
         }
         const context = {
             businessObject: businessObject,

@@ -84,11 +84,12 @@ export class ActivityChangedHandler implements CommandHandler {
         businessObject.multipleNumberAllowed =
             context.newMultipleNumberAllowed ?? false;
 
-        // Written *after* the clear above, so `generateAutomaticNumber` reads a
-        // registry in which this activity holds no number and cannot collide
-        // with itself.
+        // Computed *after* the clear above, so it reads a registry in which this
+        // activity holds no number and cannot collide with itself. The write
+        // belongs here, inside execute, so revert can put the old number back.
         if (!context.newNumber && isActor(element["source"])) {
-            this.numberingRegistry.generateAutomaticNumber(element);
+            businessObject.number =
+                this.numberingRegistry.generateAutomaticNumber();
         }
 
         if (context.newNumber) {
