@@ -9,6 +9,7 @@ import SchedulerModule from "diagram-js/lib/features/scheduler";
 import DomainStoryElementFactory from "../element-factory";
 import DomainStoryModeling from "../modeling";
 import DomainStoryReplaceMenuProvider from "../replace";
+import DomainStoryPopup from "../popup";
 import DomainStoryDirtyFlagService from "../../service";
 import DomainStoryIconDictionaryService from "../../../iconSet/service";
 
@@ -20,6 +21,9 @@ export default {
         DomainStoryElementFactory,
         DomainStoryModeling,
         DomainStoryReplaceMenuProvider,
+        // provides `domainStoryNumberingRegistry`, which
+        // `DomainStoryContextPadProvider` injects.
+        DomainStoryPopup,
         DomainStoryDirtyFlagService,
         DomainStoryIconDictionaryService,
         RulesModule,

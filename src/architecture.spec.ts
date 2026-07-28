@@ -167,6 +167,7 @@ const FEATURE_ROOTS: readonly string[] = [
  */
 const FROZEN_INDEX_SPECIFIERS: readonly string[] = [
     "./iconSet/domain/IconTypes",
+    "./modeler/domain/model/TextRendererConfig",
     "./modeler/domain/model/Viewport",
     "./modeler/domain/ports/IconPort",
     "./modeler/domain/ports/ModelerPort",

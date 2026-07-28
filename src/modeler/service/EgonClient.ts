@@ -87,6 +87,7 @@ export class EgonClient {
             config.width ?? "100%",
             config.height ?? "100%",
             additionalModules,
+            config.textRenderer,
         );
 
         const iconAdapter = new DiagramJsIconAdapter(

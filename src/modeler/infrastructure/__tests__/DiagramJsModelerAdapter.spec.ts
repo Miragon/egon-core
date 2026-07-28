@@ -300,4 +300,32 @@ describe("DiagramJsModelerAdapter", () => {
             second.destroy();
         });
     });
+
+    describe("text renderer wiring", () => {
+        it("passes the host's typography as the `textRenderer` config key", () => {
+            // Same producer-side pin as the icon stylesheet: the renderer's
+            // `$inject` string `config.textRenderer` is invisible to the
+            // compiler, so only the key name asserted here connects the two.
+            const textRenderer = { defaultStyle: { fontSize: 18 } };
+
+            const configured = new DiagramJsModelerAdapter(
+                container,
+                "100%",
+                "100%",
+                [],
+                textRenderer,
+            );
+
+            expect(diagramOptions[1]!["textRenderer"]).toBe(textRenderer);
+
+            configured.destroy();
+        });
+
+        it("omits the key entirely when the host supplied nothing", () => {
+            // Not `{ textRenderer: undefined }`: didi would still resolve the
+            // dotted key to undefined, but leaving the key out keeps the boot
+            // options honest about what the host actually configured.
+            expect(diagramOptions[0]).not.toHaveProperty("textRenderer");
+        });
+    });
 });
