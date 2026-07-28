@@ -67,20 +67,24 @@ export class DomainStoryLabelEditingPreview {
                 svgAppend(this.defaultLayer, this.gfx);
 
                 translate(this.gfx, this.element.x, this.element.y);
+            }
 
-                if (
-                    is(this.element, ElementTypes.TEXTANNOTATION) ||
-                    this.element["labelTarget"]
-                ) {
-                    canvas.addMarker(this.element, MARKER_HIDDEN);
-                } else if (
-                    isActor(this.element) ||
-                    isWorkObject(this.element) ||
-                    isActivity(this.element) ||
-                    isGroup(this.element)
-                ) {
-                    canvas.addMarker(this.element, MARKER_LABEL_HIDDEN);
-                }
+            // Hiding the edited text is every element type's concern, not just
+            // the annotation's — nested in the branch above, the
+            // MARKER_LABEL_HIDDEN arm was unreachable and an actor's SVG label
+            // stayed visible behind the edit box.
+            if (
+                is(this.element, ElementTypes.TEXTANNOTATION) ||
+                this.element["labelTarget"]
+            ) {
+                canvas.addMarker(this.element, MARKER_HIDDEN);
+            } else if (
+                isActor(this.element) ||
+                isWorkObject(this.element) ||
+                isActivity(this.element) ||
+                isGroup(this.element)
+            ) {
+                canvas.addMarker(this.element, MARKER_LABEL_HIDDEN);
             }
         });
 
