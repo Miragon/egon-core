@@ -243,7 +243,13 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         autoActivate: boolean,
     ) => void {
         return (event: any, element: Element, autoActivate: boolean) =>
-            this.connect.start(event, element, undefined, autoActivate);
+            // Three arguments, deliberately: Connect#start treats a non-object
+            // third argument *as* autoActivate and defaults connectionStart to
+            // the element's mid (Connect.js:131). Passing an explicit
+            // `undefined` in that slot swallowed the flag. diagram-js' types
+            // only describe the Point overload.
+            // @ts-expect-error autoActivate in the connectionStart position
+            this.connect.start(event, element, autoActivate);
     }
 
     private addDelete(elements: Element[]): [string, ContextPadEntry<any>] {

@@ -132,7 +132,12 @@ function provider() {
         {} as any, // replaceMenuProvider
         {} as any, // numberingRegistry
         dirtyFlagService as any,
-        {} as any, // iconDictionaryService
+        // iconDictionaryService: no icons, so the append-actor/work-object
+        // entries stay empty and do not obscure the entries under test.
+        {
+            getIconsAssignedAs: () => ({ keysArray: () => [] }),
+            getCSSClassOfIcon: () => "",
+        } as any,
         { allowed: () => true } as any, // rules
         connect as any,
         (text: string) => text, // translate (identity)
@@ -232,6 +237,20 @@ describe("DomainStoryContextPadProvider color change", () => {
         ]);
 
         expect(entries).toHaveProperty("colorChange");
+    });
+});
+
+describe("DomainStoryContextPadProvider connect entry", () => {
+    it("hands autoActivate to Connect in the slot it actually reads", () => {
+        const { instance, connect } = provider();
+        const el = element("Actor_1", ElementTypes.ACTOR);
+
+        const entries = instance.getContextPadEntries(el);
+        (entries["connect"].action as any).click({}, el, true);
+
+        // Connect#start reads a non-object third argument *as* autoActivate; a
+        // fourth argument is only consulted when the third is a Point.
+        expect(connect.start).toHaveBeenCalledWith({}, el, true);
     });
 });
 
