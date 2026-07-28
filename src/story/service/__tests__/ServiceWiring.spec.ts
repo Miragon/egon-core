@@ -46,4 +46,22 @@ describe("service DI wiring", () => {
         // the round-trip bridge is registered and shared by both services
         expect(injector.get("domainStoryPropertiesService")).toBeDefined();
     });
+
+    /**
+     * A host composing a subset of the plugin gets only what `__depends__`
+     * declares. `ImportModule` injects the two icon-set services, so it has to
+     * pull `IconSetModule` in itself — note the module list below deliberately
+     * omits it.
+     */
+    it("resolves the import service without the icon set module listed explicitly", () => {
+        const injector = new Injector([ImportModule, diagramPrimitives]);
+
+        expect(
+            injector.get<DomainStoryImportService>("domainStoryImportService"),
+        ).toBeInstanceOf(DomainStoryImportService);
+        expect(injector.get("domainStoryIconDictionaryService")).toBeDefined();
+        expect(
+            injector.get("domainStoryIconSetImportExportService"),
+        ).toBeDefined();
+    });
 });

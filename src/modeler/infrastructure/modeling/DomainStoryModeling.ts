@@ -9,11 +9,14 @@ import { Element, Shape } from "diagram-js/lib/model/Types";
 import { Rect } from "diagram-js/lib/util/Types";
 
 export class DomainStoryModeling extends Modeling {
+    // No `domainStoryRules` here even though the rules must exist: didi passes
+    // $inject positionally, so a fourth token would be handed to a three-param
+    // constructor and silently dropped. The rules are instantiated by
+    // `modeling/index.ts`'s `__depends__` plus `rules/index.ts`'s `__init__`.
     static override $inject: string[] = [
         "eventBus",
         "elementFactory",
         "commandStack",
-        "domainStoryRules",
     ];
 
     constructor(

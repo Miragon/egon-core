@@ -32,6 +32,10 @@ export {
 } from "./story/domain/scope";
 export type { ViewportData } from "./modeler/domain/model/Viewport";
 export type {
+    DomainStoryTextRendererConfig,
+    DomainStoryTextRendererStyle,
+} from "./modeler/domain/model/TextRendererConfig";
+export type {
     IconSet,
     IconSetData,
     IconCategory,

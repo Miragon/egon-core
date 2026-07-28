@@ -2,49 +2,55 @@ import { assign } from "min-dash";
 import TextUtil, { TextLayoutConfig } from "diagram-js/lib/util/Text";
 import { Rect } from "diagram-js/lib/util/Types";
 
-export interface DomainStoryTextRendererStyle {
-    fontFamily: string;
-    fontSize: number;
-    fontWeight: string;
-    lineHeight: number;
-}
-
-export interface DomainStoryTextRendererConfig {
-    defaultStyle?: Partial<DomainStoryTextRendererStyle>;
-    externalStyle?: Partial<DomainStoryTextRendererStyle>;
-}
+import {
+    DomainStoryTextRendererConfig,
+    DomainStoryTextRendererStyle,
+} from "../../domain";
 
 const DEFAULT_FONT_SIZE = 12;
 const LINE_HEIGHT_RATIO = 1.2;
 const MIN_TEXT_ANNOTATION_HEIGHT = 30;
 
 export class DomainStoryTextRenderer {
-    // TODO: Does a config exist???
     static $inject: string[] = ["config.textRenderer"];
 
-    private config: DomainStoryTextRendererConfig;
+    private config: {
+        defaultStyle: DomainStoryTextRendererStyle;
+        externalStyle: DomainStoryTextRendererStyle;
+    };
 
     private textUtil: TextUtil;
 
-    constructor() {
-        // private readonly config: DomainStoryTextRendererConfig) {
-        const defaultStyle: DomainStoryTextRendererStyle = {
-            fontFamily: "Arial, sans-serif",
-            fontSize: DEFAULT_FONT_SIZE,
-            fontWeight: "normal",
-            lineHeight: LINE_HEIGHT_RATIO,
-        };
+    /**
+     * `config` is optional because didi resolves an absent dotted key to
+     * `undefined` (as long as a `config` provider exists at all) — the host is
+     * not required to supply typography.
+     */
+    constructor(config?: DomainStoryTextRendererConfig) {
+        const defaultStyle: DomainStoryTextRendererStyle = assign(
+            {
+                fontFamily: "Arial, sans-serif",
+                fontSize: DEFAULT_FONT_SIZE,
+                fontWeight: "normal",
+                lineHeight: LINE_HEIGHT_RATIO,
+            },
+            config?.defaultStyle ?? {},
+        );
 
         // min-dash `assign` is Object.assign: passing `defaultStyle` as the
         // target mutated it and returned it, so both styles were one object at
         // 11px and every label rendered and measured a point too small.
+        //
+        // The external style derives from the *merged* default, so a host that
+        // only overrides `defaultStyle` still gets the one-point-smaller
+        // external label; an explicit `externalStyle` overrides that in turn.
         const externalStyle: DomainStoryTextRendererStyle = assign(
             {},
             defaultStyle,
             {
                 fontSize: defaultStyle.fontSize - 1,
             },
-            // (config && config.externalStyle) || {},
+            config?.externalStyle ?? {},
         );
 
         this.config = {

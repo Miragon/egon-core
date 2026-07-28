@@ -14,7 +14,11 @@ import {
 } from "../../shared/infrastructure/debounce";
 
 import { ModelerPort } from "../domain/ports";
-import { DomainStoryDocument, ViewportData } from "../domain";
+import {
+    DomainStoryDocument,
+    DomainStoryTextRendererConfig,
+    ViewportData,
+} from "../domain";
 
 /**
  * Infrastructure adapter that implements ModelerPort using diagram-js.
@@ -43,6 +47,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         width: string,
         height: string,
         additionalModules: ModuleDeclaration[] = [],
+        textRenderer?: DomainStoryTextRendererConfig,
     ) {
         // Must exist before `new Diagram`: IconCssInjector is constructed during
         // boot (IconDictionaryService.$inject) and takes the node by reference.
@@ -53,10 +58,14 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         // silently ignored and the canvas renders into document.body instead of
         // the host-provided element, breaking multi-instance isolation.
         // `domainStoryIconStyleSheet` rides the same mechanism to hand this
-        // instance's own <style> node to its own IconCssInjector.
+        // instance's own <style> node to its own IconCssInjector, and
+        // `textRenderer` to reach `config.textRenderer` in the text renderer.
+        // The key is omitted when the host supplied nothing, so didi hands the
+        // renderer `undefined` and its built-in defaults stand.
         this.diagram = new Diagram({
             canvas: { container, width, height },
             domainStoryIconStyleSheet: { styleElement: this.iconStyleElement },
+            ...(textRenderer ? { textRenderer } : {}),
             modules: [EgonPlugin, ...additionalModules],
         });
 

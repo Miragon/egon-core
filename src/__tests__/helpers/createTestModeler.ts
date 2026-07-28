@@ -12,6 +12,7 @@ import { DiagramJsIconAdapter } from "../../modeler/infrastructure/DiagramJsIcon
 import type { DomainStoryElementFactory } from "../../modeler/infrastructure/element-factory/DomainStoryElementFactory";
 import type { DomainStoryModeling } from "../../modeler/infrastructure/modeling/DomainStoryModeling";
 import type { IconSetData } from "../../iconSet/domain/IconTypes";
+import type { DomainStoryTextRendererConfig } from "../../modeler/domain/model/TextRendererConfig";
 
 import { TEST_ICON_SET } from "./testIconSet";
 
@@ -19,6 +20,8 @@ export interface TestModelerOptions {
     /** Icon set to load before any shape is created. Defaults to TEST_ICON_SET. */
     icons?: Partial<IconSetData>;
     additionalModules?: ModuleDeclaration[];
+    /** Label typography overrides, as `EgonClientConfig.textRenderer` supplies them. */
+    textRenderer?: DomainStoryTextRendererConfig;
 }
 
 /** A booted modeler plus the injector services canvas specs drive directly. */
@@ -75,6 +78,7 @@ export function createTestModeler(
         "100%",
         "100%",
         options.additionalModules ?? [],
+        options.textRenderer,
     );
     const diagram = adapter.getDiagram();
 
