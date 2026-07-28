@@ -191,6 +191,46 @@ describe("DomainStoryPasteRestore", () => {
         expect(changed).toEqual([]);
     });
 
+    it.each([["create.cancel"], ["create.rejected"]])(
+        "drops the stash when the paste's create ends in %s",
+        (endEvent) => {
+            eventBus.fire(
+                "copyPaste.pasteElement",
+                pasteElementEvent({
+                    type: ACTOR_TYPE,
+                    pickedColor: "#deadbe",
+                }),
+            );
+
+            // The paste's create context, marked by diagram-js CopyPaste.
+            eventBus.fire(endEvent, {
+                context: { hints: { createElementsBehavior: false } },
+            });
+
+            const element = createdElement(ACTOR_TYPE);
+            eventBus.fire("create.end", { elements: [element] });
+
+            expect("pickedColor" in element.businessObject).toBe(false);
+        },
+    );
+
+    it("keeps the stash when an unrelated create drag is aborted", () => {
+        // Starting a paste calls `dragging.init`, which cancels whatever drag
+        // was active — firing `create.cancel` for *that* drag, after this paste
+        // has already stashed its values.
+        eventBus.fire(
+            "copyPaste.pasteElement",
+            pasteElementEvent({ type: ACTOR_TYPE, pickedColor: "#ff0000" }),
+        );
+
+        eventBus.fire("create.cancel", { context: { hints: {} } });
+
+        const element = createdElement(ACTOR_TYPE);
+        eventBus.fire("create.end", { elements: [element] });
+
+        expect(element.businessObject.pickedColor).toBe("#ff0000");
+    });
+
     it("drops stale stash state when a paste is restarted (cancelled paste)", () => {
         // Fill the stash, then never place it (Escape) — the next paste starts
         // with `copyPaste.pasteElements`, which must clear the leak.
