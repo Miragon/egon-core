@@ -2,7 +2,7 @@ import ContextPad from "diagram-js/lib/features/context-pad/ContextPad";
 import Canvas from "diagram-js/lib/core/Canvas";
 import ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import EventBus from "diagram-js/lib/core/EventBus";
-import { Element, Shape } from "diagram-js/lib/model/Types";
+import { Connection, Element, Shape } from "diagram-js/lib/model/Types";
 import { isArray } from "min-dash";
 import { isConnection } from "diagram-js/lib/util/ModelUtil";
 
@@ -43,6 +43,12 @@ export class DomainStoryContextPad extends ContextPad {
      * Calculate target bounds from element model coordinates instead of SVG graphics bounds.
      * This fixes positioning issues where the SVG bounding box differs from the element's
      * logical bounds (e.g., due to labels, invisible elements, or viewBox differences).
+     *
+     * Connections keep the stock treatment: their model has waypoints, not a
+     * box, so there is nothing to read x/y/width/height off. Skipping them
+     * entirely is not an option — activities *are* connections, and a
+     * connection-only selection would leave the accumulator at its Infinity
+     * seed, which renders the pad at the canvas origin.
      */
     private getTargetBoundsFromModel(target: ContextPadTarget): DOMRect {
         const self = this as unknown as ContextPadInternal;
@@ -56,8 +62,19 @@ export class DomainStoryContextPad extends ContextPad {
         // Calculate the combined bounds of all elements using their model coordinates
         const bounds = elements.reduce(
             (acc, element) => {
-                // Skip connections - they don't have simple rectangular bounds
+                // A connection has no model box; measure its rendered graphics,
+                // which the stock implementation uses for everything and which
+                // are already in screen coordinates.
                 if (isConnection(element)) {
+                    const gfxBounds = self._canvas
+                        .getGraphics(element as Connection)
+                        .getBoundingClientRect();
+
+                    acc.top = Math.min(acc.top, gfxBounds.top);
+                    acc.left = Math.min(acc.left, gfxBounds.left);
+                    acc.right = Math.max(acc.right, gfxBounds.right);
+                    acc.bottom = Math.max(acc.bottom, gfxBounds.bottom);
+
                     return acc;
                 }
 
