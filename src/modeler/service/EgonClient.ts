@@ -198,7 +198,11 @@ export class EgonClient {
 
     /**
      * Load a set of icons (actors and/or work objects).
-     * Merges with existing icons; existing icons with the same name are overwritten.
+     *
+     * **Replaces** the currently selected icon set — this is file-import
+     * semantics, matching what opening a story does. A category left out of
+     * `icons` becomes empty, it is not carried over. To merge, spread
+     * `getIcons()` into the new set.
      */
     loadIcons(icons: Partial<IconSetData>): void {
         this.iconPort.loadIcons(icons);

@@ -10,7 +10,9 @@ import {
  */
 export interface IconPort {
     /**
-     * Load a set of icons into the modeler.
+     * Load a set of icons into the modeler, **replacing** the current icon set.
+     * A category left out of `icons` becomes empty; to merge, spread
+     * {@link getIcons} into the new set.
      */
     loadIcons(icons: Partial<IconSetData>): void;
 
