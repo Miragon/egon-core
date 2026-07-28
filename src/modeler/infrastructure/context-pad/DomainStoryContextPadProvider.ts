@@ -126,11 +126,20 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
             }
         });
 
-        document.addEventListener("pickedColor", (event: any) => {
+        // The host owns the color picker, so its answer arrives as a
+        // document-level event rather than through the event bus. That makes it
+        // this instance's job to let go again on teardown: otherwise a stale
+        // listener keeps executing commands on a destroyed command stack, and
+        // two live modelers both react to one picker event.
+        const onPickedColor = (event: any) => {
             if (this.selectedElement) {
                 this.executeCommandStack(event);
             }
-        });
+        };
+        document.addEventListener("pickedColor", onPickedColor);
+        eventBus.on("diagram.destroy", () =>
+            document.removeEventListener("pickedColor", onPickedColor),
+        );
     }
 
     getContextPadEntries(element: Element): ContextPadEntries {

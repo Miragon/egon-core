@@ -88,10 +88,9 @@ describe("computeReplaceMenuPosition", () => {
  * `pickedColor` event. These tests drive that round-trip directly on a provider
  * instance, asserting the resulting `element.colorChange` command executions.
  *
- * Each provider registers a permanent `document` listener that cannot be
- * removed, so `provider()` builds a fresh instance with its own `commandStack`
- * spy per test — stale listeners from earlier tests fire against their own
- * (now-irrelevant) spies and never touch the spy under assertion.
+ * Each test builds its own instance with its own `commandStack` spy; instances
+ * from earlier tests are never destroyed, so their listeners fire against their
+ * own (now-irrelevant) spies and never touch the spy under assertion.
  */
 
 /** A minimal element carrying only what the color-change path reads. */
@@ -226,6 +225,20 @@ describe("DomainStoryContextPadProvider color change", () => {
         );
         // A single dirty flag for the whole multi-select gesture.
         expect(dirtyFlagService.makeDirty).toHaveBeenCalledTimes(1);
+    });
+
+    it("stops listening for picked colors once the diagram is destroyed", () => {
+        const { instance, commandStack, eventBus } = provider();
+        instance.getContextPadEntries(
+            element("Annotation_1", ElementTypes.TEXTANNOTATION),
+        );
+
+        eventBus.fire("diagram.destroy", {});
+        document.dispatchEvent(
+            new CustomEvent("pickedColor", { detail: { color: "#ff0000" } }),
+        );
+
+        expect(commandStack.execute).not.toHaveBeenCalled();
     });
 
     it("offers a colorChange entry for multi-selections", () => {
