@@ -86,11 +86,22 @@ export class DomainStoryRenderer extends BaseRenderer {
             canvas.addMarker(event.context.connection, "djs-element-hidden");
         });
 
-        eventBus.on("bendpoint.move.end", 2000, function (event: any) {
-            // the acitvity will not be displayed if we don't remove the marker we added during bendpoint.move.start
-            // high priority is neccessary, so we come before something that might stop the execution
-            canvas.removeMarker(event.context.connection, "djs-element-hidden");
-        });
+        // `.cancel` matters as much as `.end`: an ESC-aborted drag fires only
+        // the former (Dragging.js:283 vs :374), so listening for `.end` alone
+        // left the connection invisible until the next successful drag.
+        // diagram-js' own BendpointMovePreview cleans up on both.
+        eventBus.on(
+            ["bendpoint.move.end", "bendpoint.move.cancel"],
+            2000,
+            function (event: any) {
+                // the acitvity will not be displayed if we don't remove the marker we added during bendpoint.move.start
+                // high priority is neccessary, so we come before something that might stop the execution
+                canvas.removeMarker(
+                    event.context.connection,
+                    "djs-element-hidden",
+                );
+            },
+        );
     }
 
     override canRender(element: Element): boolean {
