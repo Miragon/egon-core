@@ -138,6 +138,47 @@ describe("DomainStoryLabelEditingProvider.update", () => {
     });
 });
 
+describe("DomainStoryLabelEditingProvider create.end", () => {
+    /**
+     * `focusElement` reaches into the DOM for the direct-editing box, so give it
+     * a real node instead of letting it call `.focus()` on null in a timer.
+     */
+    function withEditingBoxInDom() {
+        const box = document.createElement("div");
+        box.className = "djs-direct-editing-content";
+        document.body.appendChild(box);
+        return () => box.remove();
+    }
+
+    function fireCreateEnd(hints?: Record<string, unknown>) {
+        const { eventBus, directEditing } = setup();
+        const removeBox = withEditingBoxInDom();
+
+        capturedHandler(
+            eventBus,
+            "create.end",
+        )({
+            shape: makeElement(),
+            context: { canExecute: true, hints },
+        });
+
+        removeBox();
+        return directEditing;
+    }
+
+    it("opens the editor for a freshly created element", () => {
+        expect(fireCreateEnd().activate).toHaveBeenCalledTimes(1);
+    });
+
+    it("stays out of the way of a paste", () => {
+        const directEditing = fireCreateEnd({
+            createElementsBehavior: false,
+        });
+
+        expect(directEditing.activate).not.toHaveBeenCalled();
+    });
+});
+
 describe("DomainStoryLabelEditingProvider dblclick", () => {
     it("closes the inline editing box again for an activity", () => {
         const { eventBus, directEditing } = setup();

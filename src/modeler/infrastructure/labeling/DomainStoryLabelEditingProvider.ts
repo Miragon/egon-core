@@ -106,6 +106,13 @@ export class DomainStoryLabelEditingProvider implements DirectEditingProvider {
             if (!canExecute) {
                 return;
             }
+            // A paste is routed through the create interaction with
+            // `createElementsBehavior: false` (diagram-js CopyPaste.js:187), the
+            // hint that tells create behaviors to keep out. Editing a pasted
+            // element would open an empty box over an already-labelled shape.
+            if (event.context.hints?.createElementsBehavior === false) {
+                return;
+            }
             if (!is(element, ElementTypes.ACTIVITY)) {
                 this.activateDirectEdit(element);
             }
