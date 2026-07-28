@@ -105,7 +105,12 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         contextPad.registerProvider(this);
         popupMenu.registerProvider("ds-replace", replaceMenuProvider);
 
-        eventBus.on("create.end", (event: any) => {
+        // Priority 250, below diagram-js' SelectionBehavior (500): it is the
+        // selection of the new shape that makes ContextPad open it. At the
+        // default 1000 this ran first and always saw a closed pad, so the
+        // ctrl-drop "open replace menu" gesture silently did nothing. bpmn-js
+        // registers the same listener at 250 for the same reason.
+        eventBus.on("create.end", 250, (event: any) => {
             const context = event.context,
                 shape = context.shape;
 
