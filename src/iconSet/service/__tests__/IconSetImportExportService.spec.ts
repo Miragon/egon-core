@@ -93,3 +93,54 @@ describe("IconSetImportExportService dot-named icons", () => {
         ]);
     });
 });
+
+/**
+ * A half-empty icon set is legal here — unlike upstream, which always has the
+ * default set loaded. Requiring *both* halves made the export report nothing at
+ * all, so the populated half was overwritten with EMPTY_ICON_SET on the next
+ * save and `hasIcon()`/`getIcons()` denied icons that had just been added.
+ */
+describe("IconSetImportExportService half-empty icon sets", () => {
+    let dictionaryService: IconDictionaryService;
+    let service: IconSetImportExportService;
+
+    beforeEach(() => {
+        dictionaryService = new IconDictionaryService(noopStyleSheet);
+        service = new IconSetImportExportService(dictionaryService);
+    });
+
+    function load(config: FileConfiguration) {
+        service.loadConfiguration(service.createIconSetConfiguration(config));
+    }
+
+    it("exports a set that has only actors", () => {
+        load(iconSet({ Person: "<svg/>" }, {}, "actors-only"));
+
+        const exported = service.getCurrentConfigurationForExport();
+
+        expect(exported).toEqual({
+            name: "actors-only",
+            actors: { Person: "<svg/>" },
+            workObjects: {},
+        });
+    });
+
+    it("exports a set that has only work objects", () => {
+        load(iconSet({}, { Document: "<svg/>" }, "objects-only"));
+
+        const exported = service.getCurrentConfigurationForExport();
+
+        expect(exported).toEqual({
+            name: "objects-only",
+            actors: {},
+            workObjects: { Document: "<svg/>" },
+        });
+    });
+
+    it("still reports nothing for a genuinely empty set", () => {
+        load(iconSet({}, {}, "empty"));
+
+        // `undefined` is what makes the export fall back to EMPTY_ICON_SET.
+        expect(service.getCurrentConfigurationForExport()).toBeUndefined();
+    });
+});

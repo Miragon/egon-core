@@ -74,7 +74,14 @@ export class IconSetImportExportService {
 
         let iconSetConfiguration;
 
-        if (actors.length > 0 && workObjects.length > 0) {
+        // `||`, not `&&`: upstream always has the default icon set loaded, so
+        // "both halves populated" and "any icon at all" coincide there. Here an
+        // icon set with only actors or only work objects is legal, and requiring
+        // both reported an empty set after a successful `addIcon()` — and, on
+        // export, wrote EMPTY_ICON_SET over the half that did exist. A set with
+        // neither half still yields `undefined`, which is what preserves
+        // EMPTY_ICON_SET for a genuinely empty set.
+        if (actors.length > 0 || workObjects.length > 0) {
             iconSetConfiguration = this.createConfigFromDictionaries(
                 actors,
                 workObjects,
