@@ -48,16 +48,27 @@ describe("DomainStoryDirtyFlagUpdater", () => {
     });
 
     it("comes back clean when the stack is emptied again", () => {
-        // Both the undo-everything case and the `diagram.clear` an import fires:
-        // diagram-js' CommandStack answers `diagram.clear` by clearing itself and
-        // firing `changed`. Without the `canUndo()` guard this would report every
-        // freshly opened story as having unsaved changes.
+        // Undoing back to the start of history is a return to clean; without
+        // the `canUndo()` guard it would count as one more change.
         canUndo = true;
         eventBus.fire("commandStack.changed", {});
         expect(dirtyFlagService.dirty).toBe(true);
 
         canUndo = false;
         eventBus.fire("commandStack.changed", {});
+
+        expect(dirtyFlagService.dirty).toBe(false);
+    });
+
+    it("resets to clean when an import clears the diagram", () => {
+        canUndo = true;
+        eventBus.fire("commandStack.changed", {});
+        expect(dirtyFlagService.dirty).toBe(true);
+
+        // CommandStack clears itself silently on `diagram.clear`
+        // (`clear(emit = false)`), so `canUndo` stays whatever the stub says and
+        // no `commandStack.changed` follows — this listener is the only reset.
+        eventBus.fire("diagram.clear", {});
 
         expect(dirtyFlagService.dirty).toBe(false);
     });

@@ -1,5 +1,4 @@
 import EventBus from "diagram-js/lib/core/EventBus";
-import { Element } from "diagram-js/lib/model/Types";
 
 import { ElementRegistryService } from "../../service/ElementRegistryService";
 import { ActivityCanvasObject } from "../../../story/domain/canvasObject";
@@ -92,17 +91,20 @@ export class DomainStoryNumberingRegistry {
     }
 
     /**
-     * Determine the next available number that is not yet used
+     * Determine the next available number that is not yet used.
+     *
+     * A pure query on purpose (#74 class): it used to write the number onto the
+     * element as a side effect, so a caller that computes a number *before*
+     * executing a command handed that handler an already-mutated model to
+     * snapshot — and the undo restored the new number instead of the old one.
+     * Whoever owns the transaction owns the write.
      */
-    generateAutomaticNumber(elementActivity: Element) {
+    generateAutomaticNumber(): number {
         const usedNumbers = this.domainStoryElementRegistryService
             .getActivitiesFromActors()
             .map((activity) => activity.businessObject.number);
 
-        const wantedNumber = nextAvailableActivityNumber(usedNumbers);
-
-        elementActivity.businessObject.number = wantedNumber;
-        return wantedNumber;
+        return nextAvailableActivityNumber(usedNumbers);
     }
 
     /**

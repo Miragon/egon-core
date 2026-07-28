@@ -394,6 +394,56 @@ future round. Offer the fixes upstream separately.
   `IconCssInjector.spec.ts`, the sheet-isolation case in
   `MultiInstanceIsolation.spec.ts`, and the container-empty case in
   `EgonClient.browser.spec.ts`.
+- **`getCurrentConfigurationForExport` needed _both_ icon categories to be
+  non-empty.** `if (actors.length > 0 && workObjects.length > 0)` is
+  upstream-verbatim and harmless there, because upstream always has its default
+  icon set loaded. Here a half-empty icon set is legal, so the `&&` made
+  `hasIcon()`/`getIcons()` report `{}` right after a successful `addIcon()` and
+  made an export write `EMPTY_ICON_SET` over the half that did exist. Changed to
+  `||`; neither half populated still yields `undefined`, which is what keeps
+  `EMPTY_ICON_SET` for a genuinely empty set. Locked by the half-empty cases in
+  `IconSetImportExportService.spec.ts`.
+- **The work-object autocomplete never tore its listeners down.** Upstream's
+  `dsLabelUtil.js` removes the `input` listener only on Enter-commit or a
+  list-closing outside click, adds one `document` click listener per session that
+  is never removed, and overwrites `editingBox.onkeydown` only for work objects.
+  Because the direct-editing box is one recycled node, an actor session inherited
+  the previous work object's keydown handler — whose guard tests the _captured_
+  element, so Enter renamed that work object outside the command stack. Fixed
+  locally by resetting `onkeydown` before the non-work-object early return and by
+  a `teardown()` wired to `directEditing.complete`/`cancel`. Locked by the
+  "session teardown" cases in `labeling/__tests__/utils.spec.ts`.
+- **Bendpoint-drag hiding was not undone on ESC.** Upstream's renderer removes
+  its `djs-element-hidden` marker only on `bendpoint.move.end`; a cancelled drag
+  fires `.cancel` instead (Dragging.js:283 vs :374), leaving the activity
+  invisible. diagram-js' own `BendpointMovePreview` listens to both, and so do we
+  now. Locked by `DomainStoryRenderer.spec.ts`.
+- **The ctrl-drop "open replace menu" listener ran before selection.** Registered
+  at the default priority 1000, it always observed a closed context pad, because
+  it is diagram-js' `SelectionBehavior` (priority 500) that selects the new shape
+  and thereby opens the pad. Registered at 250 locally, which is what bpmn-js
+  does. Locked by the ctrl-drop cases in `DomainStoryContextPadProvider.spec.ts`.
+- **`generateAutomaticNumber` wrote the number it computed.** Upstream mints the
+  number into `businessObject` as a side effect, so the context pad's
+  `changeDirection` handed `activity.directionChange` an already-mutated model to
+  snapshot and an undo restored the _new_ number. Made a pure query locally, with
+  each caller writing inside its own command. Same class as
+  [#74](https://github.com/Miragon/egon-core/issues/74). Locked by
+  `DomainStoryNumberingRegistry.spec.ts`, the change-direction case in
+  `DomainStoryContextPadProvider.spec.ts`, and the `activity.directionChange`
+  case in `ActivityNumbering.browser.spec.ts`.
+- **A cancelled paste leaked its stash onto the next create.** _Local-only
+  mechanism (`DomainStoryPasteRestore`), but the upstream host code it ports has
+  the same hole._ The stash was cleared only when the next paste started, so
+  Escape (or a rejected drop) left it for a plain palette create to consume.
+  Reset on `create.cancel`/`create.rejected`, filtered by the paste's
+  `hints.createElementsBehavior === false` marker so an unrelated drag that
+  `dragging.init` aborts cannot wipe a stash the paste just filled. Locked by the
+  cancel/rejected cases in `DomainStoryPasteRestore.spec.ts`.
+- **The `pickedColor` document listener was never removed.** _Local-only seam —
+  upstream's Angular host owns the color picker._ Removed on `diagram.destroy`,
+  same reasoning as the `<style>` node above ([#12](https://github.com/Miragon/egon-core/issues/12)).
+  Locked by the destroy case in `DomainStoryContextPadProvider.spec.ts`.
 
 ### Known, still shared with upstream
 

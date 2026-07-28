@@ -45,14 +45,20 @@ export function parseExportFile(parsed: any): {
 }
 
 /**
- * Reads the icon set from either `iconSet` (v4) or `domain` (legacy). A string
- * payload (v1.x wrote `domain` as JSON text) is decoded here — passing it on
- * raw is exactly what crashed the previous importer.
+ * Reads the icon set from `iconSet` (v4), `domain` (legacy) or `config` (the
+ * oldest key), newest first. Dropping `config` meant an old
+ * `{ config, dst }` file imported with an empty icon set — blank shapes on
+ * canvas, and the next export wrote that emptiness back permanently.
+ *
+ * A string payload (the older keys were written as JSON text) is decoded here;
+ * passing it on raw is exactly what crashed the previous importer.
  */
 export function extractIconSetConfiguration(
     parsed: any,
 ): FileConfiguration | undefined {
-    const raw = isPresent(parsed?.iconSet) ? parsed.iconSet : parsed?.domain;
+    const raw = [parsed?.iconSet, parsed?.domain, parsed?.config].find(
+        isPresent,
+    );
     if (!isPresent(raw)) {
         return undefined;
     }

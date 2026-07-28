@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
+import EventBus from "diagram-js/lib/core/EventBus";
 
 import {
     computeReplaceMenuPosition,
     DomainStoryContextPadProvider,
 } from "../DomainStoryContextPadProvider";
 import { ElementTypes } from "../../../../story/domain/elementTypes";
+import { DomainStoryNumberingRegistry } from "../../popup/DomainStoryNumberingRegistry";
 
 /**
  * Regression tests for the replace ("Change type") popup positioning (issue #6,
@@ -87,10 +89,9 @@ describe("computeReplaceMenuPosition", () => {
  * `pickedColor` event. These tests drive that round-trip directly on a provider
  * instance, asserting the resulting `element.colorChange` command executions.
  *
- * Each provider registers a permanent `document` listener that cannot be
- * removed, so `provider()` builds a fresh instance with its own `commandStack`
- * spy per test — stale listeners from earlier tests fire against their own
- * (now-irrelevant) spies and never touch the spy under assertion.
+ * Each test builds its own instance with its own `commandStack` spy; instances
+ * from earlier tests are never destroyed, so their listeners fire against their
+ * own (now-irrelevant) spies and never touch the spy under assertion.
  */
 
 /** A minimal element carrying only what the color-change path reads. */
@@ -102,30 +103,78 @@ function element(id: string, type: ElementTypes, pickedColor?: string): any {
  * Construct a provider with just enough mocks to reach the color-change path,
  * returning the spies the tests assert on. `rules.allowed` → true so the delete
  * entry (a prerequisite sibling of colorChange) is emitted without error.
+ *
+ * The event bus is the real diagram-js one, because two of the provider's
+ * behaviours are about *when* its listeners run relative to diagram-js' own
+ * (the ctrl-drop replace menu) and *whether* they still run at all (teardown on
+ * `diagram.destroy`) — neither is observable through a stubbed `on`.
  */
 function provider() {
     const commandStack = { execute: vi.fn(), registerHandler: vi.fn() };
     const dirtyFlagService = { makeDirty: vi.fn() };
+    const connect = { start: vi.fn() };
+    const replaceEntryClick = vi.fn();
+    const eventBus = new EventBus();
+
+    // Stands in for ContextPad: opened by whoever selects the created shape.
+    let padOpen = false;
+    const contextPad = {
+        registerProvider: () => undefined,
+        isOpen: () => padOpen,
+        getEntries: () => ({
+            replace: { action: { click: replaceEntryClick } },
+        }),
+    };
 
     const instance = new DomainStoryContextPadProvider(
         {} as any, // elementFactory
         {} as any, // modeling
         {} as any, // replaceMenuProvider
-        {} as any, // numberingRegistry
+        // The real registry against an empty canvas, so "does anything write to
+        // the model before the command runs" is actually observable.
+        new DomainStoryNumberingRegistry(eventBus, {
+            getActivitiesFromActors: () => [],
+        } as any),
         dirtyFlagService as any,
-        {} as any, // iconDictionaryService
+        // iconDictionaryService: no icons, so the append-actor/work-object
+        // entries stay empty and do not obscure the entries under test.
+        {
+            getIconsAssignedAs: () => ({ keysArray: () => [] }),
+            getCSSClassOfIcon: () => "",
+        } as any,
         { allowed: () => true } as any, // rules
-        {} as any, // connect
+        connect as any,
         (text: string) => text, // translate (identity)
         {} as any, // create
         {} as any, // canvas
-        { registerProvider: () => undefined, isOpen: () => false } as any,
+        contextPad as any,
         { registerProvider: () => undefined } as any, // popupMenu
         commandStack as any,
-        { on: () => undefined } as any, // eventBus
+        eventBus,
     );
 
-    return { instance, commandStack, dirtyFlagService };
+    return {
+        instance,
+        commandStack,
+        dirtyFlagService,
+        connect,
+        eventBus,
+        replaceEntryClick,
+        openPadOnSelection: () => {
+            padOpen = true;
+        },
+    };
+}
+
+/** A ctrl/cmd-held primary-button drop, the gesture `hasPrimaryModifier` reads. */
+function primaryModifierDrop(shape: any) {
+    return {
+        button: 0,
+        ctrlKey: true,
+        metaKey: true,
+        context: { shape },
+        shape,
+    };
 }
 
 describe("DomainStoryContextPadProvider color change", () => {
@@ -183,6 +232,20 @@ describe("DomainStoryContextPadProvider color change", () => {
         expect(dirtyFlagService.makeDirty).toHaveBeenCalledTimes(1);
     });
 
+    it("stops listening for picked colors once the diagram is destroyed", () => {
+        const { instance, commandStack, eventBus } = provider();
+        instance.getContextPadEntries(
+            element("Annotation_1", ElementTypes.TEXTANNOTATION),
+        );
+
+        eventBus.fire("diagram.destroy", {});
+        document.dispatchEvent(
+            new CustomEvent("pickedColor", { detail: { color: "#ff0000" } }),
+        );
+
+        expect(commandStack.execute).not.toHaveBeenCalled();
+    });
+
     it("offers a colorChange entry for multi-selections", () => {
         const { instance } = provider();
 
@@ -192,5 +255,88 @@ describe("DomainStoryContextPadProvider color change", () => {
         ]);
 
         expect(entries).toHaveProperty("colorChange");
+    });
+});
+
+/**
+ * Changing an activity's direction has to reach the model through the command,
+ * not before it: `ActivityDirectionChangedHandler.preExecute` snapshots the
+ * activity's current number so an undo can put it back.
+ */
+describe("DomainStoryContextPadProvider change direction", () => {
+    /** A work-object-sourced activity: after the swap it starts at an actor. */
+    function workObjectSourcedActivity() {
+        return {
+            id: "Activity_1",
+            type: ElementTypes.ACTIVITY,
+            businessObject: { id: "Activity_1", number: null },
+            source: { type: ElementTypes.WORKOBJECT + "Document" },
+            waypoints: [],
+        } as any;
+    }
+
+    it("leaves the number to the command instead of minting it into the model", () => {
+        const { instance, commandStack } = provider();
+        const activity = workObjectSourcedActivity();
+        let numberAtExecute: unknown = "not executed";
+        commandStack.execute.mockImplementation(() => {
+            numberAtExecute = activity.businessObject.number;
+        });
+
+        const entries = instance.getContextPadEntries(activity);
+        (entries["changeDirection"].action as any).click({}, activity);
+
+        expect(numberAtExecute).toBeNull();
+        expect(commandStack.execute).toHaveBeenCalledWith(
+            "activity.directionChange",
+            expect.objectContaining({ newNumber: 1, element: activity }),
+        );
+    });
+});
+
+describe("DomainStoryContextPadProvider connect entry", () => {
+    it("hands autoActivate to Connect in the slot it actually reads", () => {
+        const { instance, connect } = provider();
+        const el = element("Actor_1", ElementTypes.ACTOR);
+
+        const entries = instance.getContextPadEntries(el);
+        (entries["connect"].action as any).click({}, el, true);
+
+        // Connect#start reads a non-object third argument *as* autoActivate; a
+        // fourth argument is only consulted when the third is a Point.
+        expect(connect.start).toHaveBeenCalledWith({}, el, true);
+    });
+});
+
+/**
+ * Ctrl/cmd-dropping a new element is meant to open the replace ("Change type")
+ * menu straight away. That only works if the listener runs *after* the shape has
+ * been selected, because it is the selection that opens the context pad —
+ * diagram-js' SelectionBehavior does it at priority 500.
+ */
+describe("DomainStoryContextPadProvider ctrl-drop replace menu", () => {
+    it("opens the replace menu after selection has opened the pad", () => {
+        const { eventBus, replaceEntryClick, openPadOnSelection } = provider();
+        const shape = element("Actor_1", ElementTypes.ACTOR);
+        // Stand-in for SelectionBehavior: selects, and thereby opens the pad.
+        eventBus.on("create.end", 500, openPadOnSelection);
+
+        eventBus.fire("create.end", primaryModifierDrop(shape));
+
+        expect(replaceEntryClick).toHaveBeenCalledTimes(1);
+    });
+
+    it("stays out of the way of a plain drop", () => {
+        const { eventBus, replaceEntryClick, openPadOnSelection } = provider();
+        const shape = element("Actor_1", ElementTypes.ACTOR);
+        eventBus.on("create.end", 500, openPadOnSelection);
+
+        eventBus.fire("create.end", {
+            button: 0,
+            context: { shape },
+            shape,
+        });
+
+        expect(replaceEntryClick).not.toHaveBeenCalled();
     });
 });

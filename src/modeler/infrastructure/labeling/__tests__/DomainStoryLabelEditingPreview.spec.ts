@@ -74,15 +74,28 @@ function makeAnnotation(): Shape {
     } as unknown as Shape;
 }
 
+/** A work object — an element whose label lives in its own SVG, not a bracket. */
+function makeWorkObject(): Shape {
+    return {
+        type: ElementTypes.WORKOBJECT + "Document",
+        businessObject: { type: ElementTypes.WORKOBJECT + "Document" },
+        width: 75,
+        height: 75,
+        x: 10,
+        y: 20,
+    } as unknown as Shape;
+}
+
 describe("DomainStoryLabelEditingPreview", () => {
     let defaultLayer: SVGElement;
     let eventBus: RecordingEventBus;
+    let canvas: Canvas;
 
     beforeEach(() => {
         defaultLayer = svgCreate("g");
         eventBus = new RecordingEventBus();
         // element height 30 vs. bbox height 50 → resize scales incoming height by 0.6
-        const canvas = makeCanvas(defaultLayer, {
+        canvas = makeCanvas(defaultLayer, {
             x: 0,
             y: 0,
             width: 100,
@@ -117,6 +130,32 @@ describe("DomainStoryLabelEditingPreview", () => {
         const path = defaultLayer.querySelector("path");
         expect(path?.getAttribute("d")).toBe(
             "m 0, 0 m 10,0 l -10,0 l 0,60 l 10,0",
+        );
+    });
+
+    it("hides the whole annotation while it is edited", () => {
+        const annotation = makeAnnotation();
+
+        eventBus.fire("directEditing.activate", {
+            active: { element: annotation },
+        });
+
+        expect(canvas.addMarker).toHaveBeenCalledWith(
+            annotation,
+            "djs-element-hidden",
+        );
+    });
+
+    it("hides only the SVG label of a work object while it is edited", () => {
+        const workObject = makeWorkObject();
+
+        eventBus.fire("directEditing.activate", {
+            active: { element: workObject },
+        });
+
+        expect(canvas.addMarker).toHaveBeenCalledWith(
+            workObject,
+            "djs-label-hidden",
         );
     });
 });

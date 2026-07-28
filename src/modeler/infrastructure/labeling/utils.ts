@@ -142,6 +142,15 @@ export function createAutocompleteForEdit(
     eventBus: EventBus,
 ) {
     clearOldAutocompleteList();
+
+    // The editing box is a single recycled node, so a keydown handler left over
+    // from the previous session outlives it — and its work-object guard tests
+    // the element *it* captured, so it always passes. Editing an actor right
+    // after a work object would then let Enter rename that work object outside
+    // the command stack. Reset before the early return below, which is exactly
+    // the path that used to skip it.
+    editingBox.onkeydown = null;
+
     if (!businessElement || !isWorkObject(businessElement)) {
         return;
     }
@@ -295,9 +304,26 @@ export function createAutocompleteForEdit(
 
     // an outside click closes the list; when it does, the input listener is now
     // stale, so remove it too
-    document.addEventListener("click", function (e) {
+    function documentClickListener(e: MouseEvent) {
         if (clearOldAutocompleteList(e.target as HTMLElement | null)) {
             editingBox.removeEventListener("input", inputFunction);
         }
-    });
+    }
+
+    document.addEventListener("click", documentClickListener);
+
+    /**
+     * Drop everything this session attached. Escape-cancelling goes through
+     * `TextBox.destroy()`, which only unbinds diagram-js's own listeners, so
+     * without this the input handlers and one document click listener per
+     * session pile up on the recycled node — unbounded, and shared across
+     * modeler instances.
+     */
+    function teardown() {
+        editingBox.removeEventListener("input", inputFunction);
+        document.removeEventListener("click", documentClickListener);
+        editingBox.onkeydown = null;
+    }
+
+    eventBus.once(["directEditing.complete", "directEditing.cancel"], teardown);
 }

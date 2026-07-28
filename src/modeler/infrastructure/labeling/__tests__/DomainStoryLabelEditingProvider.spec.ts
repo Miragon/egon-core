@@ -72,7 +72,7 @@ function capturedHandler(eventBus: any, event: string): (e: any) => void {
     return call[call.length - 1];
 }
 
-/** A non-text-annotation shape so `update()` takes its bounds-recomputing path. */
+/** A non-text-annotation shape, which keeps its own external-label layout. */
 function makeElement(): Shape {
     return {
         type: "domainStory:workObjectDocument",
@@ -84,16 +84,98 @@ function makeElement(): Shape {
     } as unknown as Shape;
 }
 
+/** A text annotation — the only element type `update()` re-bounds. */
+function makeAnnotation(): Shape {
+    return {
+        type: ElementTypes.TEXTANNOTATION,
+        businessObject: { type: ElementTypes.TEXTANNOTATION },
+        x: 10,
+        y: 20,
+        width: 50,
+        height: 30,
+    } as unknown as Shape;
+}
+
+/** The bounds DirectEditing measures off the edit box, doubling the bbox. */
+const EDIT_BOX_BOUNDS = { x: 0, y: 0, width: 200, height: 120 } as Rect;
+
 describe("DomainStoryLabelEditingProvider.update", () => {
     it("passes the label to the model verbatim, without SVG sanitizing", () => {
         const { provider, updateLabel } = setup();
-        const element = makeElement();
-        const bounds = { x: 0, y: 0, width: 100, height: 60 } as Rect;
 
-        provider.update(element, "a--b <c> d", bounds);
+        provider.update(
+            makeElement(),
+            "a--b <c> d",
+            "old text",
+            EDIT_BOX_BOUNDS,
+        );
 
         expect(updateLabel).toHaveBeenCalledTimes(1);
         expect(updateLabel.mock.calls[0][1]).toBe("a--b <c> d");
+    });
+
+    it("scales the edit-box bounds onto a resized text annotation", () => {
+        const { provider, updateLabel } = setup();
+        const annotation = makeAnnotation();
+
+        provider.update(annotation, "note", "old text", EDIT_BOX_BOUNDS);
+
+        // The box grew 2x against the bbox, so the annotation grows 2x too.
+        expect(updateLabel.mock.calls[0][2]).toEqual({
+            x: annotation.x,
+            y: annotation.y,
+            width: 100,
+            height: 60,
+        });
+    });
+
+    it("leaves bounds undefined for elements that lay out their own label", () => {
+        const { provider, updateLabel } = setup();
+
+        provider.update(makeElement(), "name", "old text", EDIT_BOX_BOUNDS);
+
+        expect(updateLabel.mock.calls[0][2]).toBeUndefined();
+    });
+});
+
+describe("DomainStoryLabelEditingProvider create.end", () => {
+    /**
+     * `focusElement` reaches into the DOM for the direct-editing box, so give it
+     * a real node instead of letting it call `.focus()` on null in a timer.
+     */
+    function withEditingBoxInDom() {
+        const box = document.createElement("div");
+        box.className = "djs-direct-editing-content";
+        document.body.appendChild(box);
+        return () => box.remove();
+    }
+
+    function fireCreateEnd(hints?: Record<string, unknown>) {
+        const { eventBus, directEditing } = setup();
+        const removeBox = withEditingBoxInDom();
+
+        capturedHandler(
+            eventBus,
+            "create.end",
+        )({
+            shape: makeElement(),
+            context: { canExecute: true, hints },
+        });
+
+        removeBox();
+        return directEditing;
+    }
+
+    it("opens the editor for a freshly created element", () => {
+        expect(fireCreateEnd().activate).toHaveBeenCalledTimes(1);
+    });
+
+    it("stays out of the way of a paste", () => {
+        const directEditing = fireCreateEnd({
+            createElementsBehavior: false,
+        });
+
+        expect(directEditing.activate).not.toHaveBeenCalled();
     });
 });
 

@@ -1,11 +1,6 @@
-import ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import CommandInterceptor from "diagram-js/lib/command/CommandInterceptor";
 import EventBus from "diagram-js/lib/core/EventBus";
 import CroppingConnectionDocking from "diagram-js/lib/layout/CroppingConnectionDocking";
-import {
-    add as collectionAdd,
-    remove as collectionRemove,
-} from "diagram-js/lib/util/Collections";
 import { Point } from "diagram-js/lib/util/Types";
 import { assign, pick } from "min-dash";
 import { Connection, Shape } from "diagram-js/lib/model/Types";
@@ -13,15 +8,10 @@ import { reworkGroupElements } from "../../../shared/infrastructure/util";
 import { isBackground, isGroup } from "../../../story/domain/elementPredicates";
 
 export class DomainStoryUpdater extends CommandInterceptor {
-    static override $inject: string[] = [
-        "eventBus",
-        "elementRegistry",
-        "connectionDocking",
-    ];
+    static override $inject: string[] = ["eventBus", "connectionDocking"];
 
     constructor(
         eventBus: EventBus,
-        private readonly elementRegistry: ElementRegistry,
         private readonly connectionDocking: CroppingConnectionDocking,
     ) {
         super(eventBus);
@@ -37,27 +27,16 @@ export class DomainStoryUpdater extends CommandInterceptor {
             delete e.context.cropped;
         });
 
-        this.executed(
-            [
-                "shape.create",
-                "shape.move",
-                "shape.delete",
-                "shape.resize",
-                "shape.removeGroupWithChildren",
-            ],
-            this.updateElement(),
-        );
+        const SHAPE_COMMANDS = [
+            "shape.create",
+            "shape.move",
+            "shape.delete",
+            "shape.resize",
+        ];
 
-        this.reverted(
-            [
-                "shape.create",
-                "shape.move",
-                "shape.delete",
-                "shape.resize",
-                "shape.removeGroupWithChildren",
-            ],
-            this.updateElement(),
-        );
+        this.executed(SHAPE_COMMANDS, this.updateElement());
+
+        this.reverted(SHAPE_COMMANDS, this.updateElement());
 
         this.executed(
             [
@@ -94,16 +73,6 @@ export class DomainStoryUpdater extends CommandInterceptor {
             }
             const businessObject = shape.businessObject;
             const parent = shape.parent;
-            const elements = this.elementRegistry.filter(
-                (element) => !element.id.startsWith("root"),
-            );
-
-            // make sure an element is added / removed from egon._elements
-            if (!parent) {
-                collectionRemove(elements, businessObject);
-            } else {
-                collectionAdd(elements, businessObject);
-            }
 
             // save element position
             assign(businessObject, pick(shape, ["x", "y"]));
@@ -149,27 +118,12 @@ export class DomainStoryUpdater extends CommandInterceptor {
                 connection: Connection = context.connection,
                 businessObject = connection.businessObject;
 
-            let source = connection.source,
+            // Read the ends off the connection itself. A reconnect has already
+            // written them there by the time `executed`/`reverted` runs, and the
+            // `context.newSource`/`newTarget` the handler uses are on the
+            // context, never on the event.
+            const source = connection.source,
                 target = connection.target;
-
-            if (event.newTarget) {
-                target = event.newTarget;
-            }
-            if (event.newSource) {
-                source = event.newSource;
-            }
-
-            const parent = connection.parent;
-            const elements = this.elementRegistry.filter(
-                (element) => !element.id.startsWith("root"),
-            );
-
-            // make sure an element is added / removed from egon._elements
-            if (!parent) {
-                collectionRemove(elements, businessObject);
-            } else {
-                collectionAdd(elements, businessObject);
-            }
 
             // update waypoints
             assign(businessObject, {

@@ -105,7 +105,12 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         contextPad.registerProvider(this);
         popupMenu.registerProvider("ds-replace", replaceMenuProvider);
 
-        eventBus.on("create.end", (event: any) => {
+        // Priority 250, below diagram-js' SelectionBehavior (500): it is the
+        // selection of the new shape that makes ContextPad open it. At the
+        // default 1000 this ran first and always saw a closed pad, so the
+        // ctrl-drop "open replace menu" gesture silently did nothing. bpmn-js
+        // registers the same listener at 250 for the same reason.
+        eventBus.on("create.end", 250, (event: any) => {
             const context = event.context,
                 shape = context.shape;
 
@@ -121,11 +126,20 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
             }
         });
 
-        document.addEventListener("pickedColor", (event: any) => {
+        // The host owns the color picker, so its answer arrives as a
+        // document-level event rather than through the event bus. That makes it
+        // this instance's job to let go again on teardown: otherwise a stale
+        // listener keeps executing commands on a destroyed command stack, and
+        // two live modelers both react to one picker event.
+        const onPickedColor = (event: any) => {
             if (this.selectedElement) {
                 this.executeCommandStack(event);
             }
-        });
+        };
+        document.addEventListener("pickedColor", onPickedColor);
+        eventBus.on("diagram.destroy", () =>
+            document.removeEventListener("pickedColor", onPickedColor),
+        );
     }
 
     getContextPadEntries(element: Element): ContextPadEntries {
@@ -238,7 +252,13 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         autoActivate: boolean,
     ) => void {
         return (event: any, element: Element, autoActivate: boolean) =>
-            this.connect.start(event, element, undefined, autoActivate);
+            // Three arguments, deliberately: Connect#start treats a non-object
+            // third argument *as* autoActivate and defaults connectionStart to
+            // the element's mid (Connect.js:131). Passing an explicit
+            // `undefined` in that slot swallowed the flag. diagram-js' types
+            // only describe the Point overload.
+            // @ts-expect-error autoActivate in the connectionStart position
+            this.connect.start(event, element, autoActivate);
     }
 
     private addDelete(elements: Element[]): [string, ContextPadEntry<any>] {
@@ -474,6 +494,10 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
      * "None" is `null`, not `0` (#74). The `0` this used to pass was overwritten
      * with `null` by the repaint that followed; now that drawing no longer writes
      * to the model, it would be exported verbatim as `"number": 0`.
+     *
+     * The number is only *computed* here and travels in the command context —
+     * `ActivityDirectionChangedHandler` performs the write, so its `preExecute`
+     * snapshots the number the activity really had and an undo restores it.
      */
     private changeDirection(element: Connection) {
         const businessObject = element.businessObject;
@@ -483,7 +507,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         if (isActor(source)) {
             newNumber = null;
         } else {
-            newNumber = this.numberingRegistry.generateAutomaticNumber(element);
+            newNumber = this.numberingRegistry.generateAutomaticNumber();
         }
         const context = {
             businessObject: businessObject,

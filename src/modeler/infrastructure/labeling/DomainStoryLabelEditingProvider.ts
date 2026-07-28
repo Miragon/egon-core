@@ -3,7 +3,10 @@ import { Element, Shape } from "diagram-js/lib/model/Types";
 import { Rect } from "diagram-js/lib/util/Types";
 import Canvas from "diagram-js/lib/core/Canvas";
 import EventBus from "diagram-js/lib/core/EventBus";
-import { DirectEditing } from "diagram-js-direct-editing";
+import {
+    DirectEditing,
+    DirectEditingProvider,
+} from "diagram-js-direct-editing";
 import ResizeHandles from "diagram-js/lib/features/resize/ResizeHandles";
 import CommandStack from "diagram-js/lib/command/CommandStack";
 
@@ -27,7 +30,7 @@ export function focusElement(element: HTMLDivElement) {
     setTimeout(() => element.focus(), 0);
 }
 
-export class DomainStoryLabelEditingProvider {
+export class DomainStoryLabelEditingProvider implements DirectEditingProvider {
     static $inject: string[] = [
         "modeling",
         "domainStoryTextRenderer",
@@ -101,6 +104,13 @@ export class DomainStoryLabelEditingProvider {
                 canExecute = event.context.canExecute;
 
             if (!canExecute) {
+                return;
+            }
+            // A paste is routed through the create interaction with
+            // `createElementsBehavior: false` (diagram-js CopyPaste.js:187), the
+            // hint that tells create behaviors to keep out. Editing a pasted
+            // element would open an empty box over an already-labelled shape.
+            if (event.context.hints?.createElementsBehavior === false) {
                 return;
             }
             if (!is(element, ElementTypes.ACTIVITY)) {
@@ -248,11 +258,20 @@ export class DomainStoryLabelEditingProvider {
         return { bounds: bounds, style: style };
     }
 
-    update(element: Shape, newLabel: string, bounds: Rect) {
+    /**
+     * `_oldText` is unused but must stay: DirectEditing calls
+     * `update(element, newText, oldText, bounds)`, so dropping it would shift
+     * the bounds argument out of place (that was bug A1).
+     *
+     * Only a text annotation is resizable while editing, so only it derives new
+     * bounds from the edit box. Every other element passes `undefined` and lets
+     * `DomainStoryUpdateLabelHandler` lay its external label out itself.
+     */
+    update(element: Shape, newLabel: string, _oldText: string, bounds: Rect) {
         const bbox = this.canvas.getAbsoluteBBox(element);
 
         let newBounds: Rect | undefined;
-        if (!is(element, ElementTypes.TEXTANNOTATION)) {
+        if (is(element, ElementTypes.TEXTANNOTATION)) {
             newBounds = {
                 x: element.x,
                 y: element.y,

@@ -88,7 +88,11 @@ export class DomainStoryActivityNumbering extends CommandInterceptor {
 
         if (isActor(connection.source)) {
             if (businessObject.number == null) {
-                this.numberingRegistry.generateAutomaticNumber(connection);
+                // The write happens here, inside the interceptor's
+                // executed/reverted hook, so it is part of the command's
+                // transaction rather than something that leaked in ahead of it.
+                businessObject.number =
+                    this.numberingRegistry.generateAutomaticNumber();
             }
             return;
         }

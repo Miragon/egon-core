@@ -8,9 +8,23 @@ const HIGH_PRIORITY = 10000;
 
 // Run after diagram-js `Create` (default priority) has actually created the
 // elements. Create's own `create.end` handler returns `false` on a rejected
-// placement, which stops propagation and skips this listener automatically —
-// so a cancelled paste never re-applies stale values.
+// placement, which stops propagation and skips this listener — so a rejected
+// drop never re-applies the stash, it just leaves it behind (see `create.end`
+// / `create.rejected` handling below).
 const LOW_PRIORITY = 250;
+
+/**
+ * Whether a create-interaction event belongs to a paste.
+ *
+ * diagram-js CopyPaste marks the paste's create context with
+ * `hints.createElementsBehavior = false` (CopyPaste.js:187). Checking it matters
+ * because `create.cancel` is also fired for an *unrelated* create drag that
+ * `dragging.init` aborts when a paste starts (Dragging.js:453) — resetting on
+ * that would throw away the stash the paste just filled.
+ */
+function isPasteInteraction(event: any): boolean {
+    return event.context?.hints?.createElementsBehavior === false;
+}
 
 /**
  * Restores per-element visual state that diagram-js copy-paste drops on paste.
@@ -69,6 +83,18 @@ export class DomainStoryPasteRestore {
         eventBus.on("create.end", LOW_PRIORITY, (event: any) =>
             this.createEnd(event),
         );
+
+        // A paste whose create never completes must not leave its stash behind:
+        // the next plain palette create would pass the `length` guard and get
+        // the copied color (and annotation text) silently applied to it. Escape
+        // fires `create.cancel`; a rejected drop fires `create.rejected`
+        // instead, because Create's own listener returned `false` rather than
+        // aborting the drag (Dragging.js:286).
+        eventBus.on(["create.cancel", "create.rejected"], (event: any) => {
+            if (isPasteInteraction(event)) {
+                this.resetStashes();
+            }
+        });
     }
 
     /**

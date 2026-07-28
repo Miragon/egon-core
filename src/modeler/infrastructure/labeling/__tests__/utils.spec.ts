@@ -35,25 +35,37 @@ interface Harness {
     editingBox: EditingBox;
     element: Element;
     eventBus: EventBus;
-    fire: ReturnType<typeof vi.fn>;
+    fire: ReturnType<typeof vi.spyOn>;
 }
 
 /**
  * Build the DOM the provider hands to the autocomplete: a container holding a
  * contenteditable-like editing box. The container is attached to document.body
  * so the handlers' `getElementById("autocomplete-list")` lookups resolve.
+ *
+ * The event bus is the real diagram-js one, because the autocomplete now ends
+ * its session on `directEditing.complete`/`cancel` — a stub that only records
+ * `fire` could not drive that teardown.
  */
-function setup(type: string): Harness {
+function setup(type: string, editingBox = makeEditingBox()): Harness {
+    const eventBus = new EventBus();
+
+    return {
+        editingBox,
+        element: makeElement(type),
+        eventBus,
+        fire: vi.spyOn(eventBus, "fire"),
+    };
+}
+
+/** The recycled contenteditable box, attached so getElementById resolves. */
+function makeEditingBox(): EditingBox {
     const container = document.createElement("div");
     const editingBox = document.createElement("div") as EditingBox;
     editingBox.className = "djs-direct-editing-content";
     container.appendChild(editingBox);
     document.body.appendChild(container);
-
-    const fire = vi.fn();
-    const eventBus = { fire } as unknown as EventBus;
-
-    return { editingBox, element: makeElement(type), eventBus, fire };
+    return editingBox;
 }
 
 /** Simulate a keystroke that mutates the box text, then fire its input event. */
@@ -370,6 +382,64 @@ describe("createAutocompleteForEdit", () => {
             expect(document.getElementById("autocomplete-list")).not.toBeNull();
 
             listItems()[0].dispatchEvent(
+                new MouseEvent("click", { bubbles: true }),
+            );
+            expect(document.getElementById("autocomplete-list")).not.toBeNull();
+        });
+    });
+
+    describe("session teardown", () => {
+        it("does not let a previous work object's keydown handler survive into an actor session", () => {
+            // One recycled box, two consecutive editing sessions.
+            const editingBox = makeEditingBox();
+            const workObject = setup(WORKOBJECT_TYPE, editingBox);
+            createAutocompleteForEdit(
+                editingBox,
+                ["Apple", "Banana"],
+                workObject.element,
+                workObject.eventBus,
+            );
+            typeInto(editingBox, "");
+            pressKey(editingBox, "ArrowDown"); // stale currentFocus = 0
+
+            const actor = setup(ACTOR_TYPE, editingBox);
+            createAutocompleteForEdit(
+                editingBox,
+                ["Apple", "Banana"],
+                actor.element,
+                actor.eventBus,
+            );
+
+            const event = pressKey(editingBox, "Enter");
+
+            expect(event.defaultPrevented).toBe(false);
+            expect(workObject.element.businessObject.name).toBe("");
+        });
+
+        it("detaches its listeners when the editing session is cancelled", () => {
+            const { editingBox, element, eventBus } = setup(WORKOBJECT_TYPE);
+            createAutocompleteForEdit(
+                editingBox,
+                ["Apple", "Banana"],
+                element,
+                eventBus,
+            );
+            typeInto(editingBox, "");
+            expect(document.getElementById("autocomplete-list")).not.toBeNull();
+
+            eventBus.fire("directEditing.cancel", {});
+
+            // the input listener is gone: typing no longer rebuilds a list
+            document.getElementById("autocomplete-list")?.remove();
+            typeInto(editingBox, "Apple");
+            expect(document.getElementById("autocomplete-list")).toBeNull();
+
+            // and so is the document click listener: an outside click no longer
+            // reaches into the DOM on this dead session's behalf
+            const strayList = document.createElement("div");
+            strayList.id = "autocomplete-list";
+            document.body.appendChild(strayList);
+            document.body.dispatchEvent(
                 new MouseEvent("click", { bubbles: true }),
             );
             expect(document.getElementById("autocomplete-list")).not.toBeNull();
