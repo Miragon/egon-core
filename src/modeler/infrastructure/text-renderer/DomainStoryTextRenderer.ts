@@ -35,7 +35,11 @@ export class DomainStoryTextRenderer {
             lineHeight: LINE_HEIGHT_RATIO,
         };
 
-        const externalStyle = assign(
+        // min-dash `assign` is Object.assign: passing `defaultStyle` as the
+        // target mutated it and returned it, so both styles were one object at
+        // 11px and every label rendered and measured a point too small.
+        const externalStyle: DomainStoryTextRendererStyle = assign(
+            {},
             defaultStyle,
             {
                 fontSize: defaultStyle.fontSize - 1,
