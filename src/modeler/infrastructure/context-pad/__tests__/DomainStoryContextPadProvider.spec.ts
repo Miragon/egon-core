@@ -101,15 +101,17 @@ function element(id: string, type: ElementTypes, pickedColor?: string): any {
 
 /**
  * Construct a provider with just enough mocks to reach the color-change path,
- * returning the spies the tests assert on. `rules.allowed` → true so the delete
- * entry (a prerequisite sibling of colorChange) is emitted without error.
+ * returning the spies the tests assert on. `rules.allowed` defaults to a spy
+ * answering `true`, so every entry is offered; pass an override to drive the
+ * delete-rule cases.
  *
  * The event bus is the real diagram-js one, because two of the provider's
  * behaviours are about *when* its listeners run relative to diagram-js' own
  * (the ctrl-drop replace menu) and *whether* they still run at all (teardown on
  * `diagram.destroy`) — neither is observable through a stubbed `on`.
  */
-function provider() {
+function provider(rulesOverride?: { allowed: (...args: any[]) => unknown }) {
+    const rules = rulesOverride ?? { allowed: vi.fn(() => true) };
     const commandStack = { execute: vi.fn(), registerHandler: vi.fn() };
     const dirtyFlagService = { makeDirty: vi.fn() };
     const connect = { start: vi.fn() };
@@ -142,7 +144,7 @@ function provider() {
             getIconsAssignedAs: () => ({ keysArray: () => [] }),
             getCSSClassOfIcon: () => "",
         } as any,
-        { allowed: () => true } as any, // rules
+        rules as any,
         connect as any,
         (text: string) => text, // translate (identity)
         {} as any, // create
@@ -155,6 +157,7 @@ function provider() {
 
     return {
         instance,
+        rules,
         commandStack,
         dirtyFlagService,
         connect,
@@ -255,6 +258,158 @@ describe("DomainStoryContextPadProvider color change", () => {
         ]);
 
         expect(entries).toHaveProperty("colorChange");
+    });
+});
+
+/**
+ * The delete entry is rule-gated (issue #85). A denied delete must *omit* the
+ * entry — the provider used to `throw`, and `getContextPadEntries` has no catch,
+ * so a single denying `elements.delete` rule would have taken down the entire
+ * context pad. The rule is also queried with the canonical flat `{ elements }`
+ * context, so host rules written against bpmn-js conventions actually match.
+ */
+describe("DomainStoryContextPadProvider delete entry", () => {
+    it("omits delete but keeps the rest of the pad when the rule denies", () => {
+        const { instance } = provider({ allowed: () => false });
+
+        const entries = instance.getContextPadEntries(
+            element("Actor_1", ElementTypes.ACTOR),
+        );
+
+        expect(entries).not.toHaveProperty("delete");
+        expect(entries).toHaveProperty("colorChange");
+        expect(entries).toHaveProperty("connect");
+    });
+
+    it("omits delete but keeps the multi-select pad when the rule denies", () => {
+        const { instance } = provider({ allowed: () => false });
+
+        const entries = instance.getMultiElementContextPadEntries([
+            element("Actor_1", ElementTypes.ACTOR),
+            element("Annotation_1", ElementTypes.TEXTANNOTATION),
+        ]);
+
+        expect(entries).not.toHaveProperty("delete");
+        expect(entries).toHaveProperty("colorChange");
+    });
+
+    it("queries the rule with the canonical flat elements context", () => {
+        const { instance, rules } = provider();
+        const el = element("Actor_1", ElementTypes.ACTOR);
+
+        instance.getContextPadEntries(el);
+
+        expect(rules.allowed).toHaveBeenCalledWith("elements.delete", {
+            elements: [el],
+        });
+    });
+
+    it("passes the whole selection for a multi-select", () => {
+        const { instance, rules } = provider();
+        const el1 = element("Actor_1", ElementTypes.ACTOR);
+        const el2 = element("Annotation_1", ElementTypes.TEXTANNOTATION);
+
+        instance.getMultiElementContextPadEntries([el1, el2]);
+
+        expect(rules.allowed).toHaveBeenCalledWith("elements.delete", {
+            elements: [el1, el2],
+        });
+    });
+
+    it("reads an array verdict as the deletable subset", () => {
+        const el = element("Actor_1", ElementTypes.ACTOR);
+
+        expect(
+            provider({ allowed: () => [el] }).instance.getContextPadEntries(el),
+        ).toHaveProperty("delete");
+        expect(
+            provider({ allowed: () => [] }).instance.getContextPadEntries(el),
+        ).not.toHaveProperty("delete");
+    });
+
+    it("requires every multi-selected element in an array verdict", () => {
+        const el1 = element("Actor_1", ElementTypes.ACTOR);
+        const el2 = element("Annotation_1", ElementTypes.TEXTANNOTATION);
+
+        // A partial verdict must not offer an entry that would delete both.
+        expect(
+            provider({
+                allowed: () => [el1],
+            }).instance.getMultiElementContextPadEntries([el1, el2]),
+        ).not.toHaveProperty("delete");
+        expect(
+            provider({
+                allowed: () => [el1, el2],
+            }).instance.getMultiElementContextPadEntries([el1, el2]),
+        ).toHaveProperty("delete");
+    });
+
+    it("keeps the group pad's own delete entry, which is rule-exempt", () => {
+        const { instance } = provider({ allowed: () => false });
+
+        const entries = instance.getContextPadEntries(
+            element("Group_1", ElementTypes.GROUP),
+        );
+
+        expect(entries).toHaveProperty("deleteGroup");
+    });
+});
+
+/**
+ * The color picker lives in the host, so its answer arrives asynchronously and
+ * long after the pad decided which element it acts on (issue #85). The provider
+ * must therefore let go of that element whenever the pad moves on, or a reply
+ * recolors a selection the user has left — possibly one already deleted, minting
+ * an undo entry for a detached element.
+ */
+describe("DomainStoryContextPadProvider stale selection", () => {
+    /** A connection: its pad branch offers delete only, never a color change. */
+    function connection(id: string): any {
+        return { id, type: ElementTypes.CONNECTION, businessObject: {} };
+    }
+
+    it("drops the previous element when a connection's pad opens", () => {
+        const { instance, commandStack } = provider();
+
+        instance.getContextPadEntries(element("Actor_1", ElementTypes.ACTOR));
+        instance.getContextPadEntries(connection("Activity_1"));
+        document.dispatchEvent(
+            new CustomEvent("pickedColor", { detail: { color: "#ff0000" } }),
+        );
+
+        expect(commandStack.execute).not.toHaveBeenCalled();
+    });
+
+    it("drops the selection when the pad closes", () => {
+        const { instance, commandStack, dirtyFlagService, eventBus } =
+            provider();
+
+        instance.getContextPadEntries(element("Actor_1", ElementTypes.ACTOR));
+        eventBus.fire("contextPad.close", { current: {} });
+        document.dispatchEvent(
+            new CustomEvent("pickedColor", { detail: { color: "#ff0000" } }),
+        );
+
+        expect(commandStack.execute).not.toHaveBeenCalled();
+        expect(dirtyFlagService.makeDirty).not.toHaveBeenCalled();
+    });
+
+    it("stops pre-seeding the picker with the previous element's color", () => {
+        const { instance } = provider();
+        const colors: string[] = [];
+        const onDefaultColor = (event: any) => colors.push(event.detail.color);
+        document.addEventListener("defaultColor", onDefaultColor);
+
+        try {
+            instance.getContextPadEntries(
+                element("Actor_1", ElementTypes.ACTOR, "#ff0000"),
+            );
+            instance.getContextPadEntries(connection("Activity_1"));
+        } finally {
+            document.removeEventListener("defaultColor", onDefaultColor);
+        }
+
+        expect(colors).toEqual(["#ff0000", "#000000"]);
     });
 });
 

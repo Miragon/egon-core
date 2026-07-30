@@ -140,13 +140,25 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         eventBus.on("diagram.destroy", () =>
             document.removeEventListener("pickedColor", onPickedColor),
         );
+
+        // Picker replies are async and can arrive after the pad closed; letting
+        // go of the selection turns them into no-ops instead of recoloring a
+        // possibly-deleted element. Safe against a fresh selection because
+        // ContextPad#open() closes before it repopulates the providers.
+        eventBus.on("contextPad.close", () => {
+            this.selectedElement = undefined;
+        });
     }
 
     getContextPadEntries(element: Element): ContextPadEntries {
+        // Drop the previous selection before any branch runs: only branches that
+        // offer a color change re-record one, so a connection (delete only) must
+        // not leave the last shape reachable for the picker.
+        this.selectedElement = undefined;
         let entries: Map<string, ContextPadEntry> = new Map();
 
         if (isWorkObject(element)) {
-            entries.set(...this.addDelete([element]));
+            this.addDelete(entries, [element]);
             entries.set(...this.addColorChange(element));
             entries.set(...this.addConnectWithActivity());
             entries.set(...this.addTextAnnotation());
@@ -154,7 +166,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
             entries = new Map([...entries, ...this.addWorkObjects()]);
             entries.set(...this.addChangeWorkObjectTypeMenu());
         } else if (isActor(element)) {
-            entries.set(...this.addDelete([element]));
+            this.addDelete(entries, [element]);
             entries.set(...this.addColorChange(element));
             entries.set(...this.addConnectWithActivity());
             entries.set(...this.addTextAnnotation());
@@ -165,14 +177,14 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
             entries.set(...this.addTextAnnotation());
             entries.set(...this.addColorChange(element));
         } else if (isActivity(element)) {
-            entries.set(...this.addDelete([element]));
+            this.addDelete(entries, [element]);
             entries.set(...this.addChangeDirection());
             entries.set(...this.addColorChange(element));
         } else if (isAnnotation(element)) {
-            entries.set(...this.addDelete([element]));
+            this.addDelete(entries, [element]);
             entries.set(...this.addColorChange(element));
         } else if (isConnection(element)) {
-            entries.set(...this.addDelete([element]));
+            this.addDelete(entries, [element]);
         }
 
         this.notifyColorPickerOfCurrentElementColor();
@@ -181,8 +193,9 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
     }
 
     getMultiElementContextPadEntries(elements: Element[]): ContextPadEntries {
+        this.selectedElement = undefined;
         const entries: Map<string, ContextPadEntry> = new Map();
-        entries.set(...this.addDelete(elements));
+        this.addDelete(entries, elements);
         entries.set(...this.addColorChange(elements));
         return Object.fromEntries(entries);
     }
@@ -190,8 +203,8 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
     /**
      * Pre-seeds the host's color picker with the current selection's color so
      * it opens on the right swatch. Only a single selected element carries a
-     * meaningful color; a multi-select (array) or a stale/absent selection
-     * (e.g. CONNECTION branches never call addColorChange) falls back to black.
+     * meaningful color; a multi-select (array) or an absent selection (the
+     * CONNECTION branch never calls addColorChange) falls back to black.
      */
     private notifyColorPickerOfCurrentElementColor() {
         let pickedColor: string | undefined;
@@ -261,50 +274,64 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
             this.connect.start(event, element, autoActivate);
     }
 
-    private addDelete(elements: Element[]): [string, ContextPadEntry<any>] {
-        // delete element entry, only show if allowed by rules
-        let deleteAllowed = this.rules.allowed("elements.delete", {
-            elements: { element: elements },
-        });
-
-        if (isArray(deleteAllowed)) {
-            // was the element returned as a deletion candidate?
-            deleteAllowed = deleteAllowed[0] === elements;
+    /**
+     * Mutates the entry map instead of returning a tuple, because a denied
+     * delete has to mean "omit this one entry". Returning a tuple left no way to
+     * say that, so the previous code threw — and `getContextPadEntries` has no
+     * catch, so one denying rule would have taken down the whole pad.
+     */
+    private addDelete(
+        entries: Map<string, ContextPadEntry>,
+        elements: Element[],
+    ): void {
+        if (!this.isDeleteAllowed(elements)) {
+            return;
         }
 
-        if (deleteAllowed) {
-            return [
-                "delete",
-                {
-                    group: "edit",
-                    className: "bpmn-icon-trash",
-                    title: this.translate("Remove"),
-                    action: {
-                        click: (_event: any, element: Element) => {
-                            if (isArray(element)) {
-                                const groups = element.filter((el) =>
-                                    isGroup(el),
-                                );
-                                const otherElements = element.filter(
-                                    (el) => !isGroup(el),
-                                );
-                                groups.forEach((group) =>
-                                    this.modeling.removeGroup(group),
-                                );
-                                this.modeling.removeElements(
-                                    otherElements.slice(),
-                                );
-                            } else {
-                                this.modeling.removeElements([element]);
-                            }
-                            this.dirtyFlagService.makeDirty();
-                        },
-                    },
+        entries.set("delete", {
+            group: "edit",
+            className: "bpmn-icon-trash",
+            title: this.translate("Remove"),
+            action: {
+                click: (_event: any, element: ContextPadTarget) => {
+                    if (isArray(element)) {
+                        const groups = element.filter((el) => isGroup(el));
+                        const otherElements = element.filter(
+                            (el) => !isGroup(el),
+                        );
+                        groups.forEach((group) =>
+                            this.modeling.removeGroup(group),
+                        );
+                        this.modeling.removeElements(otherElements.slice());
+                    } else {
+                        this.modeling.removeElements([element]);
+                    }
+                    this.dirtyFlagService.makeDirty();
                 },
-            ];
+            },
+        });
+    }
+
+    /**
+     * Asks the rules whether the selection may be deleted, using the canonical
+     * flat `{ elements }` context so rules written against diagram-js/bpmn-js
+     * conventions apply unchanged (the previous nested `{ elements: { element } }`
+     * shape matched nothing).
+     */
+    private isDeleteAllowed(elements: Element[]): boolean {
+        const allowed = this.rules.allowed("elements.delete", { elements });
+
+        if (isArray(allowed)) {
+            // An array verdict names the deletable subset; offer delete only
+            // when every requested element came back, so the entry never
+            // deletes more than the rule sanctioned.
+            return (
+                allowed.length === elements.length &&
+                elements.every((element) => allowed.includes(element))
+            );
         }
 
-        throw new Error("Delete not allowed");
+        return !!allowed;
     }
 
     private addDeleteGroupWithoutChildren(): [string, ContextPadEntry<any>] {
