@@ -12,7 +12,11 @@ export {
 export type { EgonClientConfig } from "./modeler/service/EgonClientConfig";
 
 // Port interfaces (for testing via constructor injection)
-export type { ModelerPort } from "./modeler/domain/ports/ModelerPort";
+export type {
+    ModelerPort,
+    // Payload of the `import.repaired` event (ADR 0017).
+    ImportRepairData,
+} from "./modeler/domain/ports/ModelerPort";
 export type { IconPort } from "./modeler/domain/ports/IconPort";
 
 // Domain Layer - Value Objects & Types (for consumers who need type information)

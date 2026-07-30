@@ -13,7 +13,6 @@ import {
     DENIED,
     RuleVerdict,
     allowedAs,
-    ignored,
     noOpinion,
 } from "./ruleVerdict";
 
@@ -244,26 +243,4 @@ export function judgeCreation(
     return isBackground(target) || isGroup(shape) || isGroup(target)
         ? ALLOWED
         : DENIED;
-}
-
-/**
- * A connection may only start from a real, non-label element. A missing element
- * or a label is not ours to judge — a label's own connection is handled
- * elsewhere — so those are ignored rather than denied. Never allows: starting is
- * otherwise decided by lower-priority rules, which the plain denial lets stand
- * as the last word.
- */
-export function judgeConnectionStart(
-    element:
-        | { label?: { labelTarget?: unknown }; [key: string]: unknown }
-        | null
-        | undefined,
-): RuleVerdict {
-    if (!element) {
-        return ignored("missingElement");
-    }
-    if (element.label?.labelTarget) {
-        return ignored("labelOwnedByAnotherElement");
-    }
-    return DENIED;
 }

@@ -6,7 +6,6 @@ import { ElementRegistryService } from "../../../service/ElementRegistryService"
 import { ActivityCanvasObject } from "../../../../story/domain/canvasObject";
 import { restoredNumberAssignments } from "../../../../story/domain/activityNumbering";
 import { isActor } from "../../../../story/domain/elementPredicates";
-import { DomainStoryModeling } from "../../modeling/DomainStoryModeling";
 import { DomainStoryNumberingRegistry } from "../../popup/DomainStoryNumberingRegistry";
 
 /**
@@ -137,28 +136,24 @@ export class ActivityChangedHandler implements CommandHandler {
 }
 
 export class ActivityDirectionChangedHandler implements CommandHandler {
-    static $inject: string[] = ["modeling", "eventBus"];
+    static $inject: string[] = ["eventBus"];
 
-    constructor(
-        private readonly modeling: DomainStoryModeling,
-        private readonly eventBus: EventBus,
-    ) {}
+    constructor(private readonly eventBus: EventBus) {}
 
     /**
-     * `null`, not `0`, is "this activity has no number" (#74).
+     * Snapshots only, so `revert` can put the pre-swap state back — `execute` is
+     * the redo path and must not depend on anything this phase computed.
      *
-     * The `0` this used to normalize to was laundered away by the repaint that
-     * followed: `renderExternalNumber` overwrote the number of every
-     * non-actor-sourced activity with `null`. With drawing reduced to a read,
-     * that `0` would survive into the exported file as `"number": 0` — a value
-     * no other writer produces and no reader expects.
+     * `null`, not `0`, is "this activity has no number" (#74). The `0` this used
+     * to normalize to was laundered away by the repaint that followed:
+     * `renderExternalNumber` overwrote the number of every non-actor-sourced
+     * activity with `null`. With drawing reduced to a read, that `0` would
+     * survive into the exported file as `"number": 0` — a value no other writer
+     * produces and no reader expects.
      */
     preExecute(context: CommandContext) {
         context.oldNumber = context.businessObject.number ?? null;
         context.oldWaypoints = context.element.waypoints;
-        context.name = context.businessObject.name;
-
-        this.modeling.updateNumber(context.businessObject, context.newNumber);
     }
 
     execute(context: CommandContext): ElementLike[] {
@@ -177,7 +172,6 @@ export class ActivityDirectionChangedHandler implements CommandHandler {
         element.target = swapSource;
         businessObject.target = swapSource?.id;
 
-        businessObject.name = context.name;
         // See `preExecute`: the context pad passes `null` for "the swap makes a
         // work object the source", and nothing downstream normalizes it any more.
         businessObject.number = context.newNumber ?? null;
@@ -197,8 +191,6 @@ export class ActivityDirectionChangedHandler implements CommandHandler {
         semantic.source = semantic.target;
         element.target = swapSource;
         semantic.target = swapSource?.id;
-
-        semantic.name = context.name;
 
         semantic.number = context.oldNumber;
         element.waypoints = context.oldWaypoints;

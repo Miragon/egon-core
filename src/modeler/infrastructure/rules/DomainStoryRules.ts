@@ -6,7 +6,6 @@ import { isConnection } from "../../../story/domain/elementPredicates";
 import {
     clampGroupBounds,
     judgeConnection,
-    judgeConnectionStart,
     judgeCreation,
     judgeReconnect,
     judgeResize,
@@ -151,12 +150,6 @@ export class DomainStoryRules extends RuleProvider {
             }
 
             return verdict;
-        });
-
-        this.addVerdictRule("connection.start", (context: any) => {
-            const source = context.source;
-
-            return judgeConnectionStart(source);
         });
 
         this.addVerdictRule("connection.updateWaypoints", (context: any) => {

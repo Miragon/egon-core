@@ -4,7 +4,7 @@ import { Element, ElementLike } from "diagram-js/lib/model/Types";
 import { DomainStoryTextRenderer } from "../../text-renderer/DomainStoryTextRenderer";
 import { DomainStoryModeling } from "../../modeling/DomainStoryModeling";
 import { ElementTypes } from "../../../../story/domain/elementTypes";
-import { getLabel, getNumber, setLabel, setNumber } from "../utils";
+import { getLabel, setLabel } from "../utils";
 import { getBusinessObject, is } from "../../../../shared/infrastructure/util";
 
 const NULL_DIMENSIONS = {
@@ -22,23 +22,11 @@ export class DomainStoryUpdateLabelHandler implements CommandHandler {
 
     execute(context: CommandContext): ElementLike[] {
         context.oldLabel = getLabel(context.element);
-        context.oldNumber = getNumber(context.element);
-        return this.setText(
-            context.element,
-            context.newLabel,
-            context.newNumber,
-        );
+        return this.setText(context.element, context.newLabel);
     }
 
     revert(context: CommandContext): ElementLike[] {
-        // Mirrors `execute`: restore only the half it actually wrote. Otherwise
-        // undoing a pure label edit would stamp `oldNumber` — which `getNumber`
-        // reports as `""` for an activity that has none — onto the model.
-        return this.setText(
-            context.element,
-            context.newLabel === undefined ? undefined : context.oldLabel,
-            context.newNumber === undefined ? undefined : context.oldNumber,
-        );
+        return this.setText(context.element, context.oldLabel);
     }
 
     postExecute(context: CommandContext) {
@@ -76,32 +64,25 @@ export class DomainStoryUpdateLabelHandler implements CommandHandler {
     }
 
     /**
-     * Writes the label and/or the number, skipping whichever the caller left
-     * undefined.
+     * Writes the label onto the element's own label carrier and reports both it
+     * and its target as changed, so an external label and the shape it belongs
+     * to redraw together.
      *
-     * WHY the skip (#74): `DomainStoryModeling` maps both `updateLabel` and
-     * `updateNumber` onto this one command, and each supplies only its own half —
-     * so writing both unconditionally made a label edit blank an activity's
-     * number and a number edit blank its name. The number half used to be
-     * invisible, because the repaint that followed re-minted the number in
-     * `renderExternalNumber`; with drawing reduced to a read it is not, and
-     * merely renaming an activity would drop it out of the sequence. (The name
-     * half was already worked around by hand: `ActivityDirectionChangedHandler`
-     * carries `context.name` across its own `updateNumber` call.)
+     * This command is label-only (#84). It once wrote an activity's *number*
+     * too, because `DomainStoryModeling` mapped `updateNumber` onto it as well —
+     * and writing both halves unconditionally made a label edit blank the number
+     * (#74). `updateNumber` is gone; `activity.changed` and
+     * `activity.directionChange` own every number write now, so there is no
+     * second half left to skip.
      */
-    private setText(element: Element, text?: string, textNumber?: string) {
+    private setText(element: Element, text?: string) {
         const label = element.label || element;
-        const number = element["number"] || element;
         const labelTarget = element["labelTarget"] || element;
-        const numberTarget = element["numberTarget"] || element;
 
         if (text !== undefined) {
             setLabel(label, text);
         }
-        if (textNumber !== undefined) {
-            setNumber(number, textNumber);
-        }
 
-        return [label, labelTarget, number, numberTarget];
+        return [label, labelTarget];
     }
 }

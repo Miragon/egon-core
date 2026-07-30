@@ -1,6 +1,5 @@
 import { Element } from "diagram-js/lib/model/Types";
 
-import { ElementTypes } from "../../../story/domain/elementTypes";
 import {
     isActivity,
     isActor,
@@ -8,7 +7,6 @@ import {
     isGroup,
     isWorkObject,
 } from "../../../story/domain/elementPredicates";
-import { is } from "../../../shared/infrastructure/util";
 import EventBus from "diagram-js/lib/core/EventBus";
 
 function getLabelAttr(semantic: any) {
@@ -27,14 +25,6 @@ function getLabelAttr(semantic: any) {
     }
 }
 
-function getNumberAttr(semantic: any) {
-    if (is(semantic, ElementTypes.ACTIVITY)) {
-        return "number";
-    } else {
-        return "";
-    }
-}
-
 export function getLabel(element: Element) {
     let semantic;
     if (element.businessObject) {
@@ -44,15 +34,6 @@ export function getLabel(element: Element) {
     }
     const attr = getLabelAttr(semantic);
     if (attr && semantic) {
-        return semantic[attr] || "";
-    }
-}
-
-export function getNumber(element: Element) {
-    const semantic = element.businessObject,
-        attr = getNumberAttr(semantic);
-
-    if (attr) {
         return semantic[attr] || "";
     }
 }
@@ -69,17 +50,6 @@ export function setLabel(element: Element, text: string) {
     if (attr) {
         semantic[attr] = text;
     }
-    return element;
-}
-
-export function setNumber(element: Element, textNumber: string) {
-    const semantic = element.businessObject,
-        attr = getNumberAttr(semantic);
-
-    if (attr) {
-        semantic[attr] = textNumber;
-    }
-
     return element;
 }
 

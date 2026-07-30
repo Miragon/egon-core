@@ -34,8 +34,10 @@ function createMockPorts() {
         fitToScreen: vi.fn(),
         onStoryChanged: vi.fn(),
         onViewportChanged: vi.fn(),
+        onImportRepaired: vi.fn(),
         offStoryChanged: vi.fn(),
         offViewportChanged: vi.fn(),
+        offImportRepaired: vi.fn(),
         destroy: vi.fn(),
     };
 
@@ -165,6 +167,15 @@ describe("EgonClient (Application Service)", () => {
             );
         });
 
+        it("should route import.repaired to modeler port", () => {
+            const callback = vi.fn();
+            client.on("import.repaired", callback);
+
+            expect(mockModelerPort.onImportRepaired).toHaveBeenCalledWith(
+                callback,
+            );
+        });
+
         it("should route icons.changed to icon port", () => {
             const callback = vi.fn();
             client.on("icons.changed", callback);
@@ -186,6 +197,15 @@ describe("EgonClient (Application Service)", () => {
             client.off("viewport.changed", callback);
 
             expect(mockModelerPort.offViewportChanged).toHaveBeenCalledWith(
+                callback,
+            );
+        });
+
+        it("should route off import.repaired to modeler port", () => {
+            const callback = vi.fn();
+            client.off("import.repaired", callback);
+
+            expect(mockModelerPort.offImportRepaired).toHaveBeenCalledWith(
                 callback,
             );
         });

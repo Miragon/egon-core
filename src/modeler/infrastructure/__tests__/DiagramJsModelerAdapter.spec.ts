@@ -185,6 +185,51 @@ describe("DiagramJsModelerAdapter", () => {
         });
     });
 
+    /**
+     * The one host event that is deliberately *not* debounced: an import fires
+     * it at most once and a host that shows "this file was damaged" must not
+     * learn about it a debounce window after `import()` returned (ADR 0017).
+     */
+    describe("import repair signalling", () => {
+        const REPAIRED = {
+            removedConnections: [
+                { id: "connection_1" },
+                { id: "connection_2" },
+            ],
+        };
+
+        it("maps the dropped business objects down to their ids", () => {
+            const importRepaired = vi.fn();
+            adapter.onImportRepaired(importRepaired);
+
+            services.mockEventBus.fire("dst.import.repaired", REPAIRED);
+
+            expect(importRepaired).toHaveBeenCalledWith({
+                removedConnectionIds: ["connection_1", "connection_2"],
+            });
+        });
+
+        it("delivers synchronously, without waiting out a debounce window", () => {
+            vi.useFakeTimers();
+            const importRepaired = vi.fn();
+            adapter.onImportRepaired(importRepaired);
+
+            services.mockEventBus.fire("dst.import.repaired", REPAIRED);
+
+            expect(importRepaired).toHaveBeenCalledTimes(1);
+        });
+
+        it("delivers nothing after off()", () => {
+            const importRepaired = vi.fn();
+            adapter.onImportRepaired(importRepaired);
+            adapter.offImportRepaired(importRepaired);
+
+            services.mockEventBus.fire("dst.import.repaired", REPAIRED);
+
+            expect(importRepaired).not.toHaveBeenCalled();
+        });
+    });
+
     describe("destroy", () => {
         beforeEach(() => {
             vi.useFakeTimers();
@@ -210,6 +255,7 @@ describe("DiagramJsModelerAdapter", () => {
         it("unsubscribes with the very handle it subscribed", () => {
             adapter.onStoryChanged(vi.fn());
             adapter.onViewportChanged(vi.fn());
+            adapter.onImportRepaired(vi.fn());
             const subscribed = services.mockEventBus.on.mock.calls;
 
             adapter.destroy();
