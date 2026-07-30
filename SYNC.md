@@ -449,6 +449,34 @@ future round. Offer the fixes upstream separately.
   upstream's Angular host owns the color picker._ Removed on `diagram.destroy`,
   same reasoning as the `<style>` node above ([#12](https://github.com/Miragon/egon-core/issues/12)).
   Locked by the destroy case in `DomainStoryContextPadProvider.spec.ts`.
+- **`addDelete` asked the rules a question no rule can answer, then threw.** It
+  called `rules.allowed("elements.delete", { elements: { element: elements } })`
+  — a nested context no diagram-js/bpmn-js rule matches — and compared an array
+  verdict against its own local wrapper array (`deleteAllowed[0] === elements`,
+  never true). On denial it threw, and `getContextPadEntries` has no catch, so
+  registering any denying `elements.delete` rule would have killed the _whole_
+  context pad rather than one entry. Latent upstream only because no such rule
+  exists (`Rules.allowed` → `true` with no matching rule). Fixed locally per
+  [#85](https://github.com/Miragon/egon-core/issues/85): canonical flat
+  `{ elements }` context, array verdict read as the deletable subset, and denial
+  omits the entry instead of throwing. Locked by the delete-entry cases in
+  `DomainStoryContextPadProvider.spec.ts`.
+- **`selectedElement` was never cleared, so the host's color reply could recolor
+  a stale element.** _The bug is upstream's; the document-level `pickedColor`
+  seam is local (upstream's Angular host owns the picker)._ Only `addColorChange`
+  writes the field, and the connection branch of `getContextPadEntries` emits a
+  delete entry alone, so the previously selected shape stayed reachable — and an
+  async picker reply arriving after the pad closed recolored it, possibly after
+  deletion, minting an undo entry for a detached element.
+  `notifyColorPickerOfCurrentElementColor` likewise pre-seeded the picker with
+  the stale color, contradicting its own doc comment. Cleared locally on pad
+  re-entry and on `contextPad.close` per
+  [#85](https://github.com/Miragon/egon-core/issues/85) — both hooks are needed,
+  since `contextPad.close` misses direct `getEntries()` queries and the re-entry
+  clear misses "pad closed, picker replies later". Ordering is safe because
+  diagram-js' `ContextPad#open()` closes before it repopulates the providers.
+  Locked by the stale-selection cases in
+  `DomainStoryContextPadProvider.spec.ts`.
 
 ### Known, still shared with upstream
 
