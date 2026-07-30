@@ -113,6 +113,39 @@ function storyAt(topLeft: { x: number; y: number }): DomainStoryDocument {
     };
 }
 
+/**
+ * `storyAt`, plus an activity whose target does not exist in the file.
+ *
+ * That is the damage `pruneUnreferencedConnections` repairs on import: the edge
+ * cannot be added (its endpoint is not in the registry), so it is dropped and
+ * the story loads without it. It is also the only way to make `import.repaired`
+ * fire through the public API.
+ */
+function storyWithDanglingActivity(topLeft: {
+    x: number;
+    y: number;
+}): DomainStoryDocument {
+    const story = storyAt(topLeft);
+    return {
+        ...story,
+        domainStory: {
+            ...story.domainStory,
+            businessObjects: [
+                ...story.domainStory.businessObjects,
+                {
+                    id: "connection_dangling",
+                    type: ElementTypes.ACTIVITY,
+                    name: "reports",
+                    source: "shape_actor",
+                    target: "shape_gone",
+                    number: 1,
+                    waypoints: [{ x: 0, y: 0 }],
+                },
+            ],
+        },
+    };
+}
+
 /** Reads the positioned elements back out through the public export. */
 function exportedBounds(client: EgonClient): ExportedBounds[] {
     return (client.export().domainStory.businessObjects as ExportedBounds[])
@@ -295,6 +328,50 @@ describe("EgonClient on real adapters (browser)", () => {
             await settle();
 
             expect(viewportChanged).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("import.repaired", () => {
+        it("delivers the dropped edge ids, synchronously during import()", async () => {
+            diagram = await createTestDiagram();
+            const importRepaired = vi.fn();
+            diagram.client.on("import.repaired", importRepaired);
+
+            diagram.client.import(
+                storyWithDanglingActivity({ x: 100, y: 100 }),
+            );
+
+            // No `waitFor`: unlike the debounced events above, this one has to
+            // have arrived by the time `import()` returns, or a host cannot warn
+            // before it lets the user save the repaired story back over the file.
+            expect(importRepaired).toHaveBeenCalledWith({
+                removedConnectionIds: ["connection_dangling"],
+            });
+        });
+
+        it("stays silent for an undamaged story", async () => {
+            diagram = await createTestDiagram();
+            const importRepaired = vi.fn();
+            diagram.client.on("import.repaired", importRepaired);
+
+            diagram.client.import(storyAt({ x: 100, y: 100 }));
+            await settle();
+
+            expect(importRepaired).not.toHaveBeenCalled();
+        });
+
+        it("stops firing after off()", async () => {
+            diagram = await createTestDiagram();
+            const importRepaired = vi.fn();
+            diagram.client.on("import.repaired", importRepaired);
+            diagram.client.off("import.repaired", importRepaired);
+
+            diagram.client.import(
+                storyWithDanglingActivity({ x: 100, y: 100 }),
+            );
+            await settle();
+
+            expect(importRepaired).not.toHaveBeenCalled();
         });
     });
 

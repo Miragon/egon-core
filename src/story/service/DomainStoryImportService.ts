@@ -140,9 +140,10 @@ export class DomainStoryImportService {
         connections.forEach(this.addConnection, this);
 
         // Surface the repair so a host can tell the user the file was lossy.
-        // Internal diagram-js event on purpose: the public EgonClient API is
-        // frozen by ADR 0010 and widening it needs its own decision, while a
-        // host can already subscribe via `additionalModules`.
+        // This is the internal half of the public `import.repaired` event
+        // (ADR 0017): `DiagramJsModelerAdapter` listens here and re-emits the
+        // dropped ids through `ModelerPort`. Fired only when something was
+        // actually dropped, so a host handler doubles as "the file was damaged".
         if (removedConnections.length > 0) {
             this.eventBus.fire("dst.import.repaired", { removedConnections });
         }

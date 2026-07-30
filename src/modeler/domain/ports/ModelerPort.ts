@@ -2,6 +2,18 @@ import { DomainStoryDocument } from "../../../story/domain/DomainStoryDocument";
 import { ViewportData } from "../model/Viewport";
 
 /**
+ * What an import had to throw away to produce a loadable story.
+ *
+ * WHY ids rather than the dropped elements: a host's only sensible reaction is
+ * to tell the user the file was lossy and name what is missing. Handing out the
+ * internal business objects would leak the model representation across the
+ * public API and invite hosts to write to it.
+ */
+export interface ImportRepairData {
+    removedConnectionIds: string[];
+}
+
+/**
  * Port interface for diagram modeler operations.
  * Infrastructure layer provides the concrete implementation.
  */
@@ -49,10 +61,17 @@ export interface ModelerPort {
     onViewportChanged(callback: (viewport: ViewportData) => void): void;
 
     /**
+     * Subscribe to "the last import silently dropped something". Fires at most
+     * once per `import()`, and only when there was damage to repair.
+     */
+    onImportRepaired(callback: (repair: ImportRepairData) => void): void;
+
+    /**
      * Unsubscribe from events.
      */
     offStoryChanged(callback: () => void): void;
     offViewportChanged(callback: (viewport: ViewportData) => void): void;
+    offImportRepaired(callback: (repair: ImportRepairData) => void): void;
 
     /**
      * Clean up resources.

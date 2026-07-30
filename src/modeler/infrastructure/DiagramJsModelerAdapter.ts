@@ -13,7 +13,7 @@ import {
     type DebouncedCallback,
 } from "../../shared/infrastructure/debounce";
 
-import { ModelerPort } from "../domain/ports";
+import { ImportRepairData, ModelerPort } from "../domain/ports";
 import {
     DomainStoryDocument,
     DomainStoryTextRendererConfig,
@@ -40,6 +40,14 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     private readonly viewportCallbacks: Map<
         (viewport: ViewportData) => void,
         DebouncedCallback
+    > = new Map();
+    // Undebounced, so the map holds the wrapper itself: an import is one
+    // discrete host-triggered action that fires this at most once, and delaying
+    // "your file was lossy" past the import returning would be a regression, not
+    // a coalescing win.
+    private readonly importRepairCallbacks: Map<
+        (repair: ImportRepairData) => void,
+        (event: any) => void
     > = new Map();
 
     constructor(
@@ -126,6 +134,19 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         (this.eventBus.on as any)("canvas.viewbox.changed", wrapped);
     }
 
+    onImportRepaired(callback: (repair: ImportRepairData) => void): void {
+        // The internal event carries the dropped business objects; only their
+        // ids cross the port, so the model stays on this side of it.
+        const wrapped = (event: any) =>
+            callback({
+                removedConnectionIds: (event.removedConnections ?? []).map(
+                    (connection: { id: string }) => connection.id,
+                ),
+            });
+        this.importRepairCallbacks.set(callback, wrapped);
+        (this.eventBus.on as any)("dst.import.repaired", wrapped);
+    }
+
     offStoryChanged(callback: () => void): void {
         const wrapped = this.storyCallbacks.get(callback);
         if (wrapped) {
@@ -143,6 +164,14 @@ export class DiagramJsModelerAdapter implements ModelerPort {
             (this.eventBus.off as any)("canvas.viewbox.changed", wrapped);
             wrapped.cancel();
             this.viewportCallbacks.delete(callback);
+        }
+    }
+
+    offImportRepaired(callback: (repair: ImportRepairData) => void): void {
+        const wrapped = this.importRepairCallbacks.get(callback);
+        if (wrapped) {
+            (this.eventBus.off as any)("dst.import.repaired", wrapped);
+            this.importRepairCallbacks.delete(callback);
         }
     }
 
@@ -181,7 +210,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         return style;
     }
 
-    /** Detaches and disarms every host subscription, both event kinds. */
+    /** Detaches and disarms every host subscription, all three event kinds. */
     private unsubscribeAll(): void {
         this.storyCallbacks.forEach((wrapped) => {
             (this.eventBus.off as any)("commandStack.changed", wrapped);
@@ -194,6 +223,11 @@ export class DiagramJsModelerAdapter implements ModelerPort {
             wrapped.cancel();
         });
         this.viewportCallbacks.clear();
+
+        this.importRepairCallbacks.forEach((wrapped) => {
+            (this.eventBus.off as any)("dst.import.repaired", wrapped);
+        });
+        this.importRepairCallbacks.clear();
     }
 
     /**

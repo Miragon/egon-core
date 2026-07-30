@@ -1,7 +1,7 @@
 import type { ModuleDeclaration } from "didi";
 
 import { EgonClientConfig } from "./EgonClientConfig";
-import { IconPort, ModelerPort } from "../domain/ports";
+import { IconPort, ImportRepairData, ModelerPort } from "../domain/ports";
 
 import type {
     DomainStoryDocument,
@@ -18,6 +18,12 @@ export type EgonEventMap = {
     "story.changed": () => void;
     "viewport.changed": (viewport: ViewportData) => void;
     "icons.changed": (icons: IconSet) => void;
+    /**
+     * The story just imported was damaged and had to be repaired to load —
+     * dangling activity edges were dropped. Fires during `import()`, before it
+     * returns, so a host can warn that saving now would make the loss permanent.
+     */
+    "import.repaired": (repair: ImportRepairData) => void;
 };
 
 export type EgonEventName = keyof EgonEventMap;
@@ -102,6 +108,9 @@ export class EgonClient {
     /**
      * Import a domain story document into the diagram.
      * Icons from the document's domain section are automatically loaded.
+     *
+     * A damaged document is repaired rather than rejected; subscribe to
+     * `import.repaired` to learn what had to be dropped.
      */
     import(document: DomainStoryDocument): void {
         this.modelerPort.import(document);
@@ -131,6 +140,11 @@ export class EgonClient {
                     callback as EgonEventMap["viewport.changed"],
                 );
                 break;
+            case "import.repaired":
+                this.modelerPort.onImportRepaired(
+                    callback as EgonEventMap["import.repaired"],
+                );
+                break;
             case "icons.changed":
                 this.iconPort.onIconsChanged(
                     callback as EgonEventMap["icons.changed"],
@@ -152,6 +166,11 @@ export class EgonClient {
             case "viewport.changed":
                 this.modelerPort.offViewportChanged(
                     callback as EgonEventMap["viewport.changed"],
+                );
+                break;
+            case "import.repaired":
+                this.modelerPort.offImportRepaired(
+                    callback as EgonEventMap["import.repaired"],
                 );
                 break;
             case "icons.changed":

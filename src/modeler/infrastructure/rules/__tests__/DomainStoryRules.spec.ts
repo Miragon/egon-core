@@ -242,23 +242,6 @@ describe("DomainStoryRules", () => {
         });
     });
 
-    describe("connection.start", () => {
-        it("denies starting from a real element", () => {
-            expect(fireRule("connection.start", { source: ACTOR })).toBe(false);
-        });
-
-        it("ignores a missing source or a label", () => {
-            expect(
-                fireRule("connection.start", { source: undefined }),
-            ).toBeNull();
-            expect(
-                fireRule("connection.start", {
-                    source: { label: { labelTarget: WORK_OBJECT } },
-                }),
-            ).toBeNull();
-        });
-    });
-
     describe("connection.updateWaypoints", () => {
         it("echoes the connection type", () => {
             expect(

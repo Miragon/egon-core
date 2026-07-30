@@ -61,7 +61,9 @@ future round. Offer the fixes upstream separately.
   `src/story/domain/importRepair.ts`, which builds a new array and mutates
   nothing. It also **returns the dropped edges instead of a `boolean`** — the
   boolean was discarded at upstream's only call site, so a story silently lost
-  elements; locally the import service fires `dst.import.repaired` with them.
+  elements; locally the import service fires `dst.import.repaired` with them,
+  which `EgonClient` re-emits to hosts as the public `import.repaired` event
+  carrying the dropped ids (ADR 0017).
 - **`import-domain-story.service.ts` passes a `NaN` `parentIndex`.**
   `canvas.addShape(shape, parentShape, Number(parentShape.id))` —
   `Number("shape_1683")` is `NaN`. diagram-js' `Collections.add` normalizes only
@@ -238,13 +240,16 @@ future round. Offer the fixes upstream separately.
     re-homed** or the change would have been a silent regression. A hand-made
     file's missing numbers were minted by the first paint; they are filled once
     on import by `numberActivitiesFromActors`. And `element.updateLabel` blanks
-    an activity's number (`DomainStoryModeling` maps both `updateLabel` and
-    `updateNumber` onto that one command, each supplying half), which the repaint
-    put back — so upstream, renaming an activity drops it out of the sequence for
-    exactly as long as it is not drawn. `DomainStoryUpdateLabelHandler` now writes
-    only the half its caller supplied, which also retires the `context.name`
-    workaround `ActivityDirectionChangedHandler` carries for the mirror-image
-    name bug.
+    an activity's number (upstream's `DomainStoryModeling` maps both
+    `updateLabel` and `updateNumber` onto that one command, each supplying half),
+    which the repaint put back — so upstream, renaming an activity drops it out
+    of the sequence for exactly as long as it is not drawn. Locally that whole
+    split is gone: `updateNumber` was removed as dead (#84 — its one caller,
+    `ActivityDirectionChangedHandler.preExecute`, passed a business object where
+    an Element was expected, so it never wrote anything), and
+    `DomainStoryUpdateLabelHandler` is label-only. That also retires the
+    `context.name` workaround `ActivityDirectionChangedHandler` carried for the
+    mirror-image name bug.
 
     Three deletions go with it, all upstream-live code with no local counterpart
     left to port into. `DomainStoryRenderer.getActivityPath` — no callers, not a

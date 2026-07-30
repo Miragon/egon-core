@@ -197,8 +197,8 @@ describe("update-handler commands (browser)", () => {
             }));
             // Read *after* the rename on purpose: until #74 `element.updateLabel`
             // blanked an activity's number and only the following repaint put it
-            // back, so a renamed activity briefly had none. The label handler now
-            // writes only the half it was given, so this is still 1.
+            // back, so a renamed activity briefly had none. The label handler is
+            // label-only now (#84), so this is still 1.
             const numberBefore = activity.businessObject.number;
             expect(numberBefore).toBe(1);
 
@@ -216,9 +216,10 @@ describe("update-handler commands (browser)", () => {
                 })),
             ).toEqual(waypointsBefore);
             expect(activity.businessObject.number).toBe(numberBefore);
-            // The handler carries the name through `context.name` because
-            // `updateNumber` in preExecute runs the label handler, which would
-            // otherwise blank it — the restore has to put it back.
+            // A direction change never touches the name. It used to carry one
+            // through `context.name`, purely to undo the blanking its own nested
+            // `updateNumber` caused; both are gone (#84), so the name simply
+            // survives the swap and its undo untouched.
             expect(activity.businessObject.name).toBe("orders");
         });
     });

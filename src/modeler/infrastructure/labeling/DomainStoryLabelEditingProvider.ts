@@ -76,7 +76,6 @@ export class DomainStoryLabelEditingProvider implements DirectEditingProvider {
                 "element.mousedown",
                 "drag.init",
                 "canvas.viewbox.changing",
-                "autoPlace",
                 "popupMenu.open",
             ],
             () => {
@@ -120,10 +119,6 @@ export class DomainStoryLabelEditingProvider implements DirectEditingProvider {
                 "djs-direct-editing-content",
             );
             focusElement(editingBox.item(0) as HTMLDivElement);
-        });
-
-        eventBus.on("autoPlace.end", 500, (event: any) => {
-            this.activateDirectEdit(event.shape);
         });
     }
 
