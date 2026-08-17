@@ -478,6 +478,26 @@ future round. Offer the fixes upstream separately.
   Locked by the stale-selection cases in
   `DomainStoryContextPadProvider.spec.ts`.
 
+- **`domainStoryPalette.js` keys work-object entries as actors, and its title
+  fallback is unreachable.** Both live upstream at the recorded baseline
+  (`src/app/tools/modeler/diagram-js/features/palette/domainStoryPalette.js`,
+  lines 59 and 101). `addCanvasObjectTypes(name, "actor", WORKOBJECT)` builds the
+  key `domainStory-actor<Name>` for work objects too, so an icon assigned as
+  **both** an actor and a work object silently loses its actor entry — the later
+  work-object write overwrites it in the flat entries record, and the survivor
+  creates a `domainStory:workObject<Name>` shape from the actor slot. Fixed
+  locally by passing `"workObject"`, which namespaces the key and puts the entry
+  in the group its separator already uses (visual order is unchanged). The
+  second: `"Create " + title || "Create " + shortType` parses as
+  `("Create " + title) || …`, always truthy, so the `shortType` fallback is dead;
+  fixed to `"Create " + (title || shortType)`. Locked by
+  `palette/__tests__/DomainStoryPalette.spec.ts`. Issue
+  [#86](https://github.com/Miragon/egon-core/issues/86). A third fix in the same
+  file needs no entry here — the `dst.config.changed` listener calling
+  `palette._update()` (which bypasses `_rebuild()`'s `_diagramInitialized`,
+  providers-present and lazy-`_init()` guards) is local-only code; upstream has
+  no such listener.
+
 ### Known, still shared with upstream
 
 **Not** fixed here — each needs a design decision rather than a one-liner, so
