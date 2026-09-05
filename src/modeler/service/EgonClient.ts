@@ -129,6 +129,7 @@ export class EgonClient {
      * Subscribe to an event. Registering the same callback for the same event
      * more than once is idempotent; one matching {@link off} removes it. The
      * same callback may still be subscribed independently to different events.
+     * Throws a `TypeError` if a JavaScript caller supplies an unknown event.
      */
     on<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void {
         switch (event) {
@@ -152,12 +153,15 @@ export class EgonClient {
                     callback as EgonEventMap["icons.changed"],
                 );
                 break;
+            default:
+                throw new TypeError(`Unknown Egon event: ${String(event)}`);
         }
     }
 
     /**
      * Unsubscribe from an event. One call fully removes the matching callback,
-     * including a pending debounced delivery.
+     * including a pending debounced delivery. Removing a callback that is not
+     * registered is harmless. Throws a `TypeError` for an unknown event.
      */
     off<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void {
         switch (event) {
@@ -181,13 +185,16 @@ export class EgonClient {
                     callback as EgonEventMap["icons.changed"],
                 );
                 break;
+            default:
+                throw new TypeError(`Unknown Egon event: ${String(event)}`);
         }
     }
 
     // --- Viewport Operations ---
 
     /**
-     * Get the current viewport.
+     * Get the current viewport as a fresh object containing exactly
+     * `{ x, y, width, height }`.
      */
     getViewport(): ViewportData {
         return this.modelerPort.getViewport();

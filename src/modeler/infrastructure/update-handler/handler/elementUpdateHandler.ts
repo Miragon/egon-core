@@ -20,16 +20,24 @@ export class ElementColorChangeHandler implements CommandHandler {
 
     preExecute(context: CommandContext) {
         context.oldColor = context.businessObject.pickedColor;
+
+        if (isAnnotation(context.businessObject)) {
+            const connection = context.element.incoming[0];
+            context.annotationConnection = connection;
+            context.oldAnnotationConnectionColor =
+                connection?.businessObject.pickedColor;
+        }
     }
 
     execute(context: CommandContext): ElementLike[] {
         const semantic = context.businessObject;
         const element: Element = context.element;
 
-        if (isAnnotation(semantic) && element.incoming[0]) {
-            element.incoming[0].businessObject.pickedColor = context.newColor;
+        if (context.annotationConnection) {
+            context.annotationConnection.businessObject.pickedColor =
+                context.newColor;
             this.eventBus.fire("element.changed", {
-                element: element.incoming[0],
+                element: context.annotationConnection,
             });
         }
 
@@ -49,10 +57,11 @@ export class ElementColorChangeHandler implements CommandHandler {
         const semantic = context.businessObject;
         const element: Element = context.element;
 
-        if (isAnnotation(semantic) && element.incoming[0]) {
-            element.incoming[0].businessObject.pickedColor = context.oldColor;
+        if (context.annotationConnection) {
+            context.annotationConnection.businessObject.pickedColor =
+                context.oldAnnotationConnectionColor;
             this.eventBus.fire("element.changed", {
-                element: element.incoming[0],
+                element: context.annotationConnection,
             });
         }
 

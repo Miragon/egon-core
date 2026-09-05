@@ -40,7 +40,7 @@ instead of creating diagram-js adapters.
 ```ts
 const client = await EgonClient.create({
     container: document.getElementById("canvas")!,
-    viewport: { scroll: { x: 0, y: 0 }, zoom: 1 },
+    viewport: { x: 0, y: 0, width: 1200, height: 800 },
 });
 ```
 
@@ -62,11 +62,17 @@ on<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void
 off<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void
 ```
 
-| Event              | Callback signature                 | Fired when …                     |
-| ------------------ | ---------------------------------- | -------------------------------- |
-| `story.changed`    | `() => void`                       | The diagram content changes.     |
-| `viewport.changed` | `(viewport: ViewportData) => void` | The user scrolls or zooms.       |
-| `icons.changed`    | `(icons: IconSet) => void`         | The registered icon set changes. |
+| Event              | Callback signature                   | Fired when …                     |
+| ------------------ | ------------------------------------ | -------------------------------- |
+| `story.changed`    | `() => void`                         | The diagram content changes.     |
+| `viewport.changed` | `(viewport: ViewportData) => void`   | The user scrolls or zooms.       |
+| `icons.changed`    | `(icons: IconSet) => void`           | The registered icon set changes. |
+| `import.repaired`  | `(repair: ImportRepairData) => void` | A damaged import is repaired.    |
+
+Passing any other event name throws `TypeError` with the message
+`Unknown Egon event: <name>`. TypeScript rejects unknown names at compile time;
+the runtime check protects JavaScript callers and deliberate type escapes.
+Calling `off` with a supported event and an unregistered callback is harmless.
 
 ```ts
 client.on("story.changed", () => {
@@ -83,6 +89,10 @@ setViewport(viewport: ViewportData): void
 alignToOrigin(): void
 fitToScreen(): void
 ```
+
+`getViewport()` and every `viewport.changed` callback return a fresh plain
+object containing exactly `{ x, y, width, height }`. Internal diagram-js
+viewbox fields such as scale and inner/outer bounds are never exposed.
 
 `alignToOrigin` shifts all diagram contents to positive coordinates (origin plus
 a small offset). Stories with elements at negative coordinates break exports in

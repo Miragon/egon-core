@@ -497,6 +497,24 @@ future round. Offer the fixes upstream separately.
   `palette._update()` (which bypasses `_rebuild()`'s `_diagramInitialized`,
   providers-present and lazy-`_init()` guards) is local-only code; upstream has
   no such listener.
+- **Activity-label selection iterated one waypoint past the segment list.**
+  Upstream's `selectPartOfActivity` loops over every waypoint but reads both
+  `angleActivity[i]` and `waypoints[i + 1]`; the final waypoint has neither a
+  corresponding segment angle nor a following point. Fixed locally by stopping
+  at `waypoints.length - 1`, preserving the last-qualifying-horizontal-segment
+  rule and segment-zero fallback. Locked by the boundary and guarded
+  out-of-range cases in `labeling/__tests__/utils.spec.ts`. Issue
+  [#89](https://github.com/Miragon/egon-core/issues/89).
+- **Annotation colour undo restored its connector from the wrong snapshot.**
+  Upstream snapshots only the annotation's `pickedColor`, then writes that value
+  to both annotation and incoming connection on undo. If their original colours
+  differ, undo corrupts the connector; looking up `incoming[0]` again also means
+  the command does not own the exact object it changed. Fixed locally by
+  snapshotting the annotation colour, first incoming connection reference, and
+  connection colour independently during initial execution, then using those
+  snapshots for execute/revert (including `undefined`). Locked by the
+  recolour/undo/redo cases in `UpdateHandlerCommands.browser.spec.ts`. Issue
+  [#89](https://github.com/Miragon/egon-core/issues/89).
 
 ### Known, still shared with upstream
 

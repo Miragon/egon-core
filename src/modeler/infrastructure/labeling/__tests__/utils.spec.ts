@@ -5,6 +5,7 @@ import EventBus from "diagram-js/lib/core/EventBus";
 import {
     approximateArialSize11TextWidthInPixel,
     createAutocompleteForEdit,
+    selectPartOfActivity,
 } from "../utils";
 import { ElementTypes } from "../../../../story/domain/elementTypes";
 
@@ -106,6 +107,21 @@ function activeIndex(): number {
 const WORKOBJECT_TYPE = ElementTypes.WORKOBJECT + "Document";
 const ACTOR_TYPE = ElementTypes.ACTOR + "Person";
 
+function anglesGuardedAgainstOutOfRangeReads(values: number[]): number[] {
+    return new Proxy(values, {
+        get(target, property, receiver) {
+            if (
+                typeof property === "string" &&
+                /^\d+$/.test(property) &&
+                Number(property) >= target.length
+            ) {
+                throw new RangeError(`angle ${property} is out of range`);
+            }
+            return Reflect.get(target, property, receiver);
+        },
+    });
+}
+
 // Each createAutocompleteForEdit call registers a document-level click listener
 // that survives DOM resets. Left in place they leak across tests and interfere
 // with one another, so record and detach them per test for isolation.
@@ -158,6 +174,60 @@ describe("approximateArialSize11TextWidthInPixel", () => {
         const rendererOffset =
             approximateArialSize11TextWidthInPixel(name) / 2 + 20;
         expect(rendererOffset).toBeCloseTo((name.length * 5.1) / 2 + 20);
+    });
+});
+
+describe("selectPartOfActivity", () => {
+    it("can select the last valid segment without reading a non-existent angle", () => {
+        const waypoints = [
+            { x: 0, y: 0 },
+            { x: 20, y: 20 },
+            { x: 80, y: 20 },
+        ];
+        const angles = anglesGuardedAgainstOutOfRangeReads([45, 0]);
+
+        expect(selectPartOfActivity(waypoints, angles)).toBe(1);
+    });
+
+    it("selects the last of multiple qualifying horizontal segments", () => {
+        const waypoints = [
+            { x: 0, y: 0 },
+            { x: 60, y: 0 },
+            { x: 60, y: 20 },
+            { x: 120, y: 20 },
+        ];
+
+        expect(selectPartOfActivity(waypoints, [0, 90, 0])).toBe(2);
+    });
+
+    it("does not qualify a segment that is exactly 49 pixels long", () => {
+        const waypoints = [
+            { x: 0, y: 0 },
+            { x: 10, y: 10 },
+            { x: 59, y: 10 },
+        ];
+
+        expect(selectPartOfActivity(waypoints, [45, 0])).toBe(0);
+    });
+
+    it("qualifies a horizontal segment running in the reverse direction", () => {
+        const waypoints = [
+            { x: 0, y: 0 },
+            { x: 100, y: 20 },
+            { x: 40, y: 20 },
+        ];
+
+        expect(selectPartOfActivity(waypoints, [45, 180])).toBe(1);
+    });
+
+    it("falls back to segment zero when no segment qualifies", () => {
+        const waypoints = [
+            { x: 0, y: 0 },
+            { x: 20, y: 0 },
+            { x: 20, y: 30 },
+        ];
+
+        expect(selectPartOfActivity(waypoints, [0, 90])).toBe(0);
     });
 });
 

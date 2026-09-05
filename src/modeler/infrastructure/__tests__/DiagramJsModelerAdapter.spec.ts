@@ -102,6 +102,34 @@ describe("DiagramJsModelerAdapter", () => {
         vi.useRealTimers();
     });
 
+    describe("viewport projection", () => {
+        it("returns a fresh four-field viewport without leaking the canvas viewbox", () => {
+            const internalViewbox = {
+                x: 10,
+                y: 20,
+                width: 300,
+                height: 200,
+                scale: 2,
+                inner: { x: 1, y: 2, width: 3, height: 4 },
+                outer: { x: 5, y: 6, width: 7, height: 8 },
+            };
+            services.mockCanvas.viewbox.mockReturnValue(internalViewbox);
+
+            const viewport = adapter.getViewport();
+
+            expect(JSON.parse(JSON.stringify(viewport))).toEqual({
+                x: 10,
+                y: 20,
+                width: 300,
+                height: 200,
+            });
+            expect(viewport).not.toBe(internalViewbox);
+
+            viewport.x = 999;
+            expect(internalViewbox.x).toBe(10);
+        });
+    });
+
     describe("alignToOrigin", () => {
         it("should call align() on the alignToOrigin service", () => {
             adapter.alignToOrigin();
@@ -156,21 +184,47 @@ describe("DiagramJsModelerAdapter", () => {
             expect(storyChanged).toHaveBeenCalledTimes(1);
         });
 
-        it("collapses a viewbox burst and delivers the last viewbox", () => {
+        it("collapses a viewbox burst and projects the last viewbox", () => {
             const viewportChanged = vi.fn();
             adapter.onViewportChanged(viewportChanged);
 
             services.mockEventBus.fire("canvas.viewbox.changed", {
-                viewbox: { x: 1, y: 1, width: 10, height: 10 },
+                viewbox: {
+                    x: 1,
+                    y: 1,
+                    width: 10,
+                    height: 10,
+                    scale: 1,
+                    inner: {},
+                    outer: {},
+                },
             });
-            const last = { x: 9, y: 9, width: 90, height: 90 };
+            const last = {
+                x: 9,
+                y: 9,
+                width: 90,
+                height: 90,
+                scale: 2,
+                inner: { x: 1 },
+                outer: { x: 2 },
+            };
             services.mockEventBus.fire("canvas.viewbox.changed", {
                 viewbox: last,
             });
             vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
 
             expect(viewportChanged).toHaveBeenCalledTimes(1);
-            expect(viewportChanged).toHaveBeenCalledWith(last);
+            const delivered = viewportChanged.mock.calls[0]![0];
+            expect(JSON.parse(JSON.stringify(delivered))).toEqual({
+                x: 9,
+                y: 9,
+                width: 90,
+                height: 90,
+            });
+            expect(delivered).not.toBe(last);
+
+            delivered.x = 999;
+            expect(last.x).toBe(9);
         });
 
         it("delivers nothing after off(), even mid-window", () => {

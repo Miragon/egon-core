@@ -20,6 +20,16 @@ import {
     ViewportData,
 } from "../domain";
 
+/** Project diagram-js' richer viewbox onto the stable public port shape. */
+function projectViewport(viewbox: ViewportData): ViewportData {
+    return {
+        x: viewbox.x,
+        y: viewbox.y,
+        width: viewbox.width,
+        height: viewbox.height,
+    };
+}
+
 /**
  * Infrastructure adapter that implements ModelerPort using diagram-js.
  * This adapter isolates all diagram-js framework dependencies.
@@ -98,7 +108,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     }
 
     getViewport(): ViewportData {
-        return this.canvas.viewbox();
+        return projectViewport(this.canvas.viewbox());
     }
 
     setViewport(viewport: ViewportData): void {
@@ -134,7 +144,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
             return;
         }
         const wrapped = createDebouncedCallback((event: any) =>
-            callback(event.viewbox),
+            callback(projectViewport(event.viewbox)),
         );
         this.viewportCallbacks.set(callback, wrapped);
         (this.eventBus.on as any)("canvas.viewbox.changed", wrapped);

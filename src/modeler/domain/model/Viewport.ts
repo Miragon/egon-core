@@ -30,6 +30,10 @@ export class Viewport {
     }
 }
 
+/**
+ * Public viewport output/input shape. Adapter outputs are fresh objects with
+ * exactly these four fields, even when the underlying canvas viewbox has more.
+ */
 export interface ViewportData {
     x: number;
     y: number;
