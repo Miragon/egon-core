@@ -89,6 +89,9 @@ export class DiagramJsIconAdapter implements IconPort {
     }
 
     onIconsChanged(callback: (icons: IconSet) => void): void {
+        if (this.callbackRegistry.has(callback)) {
+            return;
+        }
         const wrapped = createDebouncedCallback(() =>
             callback(this.getIcons()),
         );

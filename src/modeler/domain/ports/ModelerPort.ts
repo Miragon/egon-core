@@ -55,7 +55,9 @@ export interface ModelerPort {
     fitToScreen(): void;
 
     /**
-     * Subscribe to internal diagram events.
+     * Subscribe to internal diagram events. Each method is idempotent for the
+     * same callback; one call to its matching `off` method fully removes that
+     * event subscription, including a pending debounced delivery.
      */
     onStoryChanged(callback: () => void): void;
     onViewportChanged(callback: (viewport: ViewportData) => void): void;

@@ -18,9 +18,9 @@ describe("IconCssInjector", () => {
     /**
      * A container attached to the document, plus its own `<style>`.
      *
-     * Attachment is not incidental: `HTMLStyleElement.sheet` stays `null` while
-     * the node is outside a document, so a detached container silences every
-     * insert and the assertions below would pass vacuously.
+     * Attachment is not incidental for CSSOM assertions:
+     * `HTMLStyleElement.sheet` stays `null` while the node is outside a
+     * document. Detached-state cases inspect `textContent` before attaching.
      */
     function createStyleElement(): HTMLStyleElement {
         const container = document.createElement("div");
@@ -35,6 +35,11 @@ describe("IconCssInjector", () => {
 
     function rulesOf(style: HTMLStyleElement): CSSStyleRule[] {
         return Array.from(style.sheet!.cssRules) as CSSStyleRule[];
+    }
+
+    function encodedSvg(rule: CSSStyleRule): string {
+        const encoded = rule.cssText.match(/base64,([^')]+)/)![1]!;
+        return atob(encoded);
     }
 
     it("inserts a rule whose selector is exactly the class it was given", () => {
@@ -58,10 +63,9 @@ describe("IconCssInjector", () => {
             '<svg width="24" height="24"><path/></svg>',
         );
 
-        const encoded =
-            rulesOf(styleElement)[0]!.cssText.match(/base64,([^')]+)/)![1]!;
-
-        expect(atob(encoded)).toBe("<svg><path/></svg>");
+        expect(encodedSvg(rulesOf(styleElement)[0]!)).toBe(
+            "<svg><path/></svg>",
+        );
     });
 
     it("is a silent no-op when no style element is configured", () => {
@@ -78,16 +82,112 @@ describe("IconCssInjector", () => {
         ).not.toThrow();
     });
 
-    it("is a silent no-op once its style element is detached", () => {
-        // The post-destroy() path: removing the node nulls its `sheet`, so a
-        // late icon write lands nowhere instead of throwing.
-        const styleElement = createStyleElement();
+    it("retains a rule added while detached and activates it on attachment", () => {
+        const container = document.createElement("div");
+        containers.push(container);
+        const styleElement = document.createElement("style");
         const injector = new IconCssInjector({ styleElement });
+
+        injector.addIconStyle("icon-domain-story-late", "<svg>late</svg>");
+
+        expect(styleElement.sheet).toBeNull();
+        expect(styleElement.textContent).toContain(
+            ".icon-domain-story-late::before",
+        );
+
+        container.appendChild(styleElement);
+        document.body.appendChild(container);
+
+        expect(rulesOf(styleElement)).toHaveLength(1);
+        expect(encodedSvg(rulesOf(styleElement)[0]!)).toBe("<svg>late</svg>");
+    });
+
+    it("replaces a detached rule before attachment", () => {
+        const container = document.createElement("div");
+        containers.push(container);
+        const styleElement = document.createElement("style");
+        const injector = new IconCssInjector({ styleElement });
+
+        injector.addIconStyle("icon-domain-story-late", "<svg>A</svg>");
+        injector.addIconStyle("icon-domain-story-late", "<svg>B</svg>");
+        container.appendChild(styleElement);
+        document.body.appendChild(container);
+
+        expect(rulesOf(styleElement)).toHaveLength(1);
+        expect(encodedSvg(rulesOf(styleElement)[0]!)).toBe("<svg>B</svg>");
+    });
+
+    it("keeps and replaces rules across detach and reattach", () => {
+        const styleElement = createStyleElement();
+        const container = styleElement.parentElement!;
+        const injector = new IconCssInjector({ styleElement });
+        injector.addIconStyle("icon-domain-story-kept", "<svg>A</svg>");
         styleElement.remove();
 
-        expect(() =>
-            injector.addIconStyle("icon-domain-story-late", "<svg/>"),
-        ).not.toThrow();
+        injector.addIconStyle("icon-domain-story-kept", "<svg>B</svg>");
+        expect(styleElement.sheet).toBeNull();
+
+        container.appendChild(styleElement);
+
+        expect(rulesOf(styleElement)).toHaveLength(1);
+        expect(encodedSvg(rulesOf(styleElement)[0]!)).toBe("<svg>B</svg>");
+    });
+
+    it("replaces a class rule instead of appending a duplicate", () => {
+        const styleElement = createStyleElement();
+        const injector = new IconCssInjector({ styleElement });
+
+        injector.addIconStyle("icon-domain-story-same", "<svg>A</svg>");
+        injector.addIconStyle("icon-domain-story-same", "<svg>B</svg>");
+
+        // Reread `.sheet`: replacing style text may replace the CSSStyleSheet
+        // object itself in a real browser.
+        expect(rulesOf(styleElement)).toHaveLength(1);
+        expect(encodedSvg(rulesOf(styleElement)[0]!)).toBe("<svg>B</svg>");
+    });
+
+    it("does not rewrite an unchanged class rule", () => {
+        const styleElement = createStyleElement();
+        const injector = new IconCssInjector({ styleElement });
+        injector.addIconStyle("icon-domain-story-same", "<svg>A</svg>");
+        const sheetAfterFirstWrite = styleElement.sheet;
+
+        injector.addIconStyle("icon-domain-story-same", "<svg>A</svg>");
+
+        expect(styleElement.sheet).toBe(sheetAfterFirstWrite);
+        expect(rulesOf(styleElement)).toHaveLength(1);
+    });
+
+    it("retains distinct class rules when one class is replaced", () => {
+        const styleElement = createStyleElement();
+        const injector = new IconCssInjector({ styleElement });
+
+        injector.addIconStyle("icon-domain-story-a", "<svg>A1</svg>");
+        injector.addIconStyle("icon-domain-story-b", "<svg>B</svg>");
+        injector.addIconStyle("icon-domain-story-a", "<svg>A2</svg>");
+
+        expect(
+            rulesOf(styleElement).map((rule) => [
+                rule.selectorText,
+                encodedSvg(rule),
+            ]),
+        ).toEqual([
+            [".icon-domain-story-a::before", "<svg>A2</svg>"],
+            [".icon-domain-story-b::before", "<svg>B</svg>"],
+        ]);
+    });
+
+    it("uses last-publication precedence for sanitized-name collisions", () => {
+        const styleElement = createStyleElement();
+        const injector = new IconCssInjector({ styleElement });
+
+        // The service sanitizes both source names to this same class before
+        // reaching the port; the port therefore replaces by class identity.
+        injector.addIconStyle("icon-domain-story-a_b", "<svg>dot</svg>");
+        injector.addIconStyle("icon-domain-story-a_b", "<svg>space</svg>");
+
+        expect(rulesOf(styleElement)).toHaveLength(1);
+        expect(encodedSvg(rulesOf(styleElement)[0]!)).toBe("<svg>space</svg>");
     });
 
     it("writes only into its own sheet when two injectors coexist", () => {
@@ -112,5 +212,19 @@ describe("IconCssInjector", () => {
         expect(rulesOf(styleB).map((rule) => rule.selectorText)).toEqual([
             ".icon-domain-story-b::before",
         ]);
+    });
+
+    it("keeps replacement state owned by each injector", () => {
+        const styleA = createStyleElement();
+        const styleB = createStyleElement();
+        const injectorA = new IconCssInjector({ styleElement: styleA });
+        const injectorB = new IconCssInjector({ styleElement: styleB });
+
+        injectorA.addIconStyle("icon-domain-story-shared", "<svg>A1</svg>");
+        injectorB.addIconStyle("icon-domain-story-shared", "<svg>B</svg>");
+        injectorA.addIconStyle("icon-domain-story-shared", "<svg>A2</svg>");
+
+        expect(encodedSvg(rulesOf(styleA)[0]!)).toBe("<svg>A2</svg>");
+        expect(encodedSvg(rulesOf(styleB)[0]!)).toBe("<svg>B</svg>");
     });
 });

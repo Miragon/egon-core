@@ -126,7 +126,9 @@ export class EgonClient {
     // --- Event Subscription ---
 
     /**
-     * Subscribe to an event.
+     * Subscribe to an event. Registering the same callback for the same event
+     * more than once is idempotent; one matching {@link off} removes it. The
+     * same callback may still be subscribed independently to different events.
      */
     on<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void {
         switch (event) {
@@ -154,7 +156,8 @@ export class EgonClient {
     }
 
     /**
-     * Unsubscribe from an event.
+     * Unsubscribe from an event. One call fully removes the matching callback,
+     * including a pending debounced delivery.
      */
     off<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void {
         switch (event) {

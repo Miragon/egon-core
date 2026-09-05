@@ -23,3 +23,4 @@ and the rules (when to write one, how superseding works).
 | [0015](0015-typed-rule-verdicts-at-the-grammar-adapter-seam.md) | Typed rule verdicts at the grammar↔adapter seam     | accepted                                                                    |
 | [0016](0016-rendering-is-read-only.md)                          | Rendering is read-only; model writes are commands   | accepted                                                                    |
 | [0017](0017-expose-import-repair-as-a-host-event.md)            | Expose import repair as the `import.repaired` event | accepted                                                                    |
+| [0018](0018-idempotent-event-subscriptions.md)                  | Make event subscriptions idempotent                 | accepted                                                                    |

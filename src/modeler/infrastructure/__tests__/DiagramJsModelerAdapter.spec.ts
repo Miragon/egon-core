@@ -287,6 +287,96 @@ describe("DiagramJsModelerAdapter", () => {
             vi.useFakeTimers();
         });
 
+        it("makes duplicate story subscriptions idempotent through off, resubscribe, and destroy", () => {
+            const storyChanged = vi.fn();
+            adapter.onStoryChanged(storyChanged);
+            services.mockEventBus.fire("commandStack.changed");
+
+            // Register again while delivery is pending. The original wrapper
+            // and timer must survive, without adding a second listener.
+            adapter.onStoryChanged(storyChanged);
+            expect(services.mockEventBus.listenerCount()).toBe(1);
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(storyChanged).toHaveBeenCalledTimes(1);
+
+            services.mockEventBus.fire("commandStack.changed");
+            adapter.offStoryChanged(storyChanged);
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(storyChanged).toHaveBeenCalledTimes(1);
+            expect(services.mockEventBus.listenerCount()).toBe(0);
+
+            adapter.onStoryChanged(storyChanged);
+            services.mockEventBus.fire("commandStack.changed");
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(storyChanged).toHaveBeenCalledTimes(2);
+
+            services.mockEventBus.fire("commandStack.changed");
+            adapter.destroy();
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(storyChanged).toHaveBeenCalledTimes(2);
+        });
+
+        it("makes duplicate viewport subscriptions idempotent through off, resubscribe, and destroy", () => {
+            const viewportChanged = vi.fn();
+            const first = { x: 1, y: 1, width: 10, height: 10 };
+            adapter.onViewportChanged(viewportChanged);
+            services.mockEventBus.fire("canvas.viewbox.changed", {
+                viewbox: first,
+            });
+
+            adapter.onViewportChanged(viewportChanged);
+            expect(services.mockEventBus.listenerCount()).toBe(1);
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(viewportChanged).toHaveBeenCalledTimes(1);
+            expect(viewportChanged).toHaveBeenLastCalledWith(first);
+
+            services.mockEventBus.fire("canvas.viewbox.changed", {
+                viewbox: first,
+            });
+            adapter.offViewportChanged(viewportChanged);
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(viewportChanged).toHaveBeenCalledTimes(1);
+
+            const second = { x: 2, y: 2, width: 20, height: 20 };
+            adapter.onViewportChanged(viewportChanged);
+            services.mockEventBus.fire("canvas.viewbox.changed", {
+                viewbox: second,
+            });
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(viewportChanged).toHaveBeenCalledTimes(2);
+            expect(viewportChanged).toHaveBeenLastCalledWith(second);
+
+            services.mockEventBus.fire("canvas.viewbox.changed", {
+                viewbox: second,
+            });
+            adapter.destroy();
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(viewportChanged).toHaveBeenCalledTimes(2);
+        });
+
+        it("makes duplicate import-repair subscriptions idempotent through off, resubscribe, and destroy", () => {
+            const importRepaired = vi.fn();
+            const repaired = { removedConnections: [{ id: "connection_1" }] };
+            adapter.onImportRepaired(importRepaired);
+            adapter.onImportRepaired(importRepaired);
+
+            services.mockEventBus.fire("dst.import.repaired", repaired);
+            expect(importRepaired).toHaveBeenCalledTimes(1);
+            expect(services.mockEventBus.listenerCount()).toBe(1);
+
+            adapter.offImportRepaired(importRepaired);
+            services.mockEventBus.fire("dst.import.repaired", repaired);
+            expect(importRepaired).toHaveBeenCalledTimes(1);
+
+            adapter.onImportRepaired(importRepaired);
+            services.mockEventBus.fire("dst.import.repaired", repaired);
+            expect(importRepaired).toHaveBeenCalledTimes(2);
+
+            adapter.destroy();
+            services.mockEventBus.fire("dst.import.repaired", repaired);
+            expect(importRepaired).toHaveBeenCalledTimes(2);
+        });
+
         it("keeps one function's two subscriptions independent", () => {
             // `EgonEventMap` types `story.changed` as `() => void`, which is
             // assignable to the viewport signature too — so a host may pass one
