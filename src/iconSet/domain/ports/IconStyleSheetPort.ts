@@ -10,8 +10,9 @@
  */
 export interface IconStyleSheetPort {
     /**
-     * Publish a CSS rule that renders `svgMarkup` as the mask-image for the
-     * given already-computed `cssClassName` (prefix + sanitized icon name).
+     * Publish or replace the CSS rule that renders `svgMarkup` as the mask-image
+     * for the given already-computed `cssClassName` (prefix + sanitized icon
+     * name).
      */
     addIconStyle(cssClassName: string, svgMarkup: string): void;
 }

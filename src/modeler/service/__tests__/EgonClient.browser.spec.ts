@@ -13,7 +13,7 @@ import {
 } from "../../../__tests__/helpers/testIconSet";
 import { ElementTypes } from "../../../story/domain/elementTypes";
 import type { DomainStoryDocument } from "../../../story/domain/DomainStoryDocument";
-import type { EgonClient } from "../EgonClient";
+import { EgonClient } from "../EgonClient";
 import type { ViewportData } from "../../domain";
 
 /**
@@ -144,6 +144,63 @@ function storyWithDanglingActivity(topLeft: {
             ],
         },
     };
+}
+
+/** A story whose stable icon names point at visibly versioned SVG markup. */
+function storyWithIconVersion(version: "A" | "B"): DomainStoryDocument {
+    const story = storyAt({ x: 100, y: 100 });
+    const versionedIcon = (shape: "circle" | "rect") =>
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" data-version="${version}">` +
+        `<${shape} x="2" y="2" cx="12" cy="12" r="10" width="20" height="20" fill="#333"/>` +
+        "</svg>";
+
+    return {
+        ...story,
+        iconSet: {
+            name: `version-${version}`,
+            actors: {
+                [TEST_ICON_NAMES.person]: versionedIcon("circle"),
+            },
+            workObjects: {
+                [TEST_ICON_NAMES.document]: versionedIcon("rect"),
+            },
+        },
+    };
+}
+
+function renderedIconVersion(
+    container: HTMLElement,
+    elementId: string,
+): string | null {
+    return (
+        container
+            .querySelector(`[data-element-id="${elementId}"] .djs-visual > svg`)
+            ?.getAttribute("data-version") ?? null
+    );
+}
+
+function iconRules(container: HTMLElement): CSSStyleRule[] {
+    const style = container.querySelector<HTMLStyleElement>(
+        "[data-egon-icons-css]",
+    );
+    return Array.from(style!.sheet!.cssRules) as CSSStyleRule[];
+}
+
+function svgPublishedFor(container: HTMLElement, iconName: string): string {
+    const rule = iconRules(container).find(
+        (candidate) =>
+            candidate.selectorText ===
+            `.icon-domain-story-${iconName}::before`.toLowerCase(),
+    );
+    const encoded = rule?.cssText.match(/base64,([^"')]+)/)?.[1];
+    if (!encoded) {
+        throw new Error(
+            `no published CSS rule for ${iconName}: ${JSON.stringify(
+                iconRules(container).map((candidate) => candidate.cssText),
+            )}`,
+        );
+    }
+    return atob(encoded);
 }
 
 /** Reads the positioned elements back out through the public export. */
@@ -486,11 +543,7 @@ describe("EgonClient on real adapters (browser)", () => {
         it("addIcon registers an icon and a CSS rule; removeIcon takes it back out", async () => {
             diagram = await createTestDiagram();
             diagram.client.loadIcons(TEST_ICON_SET);
-            const styleSheet =
-                diagram.container.querySelector<HTMLStyleElement>(
-                    "[data-egon-icons-css]",
-                )!.sheet!;
-            const rulesBefore = styleSheet.cssRules.length;
+            const rulesBefore = iconRules(diagram.container).length;
 
             diagram.client.addIcon(
                 "actor",
@@ -503,7 +556,7 @@ describe("EgonClient on real adapters (browser)", () => {
             expect(diagram.client.getIcons().actors["Robot"]).toContain("<svg");
             // The renderer paints icons through a mask-image rule, so the icon is
             // only usable once IconCssInjector published one for it.
-            expect(styleSheet.cssRules.length).toBe(rulesBefore + 1);
+            expect(iconRules(diagram.container).length).toBe(rulesBefore + 1);
 
             diagram.client.removeIcon("actor", "Robot");
 
@@ -527,6 +580,79 @@ describe("EgonClient on real adapters (browser)", () => {
             expect(
                 diagram.client.hasIcon("workObject", TEST_ICON_NAMES.document),
             ).toBe(true);
+        });
+
+        it("re-imports changed SVGs under the same actor and work-object names", async () => {
+            diagram = await createTestDiagram();
+            diagram.client.import(storyWithIconVersion("A"));
+
+            expect(renderedIconVersion(diagram.container, "shape_actor")).toBe(
+                "A",
+            );
+            expect(
+                renderedIconVersion(diagram.container, "shape_workobject"),
+            ).toBe("A");
+            expect(
+                svgPublishedFor(diagram.container, TEST_ICON_NAMES.person),
+            ).toContain('data-version="A"');
+            expect(
+                svgPublishedFor(diagram.container, TEST_ICON_NAMES.document),
+            ).toContain('data-version="A"');
+
+            diagram.client.import(storyWithIconVersion("B"));
+
+            expect(renderedIconVersion(diagram.container, "shape_actor")).toBe(
+                "B",
+            );
+            expect(
+                renderedIconVersion(diagram.container, "shape_workobject"),
+            ).toBe("B");
+            expect(
+                svgPublishedFor(diagram.container, TEST_ICON_NAMES.person),
+            ).toContain('data-version="B"');
+            expect(
+                svgPublishedFor(diagram.container, TEST_ICON_NAMES.document),
+            ).toContain('data-version="B"');
+            expect(
+                iconRules(diagram.container).filter(
+                    (rule) =>
+                        rule.selectorText ===
+                            `.icon-domain-story-${TEST_ICON_NAMES.person}::before`.toLowerCase() ||
+                        rule.selectorText ===
+                            `.icon-domain-story-${TEST_ICON_NAMES.document}::before`.toLowerCase(),
+                ),
+            ).toHaveLength(2);
+        });
+
+        it("activates icon rules loaded before the host is attached", async () => {
+            const container = document.createElement("div");
+            container.style.width = "800px";
+            container.style.height = "600px";
+            const client = await EgonClient.create({ container });
+            diagram = {
+                client,
+                container,
+                cleanup: () => {
+                    client.destroy();
+                    container.remove();
+                },
+            };
+
+            client.loadIcons(TEST_ICON_SET);
+            const style = container.querySelector<HTMLStyleElement>(
+                "[data-egon-icons-css]",
+            )!;
+            expect(style.sheet).toBeNull();
+
+            document.body.appendChild(container);
+
+            expect(iconRules(container).length).toBe(
+                Object.keys(TEST_ACTOR_ICONS).length +
+                    Object.keys(TEST_WORK_OBJECT_ICONS).length,
+            );
+            expect(svgPublishedFor(container, TEST_ICON_NAMES.person)).toBe(
+                TEST_ACTOR_ICONS[TEST_ICON_NAMES.person],
+            );
         });
     });
 

@@ -118,6 +118,9 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     }
 
     onStoryChanged(callback: () => void): void {
+        if (this.storyCallbacks.has(callback)) {
+            return;
+        }
         // Built once and reused for every event: a debouncer created per event
         // shares no timer with the previous one, so nothing coalesces and each
         // command reaches the host a full window late.
@@ -127,6 +130,9 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     }
 
     onViewportChanged(callback: (viewport: ViewportData) => void): void {
+        if (this.viewportCallbacks.has(callback)) {
+            return;
+        }
         const wrapped = createDebouncedCallback((event: any) =>
             callback(event.viewbox),
         );
@@ -135,6 +141,9 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     }
 
     onImportRepaired(callback: (repair: ImportRepairData) => void): void {
+        if (this.importRepairCallbacks.has(callback)) {
+            return;
+        }
         // The internal event carries the dropped business objects; only their
         // ids cross the port, so the model stays on this side of it.
         const wrapped = (event: any) =>

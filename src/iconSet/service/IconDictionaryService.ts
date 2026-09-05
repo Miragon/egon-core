@@ -36,13 +36,7 @@ export class IconDictionaryService {
             throw new Error("Name should not include type!");
         }
 
-        let collection = new Dictionary<string>();
-        if (type === ElementTypes.ACTOR) {
-            collection = this.selectedActorsDictionary;
-        } else if (type === ElementTypes.WORKOBJECT) {
-            collection = this.selectedWorkObjectsDictionary;
-        }
-        collection.set(name, src);
+        this.getSelectedDictionary(type).set(name, src);
     }
 
     unregisterIconForType(type: ElementTypes, name: string): void {
@@ -50,31 +44,26 @@ export class IconDictionaryService {
             throw new Error("Name should not include type!");
         }
 
-        let collection = new Dictionary<string>();
-        if (type === ElementTypes.ACTOR) {
-            collection = this.selectedActorsDictionary;
-        } else if (type === ElementTypes.WORKOBJECT) {
-            collection = this.selectedWorkObjectsDictionary;
-        }
-        collection.delete(name);
+        this.getSelectedDictionary(type).delete(name);
     }
 
     updateIconRegistries(config: IconSet): void {
-        const newIcons = new Dictionary<string>();
-        this.extractCustomIconsFromDictionary(config.actors, newIcons);
-        this.extractCustomIconsFromDictionary(config.workObjects, newIcons);
+        const currentIcons = new Dictionary<string>();
+        // Dictionary is first-write-wins, so actors deliberately take
+        // precedence when one imported set uses the same name in both halves.
+        currentIcons.appendDict(config.actors);
+        currentIcons.appendDict(config.workObjects);
 
-        // Add new icons to the global dictionary
-        newIcons.keysArray().forEach((key) => {
-            const custom = newIcons.get(key);
-            this.addIMGToIconDictionary(custom, key);
+        // Imports refresh names already present in the historical pool. Keep
+        // entries absent from this import, but replace every incoming value
+        // explicitly because Dictionary.set() never overwrites.
+        currentIcons.keysArray().forEach((key) => {
+            this.customIcons.delete(key);
+            this.customIcons.set(key, currentIcons.get(key));
         });
 
         // Generate CSS for ALL custom icons in the current story's config
-        const allCurrentIcons = new Dictionary<string>();
-        allCurrentIcons.appendDict(config.actors);
-        allCurrentIcons.appendDict(config.workObjects);
-        this.addIconsToCss(allCurrentIcons);
+        this.addIconsToCss(currentIcons);
 
         // Import replaces (rather than merges into) the selected icon set:
         // hard-swap the selected dictionaries + name to the imported config.
@@ -153,16 +142,13 @@ export class IconDictionaryService {
         this.selectedWorkObjectsDictionary = iconSet.workObjects;
     }
 
-    private extractCustomIconsFromDictionary(
-        elementDictionary: Dictionary<string>,
-        collector: Dictionary<string>,
-    ) {
-        // Keys are stored verbatim: sanitizing here permanently mutated names
-        // (e.g. "my.icon.v2" → "my.icon"), losing the original on round-trip.
-        elementDictionary.keysArray().forEach((name) => {
-            if (!this.getFullDictionary().has(name)) {
-                collector.set(name, elementDictionary.get(name));
-            }
-        });
+    private getSelectedDictionary(type: ElementTypes): Dictionary<string> {
+        if (type === ElementTypes.ACTOR) {
+            return this.selectedActorsDictionary;
+        }
+        if (type === ElementTypes.WORKOBJECT) {
+            return this.selectedWorkObjectsDictionary;
+        }
+        throw new Error(`Unsupported icon element type: ${type}`);
     }
 }

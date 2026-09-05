@@ -360,5 +360,34 @@ describe("DiagramJsIconAdapter", () => {
 
             expect(iconsChanged).not.toHaveBeenCalled();
         });
+
+        it("makes duplicate subscriptions idempotent through off, resubscribe, and destroy", () => {
+            const iconsChanged = vi.fn();
+            adapter.onIconsChanged(iconsChanged);
+            mocks.mockEventBus.fire("dst.config.changed");
+
+            // A duplicate while the timer is armed must neither replace and
+            // orphan that timer nor attach another listener.
+            adapter.onIconsChanged(iconsChanged);
+            expect(mocks.mockEventBus.listenerCount()).toBe(1);
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(iconsChanged).toHaveBeenCalledTimes(1);
+
+            mocks.mockEventBus.fire("dst.config.changed");
+            adapter.offIconsChanged(iconsChanged);
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(iconsChanged).toHaveBeenCalledTimes(1);
+            expect(mocks.mockEventBus.listenerCount()).toBe(0);
+
+            adapter.onIconsChanged(iconsChanged);
+            mocks.mockEventBus.fire("dst.config.changed");
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(iconsChanged).toHaveBeenCalledTimes(2);
+
+            mocks.mockEventBus.fire("dst.config.changed");
+            adapter.destroy();
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(iconsChanged).toHaveBeenCalledTimes(2);
+        });
     });
 });

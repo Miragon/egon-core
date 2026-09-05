@@ -6,6 +6,8 @@ import {
 import { Dictionary } from "../../../story/domain/dictionary";
 import { ElementTypes } from "../../../story/domain/elementTypes";
 import { IconStyleSheetPort } from "../../domain/ports/IconStyleSheetPort";
+import { IconSetImportExportService } from "../IconSetImportExportService";
+import type { IconSet } from "../../../story/domain/iconSet";
 
 /**
  * Regression cover for issue #4: a custom icon whose name contains a dot must
@@ -20,6 +22,18 @@ class RecordingStyleSheetPort implements IconStyleSheetPort {
     addIconStyle(cssClassName: string, svgMarkup: string): void {
         this.calls.push([cssClassName, svgMarkup]);
     }
+}
+
+function iconSet(
+    actors: Record<string, string>,
+    workObjects: Record<string, string>,
+    name = "icons",
+): IconSet {
+    return {
+        name,
+        actors: Dictionary.fromRecord(actors),
+        workObjects: Dictionary.fromRecord(workObjects),
+    };
 }
 
 describe("IconDictionaryService CSS class generation", () => {
@@ -106,6 +120,164 @@ describe("IconDictionaryService CSS class generation", () => {
 
             expect(service.getFullDictionary().has("onlySelected")).toBe(false);
             expect(service.getIconSource("onlySelected")).toBe("<svg/>");
+        });
+    });
+
+    describe("icon-set replacement", () => {
+        it.each(["actor", "work object"])(
+            "refreshes a re-imported %s in the pool, selection, export, and CSS",
+            (category) => {
+                const port = new RecordingStyleSheetPort();
+                const service = new IconDictionaryService(port);
+                const importer = new IconSetImportExportService(service);
+                const firstActors: Record<string, string> =
+                    category === "actor" ? { Same: "<svg>A</svg>" } : {};
+                const firstWorkObjects: Record<string, string> =
+                    category === "work object" ? { Same: "<svg>A</svg>" } : {};
+                const secondActors: Record<string, string> =
+                    category === "actor" ? { Same: "<svg>B</svg>" } : {};
+                const secondWorkObjects: Record<string, string> =
+                    category === "work object" ? { Same: "<svg>B</svg>" } : {};
+
+                service.updateIconRegistries(
+                    iconSet(firstActors, firstWorkObjects, "first"),
+                );
+                service.updateIconRegistries(
+                    iconSet(secondActors, secondWorkObjects, "second"),
+                );
+
+                expect(service.getIconSource("Same")).toBe("<svg>B</svg>");
+                expect(service.getFullDictionary().get("Same")).toBe(
+                    "<svg>B</svg>",
+                );
+                expect(importer.getCurrentConfigurationForExport()).toEqual({
+                    name: "second",
+                    actors: secondActors,
+                    workObjects: secondWorkObjects,
+                });
+                expect(port.calls[port.calls.length - 1]).toEqual([
+                    service.getCSSClassOfIcon("Same"),
+                    "<svg>B</svg>",
+                ]);
+            },
+        );
+
+        it("keeps historical pool entries while replacing the selected set", () => {
+            const service = new IconDictionaryService(
+                new RecordingStyleSheetPort(),
+            );
+            const importer = new IconSetImportExportService(service);
+            service.updateIconRegistries(
+                iconSet({ Old: "<svg>old</svg>" }, {}),
+            );
+
+            service.updateIconRegistries(
+                iconSet({}, { Current: "<svg>current</svg>" }, "current"),
+            );
+
+            expect(service.getFullDictionary().toRecord()).toEqual({
+                Old: "<svg>old</svg>",
+                Current: "<svg>current</svg>",
+            });
+            expect(importer.getCurrentConfigurationForExport()).toEqual({
+                name: "current",
+                actors: {},
+                workObjects: { Current: "<svg>current</svg>" },
+            });
+        });
+
+        it("is stable across repeated identical imports", () => {
+            const port = new RecordingStyleSheetPort();
+            const service = new IconDictionaryService(port);
+            const imported = iconSet(
+                { Person: "<svg>person</svg>" },
+                { Document: "<svg>document</svg>" },
+            );
+
+            service.updateIconRegistries(imported);
+            service.updateIconRegistries(imported);
+
+            expect(service.getFullDictionary().toRecord()).toEqual({
+                Person: "<svg>person</svg>",
+                Document: "<svg>document</svg>",
+            });
+            expect(port.calls).toHaveLength(4);
+            expect(port.calls.slice(0, 2)).toEqual(port.calls.slice(2));
+        });
+
+        it("uses the actor value when categories share an icon name", () => {
+            const port = new RecordingStyleSheetPort();
+            const service = new IconDictionaryService(port);
+
+            service.updateIconRegistries(
+                iconSet(
+                    { Shared: "<svg>actor</svg>" },
+                    { Shared: "<svg>work-object</svg>" },
+                ),
+            );
+
+            expect(service.getIconSource("Shared")).toBe("<svg>actor</svg>");
+            expect(port.calls).toEqual([
+                [service.getCSSClassOfIcon("Shared"), "<svg>actor</svg>"],
+            ]);
+            expect(service.getActorsDictionary().get("Shared")).toBe(
+                "<svg>actor</svg>",
+            );
+            expect(service.getWorkObjectsDictionary().get("Shared")).toBe(
+                "<svg>work-object</svg>",
+            );
+        });
+    });
+
+    describe("type validation", () => {
+        it.each(["register", "unregister"])(
+            "throws before mutating dictionaries on unsupported %s",
+            (operation) => {
+                const service = new IconDictionaryService(
+                    new RecordingStyleSheetPort(),
+                );
+                service.updateIconRegistries(
+                    iconSet(
+                        { Person: "<svg>person</svg>" },
+                        { Document: "<svg>document</svg>" },
+                    ),
+                );
+                const actorsBefore = service.getActorsDictionary().toRecord();
+                const workObjectsBefore = service
+                    .getWorkObjectsDictionary()
+                    .toRecord();
+
+                expect(() => {
+                    if (operation === "register") {
+                        service.registerIconForType(
+                            ElementTypes.ACTIVITY,
+                            "Invalid",
+                            "<svg/>",
+                        );
+                    } else {
+                        service.unregisterIconForType(
+                            ElementTypes.ACTIVITY,
+                            "Person",
+                        );
+                    }
+                }).toThrow("Unsupported icon element type");
+                expect(service.getActorsDictionary().toRecord()).toEqual(
+                    actorsBefore,
+                );
+                expect(service.getWorkObjectsDictionary().toRecord()).toEqual(
+                    workObjectsBefore,
+                );
+            },
+        );
+
+        it("keeps unsupported read-only lookup behavior", () => {
+            const service = new IconDictionaryService(
+                new RecordingStyleSheetPort(),
+            );
+
+            expect(
+                service.getIconsAssignedAs(ElementTypes.ACTIVITY).toRecord(),
+            ).toEqual({});
         });
     });
 });
