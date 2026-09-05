@@ -70,9 +70,9 @@ describe("activity numbering (browser)", () => {
      * The context `DomainStoryPopupService.handleUpdate` builds — and, since
      * #68, all it builds. The popup no longer touches the model and no longer
      * runs the cascade; `ActivityChangedHandler` owns the whole transaction, so
-     * everything here is undoable and redoable as one action. Reproduced rather
-     * than driven through `open()` because that needs a `#egon-io-container` in
-     * the host document and a real dblclick; the context shape is the contract.
+     * everything here is undoable and redoable as one action. Reproduced here
+     * because the context shape is the command-handler contract; popup opening
+     * and instance-local rendering have their own browser regressions.
      */
     function editActivityThroughPopupFlow(
         modeler: TestModeler,
