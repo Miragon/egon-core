@@ -58,7 +58,9 @@ export function selectPartOfActivity(waypoints: any, angleActivity: any) {
     const lineLength = 49;
     let selectedActivity = 0;
 
-    for (let i = 0; i < waypoints.length; i++) {
+    // Intentional correction to upstream: n waypoints define only n - 1
+    // segments, so the final waypoint has no following point or angle.
+    for (let i = 0; i < waypoints.length - 1; i++) {
         if (angleActivity[i] === 0 || angleActivity[i] === 180) {
             const length = Math.abs(waypoints[i].x - waypoints[i + 1].x);
             if (length > lineLength) {

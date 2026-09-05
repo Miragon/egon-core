@@ -80,36 +80,92 @@ describe("update-handler commands (browser)", () => {
             expect(workObject.businessObject.pickedColor).toBe("#0000ff");
         });
 
-        it("recolours an annotation's incoming connection with it, and undoes both", () => {
+        const connectedAnnotationCases = [
+            {
+                name: "different annotation and connection colours",
+                annotationColor: "#111111",
+                connectionColor: "#222222",
+            },
+            {
+                name: "an annotation colour that was undefined",
+                annotationColor: undefined,
+                connectionColor: "#222222",
+            },
+            {
+                name: "a connection colour that was undefined",
+                annotationColor: "#111111",
+                connectionColor: undefined,
+            },
+        ];
+
+        for (const {
+            name,
+            annotationColor,
+            connectionColor,
+        } of connectedAnnotationCases) {
+            it(`independently restores ${name} through repeated undo`, () => {
+                modeler = createTestModeler();
+                const workObject = addWorkObject(modeler, {
+                    point: { x: 200, y: 200 },
+                });
+                const annotation = addAnnotation(modeler, {
+                    point: { x: 500, y: 200 },
+                    pickedColor: annotationColor,
+                });
+                // The grammar answers CONNECTION (not ACTIVITY) for an
+                // annotation target, so this is the edge the handler couples.
+                const connection = connect(
+                    modeler,
+                    workObject,
+                    annotation,
+                    ElementTypes.CONNECTION,
+                )!;
+                connection.businessObject.pickedColor = connectionColor;
+                expect(annotation.incoming[0]).toBe(connection);
+
+                changeColor(annotation, "#123456");
+                expect(annotation.businessObject.pickedColor).toBe("#123456");
+                expect(connection.businessObject.pickedColor).toBe("#123456");
+
+                modeler.commandStack.undo();
+                expect(annotation.businessObject.pickedColor).toBe(
+                    annotationColor,
+                );
+                expect(connection.businessObject.pickedColor).toBe(
+                    connectionColor,
+                );
+
+                modeler.commandStack.redo();
+                expect(annotation.businessObject.pickedColor).toBe("#123456");
+                expect(connection.businessObject.pickedColor).toBe("#123456");
+
+                modeler.commandStack.undo();
+                expect(annotation.businessObject.pickedColor).toBe(
+                    annotationColor,
+                );
+                expect(connection.businessObject.pickedColor).toBe(
+                    connectionColor,
+                );
+            });
+        }
+
+        it("recolours and restores an annotation without a connection", () => {
             modeler = createTestModeler();
-            const workObject = addWorkObject(modeler, {
-                point: { x: 200, y: 200 },
-            });
             const annotation = addAnnotation(modeler, {
-                point: { x: 500, y: 200 },
+                pickedColor: "#111111",
             });
-            // The grammar answers CONNECTION (not ACTIVITY) for an annotation
-            // target, so this is the edge the handler is written for.
-            const connection = connect(
-                modeler,
-                workObject,
-                annotation,
-                ElementTypes.CONNECTION,
-            )!;
-            expect(annotation.incoming[0]).toBe(connection);
 
             changeColor(annotation, "#123456");
-
-            // WHY the handler special-cases annotations: an annotation and its
-            // dashed connector read as one glyph, so recolouring one without the
-            // other looks like a rendering bug.
             expect(annotation.businessObject.pickedColor).toBe("#123456");
-            expect(connection.businessObject.pickedColor).toBe("#123456");
 
             modeler.commandStack.undo();
+            expect(annotation.businessObject.pickedColor).toBe("#111111");
 
-            expect(annotation.businessObject.pickedColor).toBeUndefined();
-            expect(connection.businessObject.pickedColor).toBeUndefined();
+            modeler.commandStack.redo();
+            expect(annotation.businessObject.pickedColor).toBe("#123456");
+
+            modeler.commandStack.undo();
+            expect(annotation.businessObject.pickedColor).toBe("#111111");
         });
     });
 

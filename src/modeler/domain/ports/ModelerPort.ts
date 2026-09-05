@@ -29,7 +29,8 @@ export interface ModelerPort {
     export(): DomainStoryDocument;
 
     /**
-     * Get the current viewport.
+     * Get the current viewport as a fresh object containing exactly
+     * `{ x, y, width, height }`.
      */
     getViewport(): ViewportData;
 
@@ -60,6 +61,10 @@ export interface ModelerPort {
      * event subscription, including a pending debounced delivery.
      */
     onStoryChanged(callback: () => void): void;
+    /**
+     * The viewport callback receives a fresh object containing exactly
+     * `{ x, y, width, height }`.
+     */
     onViewportChanged(callback: (viewport: ViewportData) => void): void;
 
     /**

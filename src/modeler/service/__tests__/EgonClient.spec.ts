@@ -183,6 +183,21 @@ describe("EgonClient (Application Service)", () => {
             expect(mockIconPort.onIconsChanged).toHaveBeenCalledWith(callback);
         });
 
+        it("rejects an unknown event in on without calling a port", () => {
+            const callback = vi.fn();
+            const javascriptClient = client as unknown as {
+                on(event: string, callback: () => void): void;
+            };
+
+            expect(() =>
+                javascriptClient.on("unknown.event", callback),
+            ).toThrow(new TypeError("Unknown Egon event: unknown.event"));
+            expect(mockModelerPort.onStoryChanged).not.toHaveBeenCalled();
+            expect(mockModelerPort.onViewportChanged).not.toHaveBeenCalled();
+            expect(mockModelerPort.onImportRepaired).not.toHaveBeenCalled();
+            expect(mockIconPort.onIconsChanged).not.toHaveBeenCalled();
+        });
+
         it("should route off story.changed to modeler port", () => {
             const callback = vi.fn();
             client.off("story.changed", callback);
@@ -215,6 +230,21 @@ describe("EgonClient (Application Service)", () => {
             client.off("icons.changed", callback);
 
             expect(mockIconPort.offIconsChanged).toHaveBeenCalledWith(callback);
+        });
+
+        it("rejects an unknown event in off without calling a port", () => {
+            const callback = vi.fn();
+            const javascriptClient = client as unknown as {
+                off(event: string, callback: () => void): void;
+            };
+
+            expect(() =>
+                javascriptClient.off("unknown.event", callback),
+            ).toThrow(new TypeError("Unknown Egon event: unknown.event"));
+            expect(mockModelerPort.offStoryChanged).not.toHaveBeenCalled();
+            expect(mockModelerPort.offViewportChanged).not.toHaveBeenCalled();
+            expect(mockModelerPort.offImportRepaired).not.toHaveBeenCalled();
+            expect(mockIconPort.offIconsChanged).not.toHaveBeenCalled();
         });
     });
 
