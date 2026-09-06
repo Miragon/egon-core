@@ -30,7 +30,7 @@ export class DomainStoryReplaceOption {
         const replaceOption: ReplaceOption[] = [];
 
         actors.keysArray().forEach((actorType) => {
-            if (!name.includes(actorType)) {
+            if (name !== `${ElementTypes.ACTOR}${actorType}`) {
                 replaceOption.push({
                     label: "Change to " + actorType,
                     actionName: "replace-with-actor-" + actorType.toLowerCase(),
@@ -60,7 +60,7 @@ export class DomainStoryReplaceOption {
         const replaceOption: ReplaceOption[] = [];
 
         workObjects.keysArray().forEach((workObjectType) => {
-            if (!name.includes(workObjectType)) {
+            if (name !== `${ElementTypes.WORKOBJECT}${workObjectType}`) {
                 replaceOption.push({
                     label: "Change to " + workObjectType,
                     actionName:

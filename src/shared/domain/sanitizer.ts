@@ -1,5 +1,22 @@
 export function sanitizeTextForSVGExport(str: string): string {
-    return str.replaceAll("--", "––");
+    return str
+        .replaceAll("--", "––")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+}
+
+/**
+ * Reverses the legacy substitutions made by `sanitizeTextForSVGExport`.
+ *
+ * This mapping is intentionally narrow and lossy: literal `&lt;`/`&gt;` entities
+ * and literal en-dash pairs cannot be distinguished from sanitized text. It is
+ * not a general-purpose XML decoder.
+ */
+export function unsanitizeTextForSVGExport(str: string): string {
+    return str
+        .replaceAll("&lt;", "<")
+        .replaceAll("&gt;", ">")
+        .replaceAll("––", "--");
 }
 
 // sanitize user-Input to be Desktop-Filename safe

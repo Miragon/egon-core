@@ -515,6 +515,37 @@ future round. Offer the fixes upstream separately.
   snapshots for execute/revert (including `undefined`). Locked by the
   recolour/undo/redo cases in `UpdateHandlerCommands.browser.spec.ts`. Issue
   [#89](https://github.com/Miragon/egon-core/issues/89).
+- **`rgbaToHex` extracted any numbers from any string and assumed an alpha
+  channel existed.** A named colour or malformed picker result threw on the
+  non-null `match`, while opaque `rgb()` produced `NaN` alpha and unrestricted
+  numeric extraction could manufacture a colour from unsupported syntax. Fixed
+  locally with complete, case-insensitive parsing of comma-separated `rgb()` and
+  `rgba()`, range checks, rounded byte channels, and unchanged passthrough for
+  everything outside that targeted syntax. The shared hex validator now also
+  accepts exactly 3, 4, 6, or 8 digits instead of accidentally accepting seven.
+  The context-pad trigger remains deliberately unchanged: conversion happens
+  only when the previous colour contains hex alpha. Locked by
+  `colorConverter.spec.ts` and actual `pickedColor` events in
+  `DomainStoryContextPadProvider.spec.ts`. Issue
+  [#90](https://github.com/Miragon/egon-core/issues/90).
+- **Replacement options matched icon names by substring instead of full element
+  type.** With registered `Person` and `SalesPerson`, a current
+  `domainStory:actorSalesPerson` filtered out both; the same defect affected work
+  objects and could also collide across category prefixes. Fixed locally by
+  comparing the current type with the category prefix plus the candidate's exact
+  icon name. Registration order, dense arrays and menu metadata stay unchanged.
+  Locked by `DomainStoryReplaceOption.spec.ts`. Issue
+  [#90](https://github.com/Miragon/egon-core/issues/90).
+- **The SVG text sanitizer behavior specified by issue #90 is implemented
+  locally.** `sanitizeTextForSVGExport` now maps angle brackets to `&lt;` and
+  `&gt;` while retaining its legacy `--` to `––` substitution; the paired
+  `unsanitizeTextForSVGExport` reverses those three mappings. This is deliberately
+  not a general XML codec and is lossy for literal entities and en-dash pairs.
+  Label editing and export pipelines are unchanged, as are desktop-filename and
+  CSS sanitization. The upstream baseline object was unavailable for comparison,
+  so this records the issue-specified behavior without claiming a verified
+  upstream copy. Locked by `sanitizer.spec.ts`. Issue
+  [#90](https://github.com/Miragon/egon-core/issues/90).
 
 ### Known, still shared with upstream
 

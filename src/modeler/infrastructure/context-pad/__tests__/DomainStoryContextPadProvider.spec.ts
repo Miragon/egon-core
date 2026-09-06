@@ -235,6 +235,69 @@ describe("DomainStoryContextPadProvider color change", () => {
         expect(dirtyFlagService.makeDirty).toHaveBeenCalledTimes(1);
     });
 
+    it.each([
+        ["rgb(12, 128, 255)", "#0c80ffff"],
+        ["rgba(12.4, 127.5, 254.6, .5)", "#0c80ff80"],
+        ["rebeccapurple", "rebeccapurple"],
+    ])(
+        "converts picked color %s only when the previous color has hex alpha",
+        (pickedColor, expected) => {
+            const { instance, commandStack } = provider();
+            const el = element("Actor_1", ElementTypes.ACTOR, "#12345680");
+
+            instance.getContextPadEntries(el);
+            document.dispatchEvent(
+                new CustomEvent("pickedColor", {
+                    detail: { color: pickedColor },
+                }),
+            );
+
+            expect(commandStack.execute).toHaveBeenCalledTimes(1);
+            expect(commandStack.execute).toHaveBeenCalledWith(
+                "element.colorChange",
+                expect.objectContaining({ newColor: expected }),
+            );
+            expect(
+                commandStack.execute.mock.calls[0][1].newColor,
+            ).not.toContain("NaN");
+        },
+    );
+
+    it("converts each mixed multi-selection according to its previous color", () => {
+        const { instance, commandStack } = provider();
+        const alphaHex = element("Actor_1", ElementTypes.ACTOR, "#1234");
+        const namedColor = element(
+            "Annotation_1",
+            ElementTypes.TEXTANNOTATION,
+            "black",
+        );
+
+        instance.getMultiElementContextPadEntries([alphaHex, namedColor]);
+        document.dispatchEvent(
+            new CustomEvent("pickedColor", {
+                detail: { color: "rgba(1, 2, 3, .5)" },
+            }),
+        );
+
+        expect(commandStack.execute).toHaveBeenCalledTimes(2);
+        expect(commandStack.execute).toHaveBeenNthCalledWith(
+            1,
+            "element.colorChange",
+            expect.objectContaining({
+                element: alphaHex,
+                newColor: "#01020380",
+            }),
+        );
+        expect(commandStack.execute).toHaveBeenNthCalledWith(
+            2,
+            "element.colorChange",
+            expect.objectContaining({
+                element: namedColor,
+                newColor: "rgba(1, 2, 3, .5)",
+            }),
+        );
+    });
+
     it("stops listening for picked colors once the diagram is destroyed", () => {
         const { instance, commandStack, eventBus } = provider();
         instance.getContextPadEntries(
