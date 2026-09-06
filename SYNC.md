@@ -429,9 +429,14 @@ future round. Offer the fixes upstream separately.
   Because the direct-editing box is one recycled node, an actor session inherited
   the previous work object's keydown handler — whose guard tests the _captured_
   element, so Enter renamed that work object outside the command stack. Fixed
-  locally by resetting `onkeydown` before the non-work-object early return and by
-  a `teardown()` wired to `directEditing.complete`/`cancel`. Locked by the
+  locally by tearing down the previous session before the non-work-object early
+  return and by a `teardown()` wired to `directEditing.complete`/`cancel`. Locked by the
   "session teardown" cases in `labeling/__tests__/utils.spec.ts`.
+  Issue #56 also moves suggestion selection into a capture-phase keydown
+  listener: it updates the editor text before diagram-js completes the edit,
+  letting `element.updateLabel` own the model change and undo. Preserve this
+  ordering when syncing; `LabelEditing.browser.spec.ts` covers real Enter
+  selection and undo/redo.
 - **Bendpoint-drag hiding was not undone on ESC.** Upstream's renderer removes
   its `djs-element-hidden` marker only on `bendpoint.move.end`; a cancelled drag
   fires `.cancel` instead (Dragging.js:283 vs :374), leaving the activity

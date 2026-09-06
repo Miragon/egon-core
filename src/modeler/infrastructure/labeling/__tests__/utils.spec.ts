@@ -249,9 +249,19 @@ describe("createAutocompleteForEdit", () => {
     });
 
     describe("selection", () => {
-        it("commits a focused suggestion on Enter and fires element.changed", () => {
+        it("puts a focused suggestion into the editor before normal Enter completion", () => {
             const { editingBox, element, eventBus, fire } =
                 setup(WORKOBJECT_TYPE);
+            const committedValues: string[] = [];
+
+            // DirectEditing owns the normal bubbling keydown handler. Register
+            // its stand-in first, as production does, to lock the ordering that
+            // exposed the bug.
+            editingBox.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                    committedValues.push(editingBox.innerText);
+                }
+            });
             createAutocompleteForEdit(
                 editingBox,
                 ["Apple", "Banana"],
@@ -264,8 +274,12 @@ describe("createAutocompleteForEdit", () => {
             const event = pressKey(editingBox, "Enter");
 
             expect(event.defaultPrevented).toBe(true);
-            expect(element.businessObject.name).toBe("Apple");
-            expect(fire).toHaveBeenCalledWith("element.changed", { element });
+            expect(editingBox.innerText).toBe("Apple");
+            expect(committedValues).toEqual(["Apple"]);
+            expect(element.businessObject.name).toBe("");
+            expect(fire).not.toHaveBeenCalledWith("element.changed", {
+                element,
+            });
         });
 
         it("inserts a linebreak on Shift+Enter instead of selecting", () => {
