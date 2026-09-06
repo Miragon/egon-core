@@ -579,7 +579,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
             className: className,
             title: "Append " + title,
             action: {
-                dragstart: this.startConnect(),
+                dragstart: appendStart,
                 click: appendStart,
             },
         };

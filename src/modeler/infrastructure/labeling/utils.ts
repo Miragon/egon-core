@@ -59,7 +59,10 @@ export function setLabel(element: Element, text: string) {
  * recycled text before filtering. Model that access narrowly so the port keeps
  * the behaviour without pretending the element is a real form control.
  */
-type EditingBoxElement = HTMLElement & { value?: string };
+type EditingBoxElement = HTMLElement & {
+    value?: string;
+    __egonAutocompleteTeardown?: () => void;
+};
 
 /**
  * Approximate the rendered width (in px) of a label at font-size 11 in Arial.
@@ -103,7 +106,9 @@ export function createAutocompleteForEdit(
     // after a work object would then let Enter rename that work object outside
     // the command stack. Reset before the early return below, which is exactly
     // the path that used to skip it.
-    editingBox.onkeydown = null;
+    const recycledEditingBox = editingBox as EditingBoxElement;
+    recycledEditingBox.__egonAutocompleteTeardown?.();
+    delete recycledEditingBox.__egonAutocompleteTeardown;
 
     if (!businessElement || !isWorkObject(businessElement)) {
         return;
@@ -176,7 +181,7 @@ export function createAutocompleteForEdit(
         }
     }
 
-    editingBox.onkeydown = function (e: KeyboardEvent) {
+    const keydownFunction = function (e: KeyboardEvent) {
         if (!businessElement || !isWorkObject(businessElement)) {
             return;
         }
@@ -197,9 +202,15 @@ export function createAutocompleteForEdit(
             // linebreak instead of committing a suggestion
             e.preventDefault();
             if (currentFocus > -1) {
-                businessElement.businessObject.name =
+                // DirectEditing registered its own bubbling keydown listener
+                // before this autocomplete was attached. Run in the capture
+                // phase and put the selected value into the editor first, so
+                // that listener reads it and commits it through
+                // `element.updateLabel`. Writing the business object here used
+                // to race completion, bypass the command stack and make undo
+                // restore the typed prefix rather than the previous label.
+                editingBox.innerText =
                     workObjectNamesFilteredBySearchterm[currentFocus];
-                eventBus.fire("element.changed", { element: businessElement });
 
                 // the input listener is re-added whenever the box reopens, so
                 // drop this one to avoid stacking stale handlers
@@ -207,6 +218,8 @@ export function createAutocompleteForEdit(
             }
         }
     };
+
+    editingBox.addEventListener("keydown", keydownFunction, true);
 
     /**
      * Remove a stale suggestion list, unless the click that triggered the check
@@ -275,9 +288,13 @@ export function createAutocompleteForEdit(
      */
     function teardown() {
         editingBox.removeEventListener("input", inputFunction);
+        editingBox.removeEventListener("keydown", keydownFunction, true);
         document.removeEventListener("click", documentClickListener);
-        editingBox.onkeydown = null;
+        if (recycledEditingBox.__egonAutocompleteTeardown === teardown) {
+            delete recycledEditingBox.__egonAutocompleteTeardown;
+        }
     }
 
+    recycledEditingBox.__egonAutocompleteTeardown = teardown;
     eventBus.once(["directEditing.complete", "directEditing.cancel"], teardown);
 }

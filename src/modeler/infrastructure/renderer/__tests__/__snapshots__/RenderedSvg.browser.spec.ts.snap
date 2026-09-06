@@ -1,0 +1,322 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`rendered domain-story SVG > keeps the reference story's semantic SVG structure stable 1`] = `
+{
+  "markerDefinitions": [
+    {
+      "id": "activity-marker",
+      "svg": {
+        "attributes": {
+          "markerHeight": "10",
+          "markerWidth": "10",
+          "orient": "auto",
+          "refX": "11",
+          "refY": "10",
+          "viewBox": "0 0 20 20",
+        },
+        "children": [
+          {
+            "attributes": {
+              "d": "M 1 5 L 11 10 L 1 15 Z",
+              "fill": "rgb(0, 0, 0)",
+              "stroke": "rgb(0, 0, 0)",
+              "stroke-dasharray": "10000, 1",
+              "stroke-width": "1px",
+            },
+            "tag": "path",
+          },
+        ],
+        "tag": "marker",
+      },
+    },
+  ],
+  "renderedElements": [
+    {
+      "role": "group",
+      "svg": {
+        "attributes": {
+          "class": "djs-visual",
+        },
+        "children": [
+          {
+            "attributes": {
+              "fill": "none",
+              "height": "200",
+              "rx": "0",
+              "ry": "0",
+              "stroke": "rgb(119, 85, 170)",
+              "stroke-width": "2px",
+              "width": "300",
+              "x": "0",
+              "y": "0",
+            },
+            "tag": "rect",
+          },
+          {
+            "attributes": {
+              "class": "djs-label",
+              "fill": "rgb(0, 0, 0)",
+            },
+            "tag": "text",
+            "text": "Fulfilment",
+          },
+        ],
+        "tag": "g",
+      },
+    },
+    {
+      "role": "actor",
+      "svg": {
+        "attributes": {
+          "class": "djs-visual",
+        },
+        "children": [
+          {
+            "attributes": {
+              "height": "75",
+              "viewBox": "0 0 24 24",
+              "width": "75",
+            },
+            "children": [
+              {
+                "attributes": {
+                  "fill": "#1166cc",
+                },
+                "tag": "circle",
+              },
+            ],
+            "tag": "svg",
+          },
+          {
+            "attributes": {
+              "class": "djs-label",
+              "fill": "rgb(0, 0, 0)",
+            },
+            "tag": "text",
+            "text": "Customer",
+          },
+        ],
+        "tag": "g",
+      },
+    },
+    {
+      "role": "order",
+      "svg": {
+        "attributes": {
+          "class": "djs-visual",
+        },
+        "children": [
+          {
+            "attributes": {
+              "height": "48.75",
+              "viewBox": "0 0 24 24",
+              "width": "48.75",
+              "x": "12.5",
+              "y": "12.5",
+            },
+            "children": [
+              {
+                "attributes": {
+                  "fill": "#000000",
+                  "height": "20",
+                  "width": "20",
+                  "x": "2",
+                  "y": "2",
+                },
+                "tag": "rect",
+              },
+            ],
+            "tag": "svg",
+          },
+          {
+            "attributes": {
+              "class": "djs-label",
+              "fill": "rgb(0, 0, 0)",
+            },
+            "tag": "text",
+            "text": "Order",
+          },
+        ],
+        "tag": "g",
+      },
+    },
+    {
+      "role": "receipt",
+      "svg": {
+        "attributes": {
+          "class": "djs-visual",
+        },
+        "children": [
+          {
+            "attributes": {
+              "height": "48.75",
+              "viewBox": "0 0 24 24",
+              "width": "48.75",
+              "x": "12.5",
+              "y": "12.5",
+            },
+            "children": [
+              {
+                "attributes": {
+                  "fill": "#cc5500",
+                  "height": "20",
+                  "width": "20",
+                  "x": "2",
+                  "y": "2",
+                },
+                "tag": "rect",
+              },
+            ],
+            "tag": "svg",
+          },
+          {
+            "attributes": {
+              "class": "djs-label",
+              "fill": "rgb(0, 0, 0)",
+            },
+            "tag": "text",
+            "text": "Receipt",
+          },
+        ],
+        "tag": "g",
+      },
+    },
+    {
+      "role": "annotation",
+      "svg": {
+        "attributes": {
+          "class": "djs-visual",
+        },
+        "children": [
+          {
+            "attributes": {
+              "fill": "none",
+              "height": "27",
+              "rx": "0",
+              "ry": "0",
+              "stroke": "none",
+              "stroke-width": "2px",
+              "width": "56",
+              "x": "0",
+              "y": "0",
+            },
+            "tag": "rect",
+          },
+          {
+            "attributes": {
+              "d": "m 0, 0 m 10,0 l -10,0 l 0,27 l 10,0",
+              "fill": "none",
+              "stroke": "rgb(34, 136, 68)",
+              "stroke-width": "2px",
+            },
+            "tag": "path",
+          },
+          {
+            "attributes": {
+              "class": "djs-label",
+              "fill": "rgb(34, 136, 68)",
+            },
+            "tag": "text",
+            "text": "first linesecond line",
+          },
+        ],
+        "tag": "g",
+      },
+    },
+    {
+      "role": "numberedActivity",
+      "svg": {
+        "attributes": {
+          "class": "djs-visual",
+        },
+        "children": [
+          {
+            "attributes": {
+              "d": "M163,130L322,130",
+              "fill": "none",
+              "marker-end": "url(#activity-marker)",
+              "stroke": "rgb(0, 0, 0)",
+              "stroke-width": "1.5px",
+            },
+            "tag": "path",
+          },
+          {
+            "attributes": {
+              "class": "djs-label",
+              "fill": "black",
+            },
+            "tag": "text",
+            "text": "places",
+          },
+          {
+            "attributes": {
+              "d": "M 183 130 m 11,0 a 11,11 0 1,0 -22,0 a 11,11 0 1,0 22,0",
+              "fill": "white",
+              "stroke": "black",
+            },
+            "tag": "path",
+          },
+          {
+            "attributes": {
+              "class": "djs-labelNumber",
+              "fill": "black",
+            },
+            "tag": "text",
+            "text": "1",
+          },
+        ],
+        "tag": "g",
+      },
+    },
+    {
+      "role": "response",
+      "svg": {
+        "attributes": {
+          "class": "djs-visual",
+        },
+        "children": [
+          {
+            "attributes": {
+              "d": "M403,130L562,130",
+              "fill": "none",
+              "marker-end": "url(#activity-marker)",
+              "stroke": "rgb(0, 0, 0)",
+              "stroke-width": "1.5px",
+            },
+            "tag": "path",
+          },
+          {
+            "attributes": {
+              "class": "djs-label",
+              "fill": "black",
+            },
+            "tag": "text",
+            "text": "creates",
+          },
+        ],
+        "tag": "g",
+      },
+    },
+    {
+      "role": "annotationConnection",
+      "svg": {
+        "attributes": {
+          "class": "djs-visual",
+        },
+        "children": [
+          {
+            "attributes": {
+              "d": "M363,177L369,282",
+              "stroke": "rgb(0, 0, 0)",
+              "stroke-dasharray": "5, 5",
+              "stroke-width": "1.5px",
+            },
+            "tag": "path",
+          },
+        ],
+        "tag": "g",
+      },
+    },
+  ],
+}
+`;
