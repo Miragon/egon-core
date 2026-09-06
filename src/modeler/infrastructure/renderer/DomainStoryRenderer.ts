@@ -28,7 +28,7 @@ import {
     isWorkObject,
 } from "../../../story/domain/elementPredicates";
 import { Point } from "diagram-js/lib/util/Types";
-import { countLines, labelPosition } from "../labeling/position";
+import { countLines, labelPosition } from "../../domain/labeling/position";
 import { approximateArialSize11TextWidthInPixel } from "../labeling/utils";
 import { angleBetween } from "../../../shared/domain/mathExtensions";
 import {
