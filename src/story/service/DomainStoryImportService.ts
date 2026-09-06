@@ -117,14 +117,14 @@ export class DomainStoryImportService {
         );
 
         const connections: Connection[] = [],
-            groups: Shape[] = [],
-            otherElementTypes: ElementLike[] = [];
+            groups: BusinessObject[] = [],
+            otherElementTypes: BusinessObject[] = [];
 
         domainStoryElements.forEach(function (bo: any) {
             if (isOfTypeConnection(bo)) {
                 connections.push(bo as unknown as Connection);
             } else if (isOfTypeGroup(bo)) {
-                groups.push(bo as unknown as Shape);
+                groups.push(bo);
             } else {
                 otherElementTypes.push(bo);
             }
@@ -133,9 +133,10 @@ export class DomainStoryImportService {
         this.iconSetImportExportService.loadConfiguration(iconSet);
         this.eventBus.fire("dst.config.changed", { iconSet });
 
-        // add groups before shapes and other element types before connections so that connections
-        // can already rely on the shapes being part of the diagram
-        groups.forEach(this.createElementFromBusinessObject, this);
+        // Add groups in parent-before-child order, then the remaining shapes,
+        // then connections. This lets nested groups retain their persisted
+        // membership even when a stable id-sorted export puts a child first.
+        this.addGroupsInDependencyOrder(groups);
         otherElementTypes.forEach(this.createElementFromBusinessObject, this);
         connections.forEach(this.addConnection, this);
 
@@ -180,10 +181,55 @@ export class DomainStoryImportService {
                 // yields NaN for ids like "shape_1683"; diagram-js normalizes only
                 // non-numbers to -1 and `typeof NaN === "number"` slips through to
                 // `splice(NaN, …)`, i.e. index 0, prepending children in reverse.
-                return this.canvas.addShape(shape, parentShape);
+                const addedShape = this.canvas.addShape(shape, parentShape);
+                // diagram-js needs the live shape reference above; EGN persists
+                // the corresponding group's id on the business object instead.
+                businessObject.parent = parentId;
+                return addedShape;
             }
         }
         return this.canvas.addShape(shape);
+    }
+
+    /**
+     * Add nested groups only after their parent is live on the canvas. Input
+     * order is retained wherever it does not conflict with that dependency.
+     * Malformed references and cycles cannot be resolved, so those groups fall
+     * back to the root without retaining a parent id that would not match the
+     * live diagram.
+     */
+    private addGroupsInDependencyOrder(groups: BusinessObject[]): void {
+        const unresolved = [...groups];
+
+        while (unresolved.length > 0) {
+            let madeProgress = false;
+
+            for (let index = 0; index < unresolved.length;) {
+                const group = unresolved[index];
+                const parentId = (group as any).parent;
+
+                if (!parentId || this.groupElements.has(parentId)) {
+                    this.createElementFromBusinessObject(group);
+                    unresolved.splice(index, 1);
+                    madeProgress = true;
+                } else {
+                    index++;
+                }
+            }
+
+            if (madeProgress) {
+                continue;
+            }
+
+            // No remaining group can become resolvable: every parent is either
+            // missing, not a group, or part of a cycle. Keep these shapes, but
+            // make their persisted state accurately describe their root home.
+            unresolved.forEach((group) => {
+                delete (group as any).parent;
+                this.createElementFromBusinessObject(group);
+            });
+            return;
+        }
     }
 
     // FIXME: use an actual type for element. It should be BusinessObject from the domain.

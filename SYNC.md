@@ -51,6 +51,20 @@ These are live bugs in upstream `main` at the recorded baseline. They are fixed
 here as a deliberate divergence — **do not re-import the upstream lines** in a
 future round. Offer the fixes upstream separately.
 
+- **`import-domain-story.service.ts` drops persisted group membership on open.**
+  The importer captures `businessObject.parent`, deletes it before calling the
+  element factory (correct: diagram-js needs a live shape reference, not a
+  serialized id), but never restores it after `canvas.addShape` has resolved
+  the parent group. An untouched open → save therefore loses memberships,
+  including nested groups. Fixed locally by loading groups parent-before-child
+  with bounded dependency passes, then restoring the saved id only on a shape
+  that was actually added to that group. Missing/non-group parents and cycles
+  fall back to the canvas root with no stale id. `children` remains omitted:
+  diagram-js owns the live inverse collection. Locked by
+  `DomainStoryImportService.spec.ts`,
+  `FormatCompatibilityMatrix.browser.spec.ts`, and
+  `RenderFreeRoundTrip.browser.spec.ts`.
+
 - **`import-repair.service.ts` prunes only the first dangling activity.**
   `checkForUnreferencedElementsInActivitiesAndRepair` does
   `elements = elements.splice(activityIndex, 1)`. `splice` returns the _removed_

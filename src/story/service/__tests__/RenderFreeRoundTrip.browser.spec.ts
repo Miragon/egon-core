@@ -86,6 +86,75 @@ function exported(story: any, id: string): any {
     return found;
 }
 
+/** A deliberately unsorted nested-group document with every shape family. */
+function storyWithGroupMembership(): DomainStoryDocument {
+    return {
+        // Reuse a complete icon set: imported actors and work objects render
+        // through the production renderer during this browser-tier test.
+        iconSet: importFixture<any>("egn_export_version_4_0_0.json").iconSet,
+        domainStory: {
+            version: "4.0.0",
+            title: "group membership",
+            description: "",
+            businessObjects: [
+                {
+                    id: "shape_inner_group",
+                    type: ElementTypes.GROUP,
+                    name: "inner",
+                    x: 100,
+                    y: 100,
+                    width: 300,
+                    height: 200,
+                    parent: "shape_outer_group",
+                },
+                {
+                    id: "shape_actor",
+                    type: `${ElementTypes.ACTOR}Person`,
+                    name: "Alice",
+                    x: 150,
+                    y: 150,
+                    parent: "shape_inner_group",
+                },
+                {
+                    id: "shape_outer_group",
+                    type: ElementTypes.GROUP,
+                    name: "outer",
+                    x: 50,
+                    y: 50,
+                    width: 500,
+                    height: 400,
+                },
+                {
+                    id: "shape_document",
+                    type: `${ElementTypes.WORKOBJECT}Document`,
+                    name: "Report",
+                    x: 400,
+                    y: 300,
+                    parent: "shape_outer_group",
+                },
+                {
+                    id: "shape_note",
+                    type: ElementTypes.TEXTANNOTATION,
+                    name: "",
+                    text: "note",
+                    x: 180,
+                    y: 250,
+                    width: 100,
+                    height: 40,
+                    parent: "shape_inner_group",
+                },
+                {
+                    id: "shape_ungrouped",
+                    type: `${ElementTypes.ACTOR}Group`,
+                    name: "Outside",
+                    x: 650,
+                    y: 100,
+                },
+            ],
+        },
+    } as DomainStoryDocument;
+}
+
 describe("render-free round trip (browser)", () => {
     let diagram: TestDiagram | undefined;
 
@@ -278,6 +347,81 @@ describe("render-free round trip (browser)", () => {
             // grown — `nextAvailableActivityNumber`'s rule, applied once.
             expect(exported(story, "connection_numbered").number).toBe(2);
             expect(exported(story, "connection_bare").number).toBe(1);
+        });
+    });
+    describe("group membership", () => {
+        it("preserves live relationships and exported parent ids across two open → save cycles", async () => {
+            const probe = injectorProbe();
+            diagram = await createTestDiagram({}, [probe.module]);
+
+            diagram.client.import(storyWithGroupMembership());
+
+            const registry = probe.elementRegistry();
+            const outer = registry.get("shape_outer_group") as any;
+            const inner = registry.get("shape_inner_group") as any;
+            const actor = registry.get("shape_actor") as any;
+            const document = registry.get("shape_document") as any;
+            const note = registry.get("shape_note") as any;
+            const ungrouped = registry.get("shape_ungrouped") as any;
+
+            expect(inner.parent).toBe(outer);
+            expect(actor.parent).toBe(inner);
+            expect(document.parent).toBe(outer);
+            expect(note.parent).toBe(inner);
+            expect(ungrouped.parent).toBe(outer.parent);
+
+            const first: any = diagram.client.export();
+            expect(exported(first, "shape_inner_group").parent).toBe(
+                "shape_outer_group",
+            );
+            expect(exported(first, "shape_actor").parent).toBe(
+                "shape_inner_group",
+            );
+            expect(exported(first, "shape_document").parent).toBe(
+                "shape_outer_group",
+            );
+            expect(exported(first, "shape_note").parent).toBe(
+                "shape_inner_group",
+            );
+            expect(exported(first, "shape_ungrouped")).not.toHaveProperty(
+                "parent",
+            );
+            expect(exported(first, "shape_outer_group")).not.toHaveProperty(
+                "children",
+            );
+
+            diagram.client.import(first as DomainStoryDocument);
+            const second = diagram.client.export();
+
+            expect(second).toEqual(first);
+            expect(
+                probe.elementRegistry().get("shape_actor")!["parent"]!.id,
+            ).toBe("shape_inner_group");
+        });
+
+        it("clears an imported child's exported parent when moved to the root and restores it on undo", async () => {
+            const probe = injectorProbe();
+            diagram = await createTestDiagram({}, [probe.module]);
+            diagram.client.import(storyWithGroupMembership());
+
+            const registry = probe.elementRegistry();
+            const actor = registry.get("shape_actor") as any;
+            const inner = registry.get("shape_inner_group") as any;
+            const root = (registry.get("shape_outer_group") as any).parent;
+
+            probe.modeling().moveElements([actor], { x: 0, y: 0 }, root);
+
+            expect(actor.parent).toBe(root);
+            expect(
+                exported(diagram.client.export(), "shape_actor"),
+            ).not.toHaveProperty("parent");
+
+            probe.commandStack().undo();
+
+            expect(actor.parent).toBe(inner);
+            expect(
+                exported(diagram.client.export(), "shape_actor").parent,
+            ).toBe("shape_inner_group");
         });
     });
     /**
