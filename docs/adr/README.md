@@ -25,3 +25,4 @@ and the rules (when to write one, how superseding works).
 | [0017](0017-expose-import-repair-as-a-host-event.md)            | Expose import repair as the `import.repaired` event | accepted                                                                    |
 | [0018](0018-idempotent-event-subscriptions.md)                  | Make event subscriptions idempotent                 | accepted                                                                    |
 | [0019](0019-reject-unknown-public-event-names.md)               | Reject unknown public event names at runtime        | accepted                                                                    |
+| [0020](0020-infrastructure-translates-domain-decisions.md)      | Infrastructure translates domain decisions          | accepted                                                                    |

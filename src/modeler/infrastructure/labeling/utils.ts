@@ -53,24 +53,6 @@ export function setLabel(element: Element, text: string) {
     return element;
 }
 
-// select at which part of the activity the label should be attached to
-export function selectPartOfActivity(waypoints: any, angleActivity: any) {
-    const lineLength = 49;
-    let selectedActivity = 0;
-
-    // Intentional correction to upstream: n waypoints define only n - 1
-    // segments, so the final waypoint has no following point or angle.
-    for (let i = 0; i < waypoints.length - 1; i++) {
-        if (angleActivity[i] === 0 || angleActivity[i] === 180) {
-            const length = Math.abs(waypoints[i].x - waypoints[i + 1].x);
-            if (length > lineLength) {
-                selectedActivity = i;
-            }
-        }
-    }
-    return selectedActivity;
-}
-
 /**
  * The direct-editing box is a recycled contenteditable <div>, not an <input>,
  * yet upstream reads and writes a `.value` on it to normalise the stale

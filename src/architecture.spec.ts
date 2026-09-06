@@ -206,6 +206,28 @@ const MODULE_STATE_PATTERNS: readonly RegExp[] = [
 const MODULE_STATE_ALLOWLIST: readonly string[] = [];
 
 /**
+ * Production infrastructure files that directly import the central element
+ * predicates. This is a frozen baseline, not an endorsement of every entry:
+ * ADR 0020 requires the list to shrink as policy leaves adapters. New entries
+ * are forbidden even for otherwise legitimate type-dispatch adapters.
+ */
+const INFRASTRUCTURE_PREDICATE_IMPORT_ALLOWLIST: readonly string[] = [
+    "src/modeler/infrastructure/context-pad/DomainStoryContextPadProvider.ts",
+    "src/modeler/infrastructure/copy-paste/DomainStoryPasteRestore.ts",
+    "src/modeler/infrastructure/labeling/DomainStoryLabelEditingPreview.ts",
+    "src/modeler/infrastructure/labeling/DomainStoryLabelEditingProvider.ts",
+    "src/modeler/infrastructure/labeling/utils.ts",
+    "src/modeler/infrastructure/popup/DomainStoryActivityNumbering.ts",
+    "src/modeler/infrastructure/popup/DomainStoryPopupService.ts",
+    "src/modeler/infrastructure/renderer/DomainStoryRenderer.ts",
+    "src/modeler/infrastructure/replace/DomainStoryReplaceMenuProvider.ts",
+    "src/modeler/infrastructure/rules/DomainStoryRules.ts",
+    "src/modeler/infrastructure/update-handler/handler/activityUpdateHandler.ts",
+    "src/modeler/infrastructure/update-handler/handler/elementUpdateHandler.ts",
+    "src/modeler/infrastructure/updater/DomainStoryUpdater.ts",
+];
+
+/**
  * Writes a renderer may not perform (rule I / ADR 0016), in the two shapes the
  * historical ones actually took.
  *
@@ -233,6 +255,25 @@ const RENDERER_WRITE_PATTERNS: readonly RegExp[] = [
 /** A file under some feature's `renderer/` folder (not `text-renderer/`). */
 function isRendererFile(repoRelativePath: string): boolean {
     return /(^|\/)renderer\//.test(repoRelativePath);
+}
+
+/**
+ * Direct production infrastructure importers of elementPredicates. Reuses the
+ * same source enumeration, import-form scan, and relative resolver as the other
+ * raw-source architecture rules, so static imports, re-exports, dynamic imports,
+ * and require calls all count.
+ */
+function infrastructurePredicateImporters(): string[] {
+    const predicateModule = "src/story/domain/elementPredicates";
+    return listSourceFiles()
+        .filter((file) => file.includes("/infrastructure/"))
+        .filter((file) =>
+            importedModules(readSource(file)).some(
+                (specifier) =>
+                    resolveSpecifier(file, specifier) === predicateModule,
+            ),
+        )
+        .sort();
 }
 
 describe("architecture", () => {
@@ -553,6 +594,45 @@ describe("architecture", () => {
                 offenders,
                 `drawing is a read (ADR 0016) — move the write onto a command ` +
                     `handler, an import repair, or the export pass`,
+            ).toEqual([]);
+        });
+    });
+
+    // ─── J. Infrastructure predicate-import ratchet ─────────────────────────
+    //
+    // ADR 0020: direct dependencies on the central element predicates expose
+    // places where adapters may be making notation decisions. The baseline is
+    // frozen and may only shrink through review. Keep the two directions
+    // separate so a new importer and a stale exception produce precise failures.
+    //
+    // This caps direct imports only. It cannot prove that an existing adapter
+    // contains no policy, or detect an equivalent decision hidden behind another
+    // helper. The conditional audit and ordinary review cover those limits.
+    describe("infrastructure predicate-import ratchet", () => {
+        it("rejects infrastructure importers outside the frozen allowlist", () => {
+            const importers = infrastructurePredicateImporters();
+            const unlisted = importers.filter(
+                (file) =>
+                    !INFRASTRUCTURE_PREDICATE_IMPORT_ALLOWLIST.includes(file),
+            );
+
+            expect(
+                unlisted,
+                `infrastructure must not add direct elementPredicates imports ` +
+                    `(ADR 0020); move notation decisions into domain code`,
+            ).toEqual([]);
+        });
+
+        it("requires stale allowlist entries to be removed", () => {
+            const importers = infrastructurePredicateImporters();
+            const stale = INFRASTRUCTURE_PREDICATE_IMPORT_ALLOWLIST.filter(
+                (file) => !importers.includes(file),
+            );
+
+            expect(
+                stale,
+                `the predicate-import allowlist may only shrink through review; ` +
+                    `remove entries whose direct dependency disappeared`,
             ).toEqual([]);
         });
     });
