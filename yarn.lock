@@ -645,6 +645,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@playwright/test@npm:1.61.1":
+  version: 1.61.1
+  resolution: "@playwright/test@npm:1.61.1"
+  dependencies:
+    playwright: "npm:1.61.1"
+  bin:
+    playwright: cli.js
+  checksum: 10c0/45004139eaa7c7ec8129e4ed77a9d734aa09ed40b69162b871e4123f1d70217b7b73651431a9343ed5090d5fed11c6df1bff2a56ff4b87dc7b0371b5da87cf9c
+  languageName: node
+  linkType: hard
+
 "@polka/url@npm:^1.0.0-next.24":
   version: 1.0.0-next.29
   resolution: "@polka/url@npm:1.0.0-next.29"
@@ -1847,6 +1858,7 @@ __metadata:
   dependencies:
     "@bpmn-io/align-to-origin": "npm:0.7.0"
     "@eslint/js": "npm:9.39.5"
+    "@playwright/test": "npm:1.61.1"
     "@types/node": "npm:22.20.1"
     "@vitest/browser": "npm:3.2.7"
     "@vitest/coverage-v8": "npm:3.2.7"
@@ -1863,6 +1875,7 @@ __metadata:
     min-dash: "npm:4.2.3"
     min-dom: "npm:4.2.1"
     playwright: "npm:1.61.1"
+    portless: "npm:0.15.6"
     prettier: "npm:3.9.5"
     sass: "npm:1.101.0"
     tiny-svg: "npm:4.1.4"
@@ -3430,6 +3443,16 @@ __metadata:
   bin:
     playwright: cli.js
   checksum: 10c0/cea1bc4d2a64ec3ef683891606774029da7b8a8036ed98332565cec2f8e89549ca1fab9a89fbfba4e08e27e0d7e7d148031e965af66d5ff97bb3c34058cfcad0
+  languageName: node
+  linkType: hard
+
+"portless@npm:0.15.6":
+  version: 0.15.6
+  resolution: "portless@npm:0.15.6"
+  bin:
+    portless: dist/cli.js
+  checksum: 10c0/4b9c89dac7ba8ee2be83fad90633e5b201b24f275e5e32515b919fa5662b432c61c6d37578f53217f01793e7aebe092fb5b0e2fafaa1dbc27d151a4bb3763393
+  conditions: (os=darwin | os=linux | os=win32)
   languageName: node
   linkType: hard
 

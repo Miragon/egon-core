@@ -1,6 +1,6 @@
 /// <reference types="vitest" />
 import { defineConfig } from "vite";
-import { configDefaults } from "vitest/config";
+import { configDefaults, coverageConfigDefaults } from "vitest/config";
 import dts from "vite-plugin-dts";
 import tsconfigPaths from "vite-tsconfig-paths";
 
@@ -77,6 +77,15 @@ export default defineConfig({
         environment: "jsdom",
         coverage: {
             reportsDirectory: "coverage",
+            // The public-consumer harness has its own Playwright verification. Do
+            // not count unrelated demo/config/launcher files as uncovered in
+            // the unit-only report (ADR 0021).
+            exclude: [
+                ...coverageConfigDefaults.exclude,
+                "demo/**",
+                "scripts/**",
+                "playwright.config.ts",
+            ],
             // json-summary + json feed the PR coverage-report action; the v8
             // default omits them, so name the reporters explicitly.
             reporter: ["text", "json-summary", "json"],
@@ -102,6 +111,8 @@ export default defineConfig({
                     exclude: [
                         ...configDefaults.exclude,
                         "**/*.browser.spec.ts",
+                        // Playwright owns the public-consumer journeys.
+                        "demo/__tests__/**",
                     ],
                 },
             },
