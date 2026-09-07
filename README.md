@@ -9,6 +9,19 @@ module (`EgonPlugin`).
 
 ## Install
 
+Use the repository's Node version without changing your nvm default, then
+install dependencies:
+
+```bash
+nvm install
+nvm use
+yarn install
+```
+
+Node 24 is required by the local demo router. CI reads the same `.nvmrc`.
+
+To install only the published package in another project:
+
 ```bash
 yarn add egon-core
 ```
@@ -61,15 +74,47 @@ color button, but it does nothing.
 
 ## Scripts
 
-| Script               | Description                                            |
-| -------------------- | ------------------------------------------------------ |
-| `yarn build`         | Production build → `dist/` (ESM, `.d.ts` tree, styles) |
-| `yarn dev`           | Build in development mode                              |
-| `yarn test`          | Run the test suite (Vitest, jsdom)                     |
-| `yarn test:watch`    | Run tests in watch mode                                |
-| `yarn test:coverage` | Run tests with coverage                                |
-| `yarn typecheck`     | Type-check without emitting (`tsc --noEmit`)           |
-| `yarn lint`          | Lint with ESLint                                       |
+| Script                 | Description                                            |
+| ---------------------- | ------------------------------------------------------ |
+| `yarn build`           | Production build → `dist/` (ESM, `.d.ts` tree, styles) |
+| `yarn dev`             | Build in development mode                              |
+| `yarn demo`            | Start the public-API demo through portless             |
+| `yarn test`            | Run the unit suite (Vitest, jsdom)                     |
+| `yarn test:watch`      | Run unit tests in watch mode                           |
+| `yarn test:coverage`   | Run unit tests with coverage                           |
+| `yarn test:browser`    | Run browser-tier Vitest integration specs              |
+| `yarn test:e2e`        | Run the four headless Playwright journeys              |
+| `yarn test:e2e:headed` | Run the Playwright journeys in a visible browser       |
+| `yarn typecheck`       | Type-check library, tests, demo, and e2e code          |
+| `yarn lint`            | Lint with ESLint                                       |
+
+## Demo and end-to-end journeys
+
+After `nvm install`, `nvm use`, and `yarn install`, start the demo with:
+
+```bash
+yarn demo
+```
+
+Portless prints the worktree-aware URL. The main checkout uses a route based on
+`egon-core-demo.localhost`; linked worktrees gain their branch name as a
+subdomain. The proxy uses loopback HTTP on port `1355` and does not edit
+`/etc/hosts`. Override the proxy port with `PORTLESS_PORT=<port> yarn demo`.
+Its temporary proxy state is shared by egon-core worktrees and may be overridden
+with `PORTLESS_STATE_DIR` when needed.
+
+The canvas palette creates actors and work objects. Select an element to use its
+context pad, double-click shapes or activities to edit them, and use Ctrl/Cmd+Z
+and Ctrl/Cmd+Shift+Z for undo/redo. Export and import use the in-page JSON panel
+only; **New story** resets the canvas while retaining that text.
+
+Install the pinned Chromium build once, then run the journeys:
+
+```bash
+yarn playwright install chromium
+yarn test:e2e
+# or: yarn test:e2e:headed
+```
 
 ## Architecture
 

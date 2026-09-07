@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>egon-core demo</title>
+    </head>
+    <body>
+        <main class="demo-shell">
+            <header class="demo-header">
+                <div>
+                    <p class="eyebrow">Public API demo</p>
+                    <h1>egon-core</h1>
+                    <p class="instructions">
+                        Add shapes from the palette, connect them from the
+                        context pad, and double-click elements to edit. Use
+                        Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z for undo and redo.
+                    </p>
+                </div>
+                <div class="toolbar" aria-label="Story actions">
+                    <button id="new-story" type="button">New story</button>
+                    <button id="export-json" type="button">Export JSON</button>
+                    <button id="import-json" type="button">Import JSON</button>
+                </div>
+            </header>
+
+            <p id="status" class="status" role="status" aria-live="polite">
+                Starting editor…
+            </p>
+
+            <section class="workspace" aria-label="Domain story workspace">
+                <div id="canvas" aria-label="Domain story canvas"></div>
+                <aside class="json-panel">
+                    <label for="story-json">Story JSON</label>
+                    <textarea
+                        id="story-json"
+                        spellcheck="false"
+                        aria-describedby="json-help"
+                    ></textarea>
+                    <p id="json-help">
+                        Export writes here; edit or paste JSON here before
+                        importing. Nothing is saved outside this page.
+                    </p>
+                </aside>
+            </section>
+        </main>
+        <script type="module" src="/main.ts"></script>
+    </body>
+</html>

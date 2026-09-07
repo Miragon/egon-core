@@ -12,7 +12,15 @@ import prettier from "eslint-config-prettier";
  */
 export default tseslint.config(
     {
-        ignores: ["**/dist", "**/node_modules", "**/coverage", "**/.yarn"],
+        ignores: [
+            "**/dist",
+            "**/node_modules",
+            "**/coverage",
+            "**/.yarn",
+            "**/playwright-report",
+            "**/test-results",
+            "**/blob-report",
+        ],
     },
     eslint.configs.recommended,
     ...tseslint.configs.recommended,
@@ -26,6 +34,25 @@ export default tseslint.config(
         },
     },
     {
+        files: ["demo/**/*.ts", "demo/**/*.mts"],
+        rules: {
+            // ADR 0021: the demo is a consumer harness, so every import into
+            // library source must cross the public barrel.
+            "no-restricted-imports": [
+                "error",
+                {
+                    patterns: [
+                        {
+                            regex: "^(?:\\.\\./)+src/(?!index\\.ts$|styles\\.scss$)",
+                            message:
+                                "Demo code must import library code and types only from src/index.ts.",
+                        },
+                    ],
+                },
+            ],
+        },
+    },
+    {
         files: ["**/*.js", "**/*.cjs", "**/*.mjs"],
         languageOptions: {
             globals: {
@@ -33,6 +60,8 @@ export default tseslint.config(
                 module: "readonly",
                 __dirname: "readonly",
                 Buffer: "readonly",
+                console: "readonly",
+                process: "readonly",
             },
         },
         rules: {
