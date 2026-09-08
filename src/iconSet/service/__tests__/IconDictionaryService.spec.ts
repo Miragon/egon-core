@@ -8,6 +8,8 @@ import { ElementTypes } from "../../../story/domain/elementTypes";
 import { IconStyleSheetPort } from "../../domain/ports/IconStyleSheetPort";
 import { IconSetImportExportService } from "../IconSetImportExportService";
 import type { IconSet } from "../../../story/domain/iconSet";
+import { passThroughIconSanitizer } from "../../../__tests__/helpers/passThroughIconSanitizer";
+import { DomPurifyIconSanitizer } from "../../infrastructure/DomPurifyIconSanitizer";
 
 /**
  * Regression cover for issue #4: a custom icon whose name contains a dot must
@@ -40,6 +42,7 @@ describe("IconDictionaryService CSS class generation", () => {
     it("turns a dot-containing name into a valid CSS class token", () => {
         const service = new IconDictionaryService(
             new RecordingStyleSheetPort(),
+            passThroughIconSanitizer,
         );
 
         const cssClass = service.getCSSClassOfIcon("my.icon.v2");
@@ -56,7 +59,10 @@ describe("IconDictionaryService CSS class generation", () => {
     describe("addIconsToCss", () => {
         it("delegates each icon to the port under the palette's own class", () => {
             const port = new RecordingStyleSheetPort();
-            const service = new IconDictionaryService(port);
+            const service = new IconDictionaryService(
+                port,
+                passThroughIconSanitizer,
+            );
             const icons = new Dictionary<string>();
             icons.set("my.icon.v2", "<svg/>");
 
@@ -80,9 +86,11 @@ describe("IconDictionaryService CSS class generation", () => {
         it("keeps an icon added to one service out of another", () => {
             const serviceA = new IconDictionaryService(
                 new RecordingStyleSheetPort(),
+                passThroughIconSanitizer,
             );
             const serviceB = new IconDictionaryService(
                 new RecordingStyleSheetPort(),
+                passThroughIconSanitizer,
             );
 
             serviceA.addIMGToIconDictionary("<svg/>", "onlyInA");
@@ -102,6 +110,7 @@ describe("IconDictionaryService CSS class generation", () => {
         it("returns '' for a name that is in no dictionary", () => {
             const service = new IconDictionaryService(
                 new RecordingStyleSheetPort(),
+                passThroughIconSanitizer,
             );
 
             expect(service.getIconSource("missing")).toBe("");
@@ -110,6 +119,7 @@ describe("IconDictionaryService CSS class generation", () => {
         it("finds an icon present only in a selected dictionary", () => {
             const service = new IconDictionaryService(
                 new RecordingStyleSheetPort(),
+                passThroughIconSanitizer,
             );
 
             service.registerIconForType(
@@ -128,7 +138,10 @@ describe("IconDictionaryService CSS class generation", () => {
             "refreshes a re-imported %s in the pool, selection, export, and CSS",
             (category) => {
                 const port = new RecordingStyleSheetPort();
-                const service = new IconDictionaryService(port);
+                const service = new IconDictionaryService(
+                    port,
+                    passThroughIconSanitizer,
+                );
                 const importer = new IconSetImportExportService(service);
                 const firstActors: Record<string, string> =
                     category === "actor" ? { Same: "<svg>A</svg>" } : {};
@@ -165,6 +178,7 @@ describe("IconDictionaryService CSS class generation", () => {
         it("keeps historical pool entries while replacing the selected set", () => {
             const service = new IconDictionaryService(
                 new RecordingStyleSheetPort(),
+                passThroughIconSanitizer,
             );
             const importer = new IconSetImportExportService(service);
             service.updateIconRegistries(
@@ -188,7 +202,10 @@ describe("IconDictionaryService CSS class generation", () => {
 
         it("is stable across repeated identical imports", () => {
             const port = new RecordingStyleSheetPort();
-            const service = new IconDictionaryService(port);
+            const service = new IconDictionaryService(
+                port,
+                passThroughIconSanitizer,
+            );
             const imported = iconSet(
                 { Person: "<svg>person</svg>" },
                 { Document: "<svg>document</svg>" },
@@ -207,7 +224,10 @@ describe("IconDictionaryService CSS class generation", () => {
 
         it("uses the actor value when categories share an icon name", () => {
             const port = new RecordingStyleSheetPort();
-            const service = new IconDictionaryService(port);
+            const service = new IconDictionaryService(
+                port,
+                passThroughIconSanitizer,
+            );
 
             service.updateIconRegistries(
                 iconSet(
@@ -235,6 +255,7 @@ describe("IconDictionaryService CSS class generation", () => {
             (operation) => {
                 const service = new IconDictionaryService(
                     new RecordingStyleSheetPort(),
+                    passThroughIconSanitizer,
                 );
                 service.updateIconRegistries(
                     iconSet(
@@ -273,11 +294,64 @@ describe("IconDictionaryService CSS class generation", () => {
         it("keeps unsupported read-only lookup behavior", () => {
             const service = new IconDictionaryService(
                 new RecordingStyleSheetPort(),
+                passThroughIconSanitizer,
             );
 
             expect(
                 service.getIconsAssignedAs(ElementTypes.ACTIVITY).toRecord(),
             ).toEqual({});
         });
+    });
+});
+
+describe("IconDictionaryService icon-content boundary", () => {
+    const unsafe =
+        '<svg xmlns="http://www.w3.org/2000/svg" onload="window.__egonExecuted=true"><script>window.__egonExecuted=true</script><path d="M0 0h10v10z"/></svg>';
+
+    it("stores, publishes, and exports sanitized copies of imported dictionaries", () => {
+        const port = new RecordingStyleSheetPort();
+        const sanitizer = new DomPurifyIconSanitizer();
+        const service = new IconDictionaryService(port, sanitizer);
+        const importer = new IconSetImportExportService(service);
+        const incoming = iconSet({ Person: unsafe }, {}, "unsafe-import");
+
+        service.updateIconRegistries(incoming);
+        const stored = service.getIconSource("Person");
+
+        expect(stored).toContain("<path");
+        expect(stored).not.toMatch(/onload|script|__egonExecuted/);
+        expect(port.calls.at(-1)?.[1]).toBe(stored);
+        expect(
+            importer.getCurrentConfigurationForExport()?.actors["Person"],
+        ).toBe(stored);
+
+        // The caller still owns `incoming`; later mutation must not alter the
+        // selected set retained by the service.
+        incoming.actors.delete("Person");
+        incoming.actors.set("Person", "<svg>changed by caller</svg>");
+        expect(service.getIconSource("Person")).toBe(stored);
+        expect(service.getActorsDictionary().get("Person")).toBe(stored);
+    });
+
+    it("sanitizes direct registration, custom-pool addition, and CSS publication", () => {
+        const port = new RecordingStyleSheetPort();
+        const service = new IconDictionaryService(
+            port,
+            new DomPurifyIconSanitizer(),
+        );
+
+        const added = service.addIMGToIconDictionary(unsafe, "Added");
+        service.registerIconForType(ElementTypes.ACTOR, "Registered", unsafe);
+        const directCss = new Dictionary<string>();
+        directCss.set("Published", unsafe);
+        service.addIconsToCss(directCss);
+
+        expect(added).not.toMatch(/onload|script|__egonExecuted/);
+        expect(service.getIconSource("Registered")).not.toMatch(
+            /onload|script|__egonExecuted/,
+        );
+        expect(port.calls.at(-1)?.[1]).not.toMatch(
+            /onload|script|__egonExecuted/,
+        );
     });
 });

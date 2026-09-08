@@ -39,7 +39,11 @@ describe("IconCssInjector", () => {
 
     function encodedSvg(rule: CSSStyleRule): string {
         const encoded = rule.cssText.match(/base64,([^')]+)/)![1]!;
-        return atob(encoded);
+        return new TextDecoder().decode(
+            Uint8Array.from(atob(encoded), (character) =>
+                character.charCodeAt(0),
+            ),
+        );
     }
 
     it("inserts a rule whose selector is exactly the class it was given", () => {
@@ -65,6 +69,19 @@ describe("IconCssInjector", () => {
 
         expect(encodedSvg(rulesOf(styleElement)[0]!)).toBe(
             "<svg><path/></svg>",
+        );
+    });
+
+    it("UTF-8 encodes text artwork instead of throwing through btoa", () => {
+        const styleElement = createStyleElement();
+
+        new IconCssInjector({ styleElement }).addIconStyle(
+            "icon-domain-story-text",
+            "<svg><text>Grüße</text></svg>",
+        );
+
+        expect(encodedSvg(rulesOf(styleElement)[0]!)).toBe(
+            "<svg><text>Grüße</text></svg>",
         );
     });
 

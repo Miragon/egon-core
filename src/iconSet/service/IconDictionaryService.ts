@@ -3,6 +3,7 @@ import { IconSet } from "../../story/domain/iconSet";
 import { ElementTypes } from "../../story/domain/elementTypes";
 import { sanitizeForCss } from "../../shared/domain/sanitizer";
 import { IconStyleSheetPort } from "../domain/ports/IconStyleSheetPort";
+import { IconSanitizerPort } from "../domain/ports/IconSanitizerPort";
 
 export const ICON_CSS_CLASS_PREFIX = "icon-domain-story-";
 
@@ -10,7 +11,10 @@ export const ICON_CSS_CLASS_PREFIX = "icon-domain-story-";
  * The dictionaries hold icons (as SVG) and icon names as key-value pairs:
  */
 export class IconDictionaryService {
-    static $inject: string[] = ["domainStoryIconStyleSheet"];
+    static $inject: string[] = [
+        "domainStoryIconStyleSheet",
+        "domainStoryIconSanitizer",
+    ];
 
     // these dictionaries make up the current icon set:
     private selectedActorsDictionary = new Dictionary<string>();
@@ -29,14 +33,20 @@ export class IconDictionaryService {
     // Required (no default): a defaulted port would let a caller silently smuggle
     // DOM coupling back into this service. The stylesheet is injected from
     // outside so the service stays free of DOM/CSSOM detail.
-    constructor(private readonly iconStyleSheet: IconStyleSheetPort) {}
+    constructor(
+        private readonly iconStyleSheet: IconStyleSheetPort,
+        private readonly iconSanitizer: IconSanitizerPort,
+    ) {}
 
     registerIconForType(type: ElementTypes, name: string, src: string): void {
         if (name.includes(type)) {
             throw new Error("Name should not include type!");
         }
 
-        this.getSelectedDictionary(type).set(name, src);
+        this.getSelectedDictionary(type).set(
+            name,
+            this.iconSanitizer.sanitize(src),
+        );
     }
 
     unregisterIconForType(type: ElementTypes, name: string): void {
@@ -48,11 +58,12 @@ export class IconDictionaryService {
     }
 
     updateIconRegistries(config: IconSet): void {
+        const sanitizedConfig = this.sanitizeIconSet(config);
         const currentIcons = new Dictionary<string>();
         // Dictionary is first-write-wins, so actors deliberately take
         // precedence when one imported set uses the same name in both halves.
-        currentIcons.appendDict(config.actors);
-        currentIcons.appendDict(config.workObjects);
+        currentIcons.appendDict(sanitizedConfig.actors);
+        currentIcons.appendDict(sanitizedConfig.workObjects);
 
         // Imports refresh names already present in the historical pool. Keep
         // entries absent from this import, but replace every incoming value
@@ -67,11 +78,13 @@ export class IconDictionaryService {
 
         // Import replaces (rather than merges into) the selected icon set:
         // hard-swap the selected dictionaries + name to the imported config.
-        this.setIconSet(config);
+        this.setIconSet(sanitizedConfig);
     }
 
-    addIMGToIconDictionary(input: string, name: string): void {
-        this.customIcons.set(name, input);
+    addIMGToIconDictionary(input: string, name: string): string {
+        const sanitized = this.iconSanitizer.sanitize(input);
+        this.customIcons.set(name, sanitized);
+        return this.customIcons.get(name);
     }
 
     addIconsToCss(icons: Dictionary<string>) {
@@ -81,7 +94,7 @@ export class IconDictionaryService {
         icons.keysArray().forEach((key) => {
             this.iconStyleSheet.addIconStyle(
                 this.getCSSClassOfIcon(key),
-                icons.get(key),
+                this.iconSanitizer.sanitize(icons.get(key)),
             );
         });
     }
@@ -137,9 +150,26 @@ export class IconDictionaryService {
     }
 
     setIconSet(iconSet: IconSet): void {
-        this.iconSetName = iconSet.name ?? "";
-        this.selectedActorsDictionary = iconSet.actors;
-        this.selectedWorkObjectsDictionary = iconSet.workObjects;
+        const sanitized = this.sanitizeIconSet(iconSet);
+        this.iconSetName = sanitized.name;
+        this.selectedActorsDictionary = sanitized.actors;
+        this.selectedWorkObjectsDictionary = sanitized.workObjects;
+    }
+
+    private sanitizeIconSet(iconSet: IconSet): IconSet {
+        return {
+            name: iconSet.name ?? "",
+            actors: this.sanitizeDictionary(iconSet.actors),
+            workObjects: this.sanitizeDictionary(iconSet.workObjects),
+        };
+    }
+
+    private sanitizeDictionary(source: Dictionary<string>): Dictionary<string> {
+        const sanitized = new Dictionary<string>();
+        source.keysArray().forEach((name) => {
+            sanitized.set(name, this.iconSanitizer.sanitize(source.get(name)));
+        });
+        return sanitized;
     }
 
     private getSelectedDictionary(type: ElementTypes): Dictionary<string> {

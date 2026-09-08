@@ -39,6 +39,7 @@ import {
 import { DomainStoryTextRenderer } from "../text-renderer/DomainStoryTextRenderer";
 import { IconDictionaryService } from "../../../iconSet/service";
 import { DEFAULT_COLOR, isDefaultColor } from "../../../story/domain/color";
+import type { IconSanitizerPort } from "../../../iconSet/domain/ports/IconSanitizerPort";
 
 /**
  * Draws Domain Storytelling elements — and **only** draws them.
@@ -60,6 +61,7 @@ export class DomainStoryRenderer extends BaseRenderer {
         "canvas",
         "domainStoryTextRenderer",
         "domainStoryIconDictionaryService",
+        "domainStoryIconSanitizer",
     ];
 
     // Per-instance so SVG marker ids never collide between two renderers on one
@@ -75,6 +77,7 @@ export class DomainStoryRenderer extends BaseRenderer {
         private readonly canvas: Canvas,
         private readonly domainStoryTextRenderer: DomainStoryTextRenderer,
         private readonly iconDictionaryService: IconDictionaryService,
+        private readonly iconSanitizer: IconSanitizerPort,
     ) {
         super(eventBus, 2000);
 
@@ -166,14 +169,7 @@ export class DomainStoryRenderer extends BaseRenderer {
             width: element.width,
             height: element.height,
         };
-        let iconSRC = this.iconDictionaryService.getIconSource(
-            getIconId(element["type"]),
-        );
-        iconSRC = this.getIconSvg(iconSRC, element);
-        const actor = svgCreate(iconSRC);
-
-        svgAttr(actor, svgDynamicSizeAttributes);
-        svgAppend(parent, actor);
+        const actor = this.drawIcon(parent, element, svgDynamicSizeAttributes);
 
         this.renderActorAndWorkObjectLabel(parent, element, "center", -5);
         return actor;
@@ -186,14 +182,11 @@ export class DomainStoryRenderer extends BaseRenderer {
             x: element.width / 2 - 25,
             y: element.height / 2 - 25,
         };
-        let iconSRC = this.iconDictionaryService.getIconSource(
-            getIconId(element["type"]),
+        const workObject = this.drawIcon(
+            parent,
+            element,
+            svgDynamicSizeAttributes,
         );
-        iconSRC = this.getIconSvg(iconSRC, element);
-        const workObject = svgCreate(iconSRC);
-
-        svgAttr(workObject, svgDynamicSizeAttributes);
-        svgAppend(parent, workObject);
         this.renderActorAndWorkObjectLabel(parent, element, "center", -5);
 
         return workObject;
@@ -377,65 +370,31 @@ export class DomainStoryRenderer extends BaseRenderer {
         ];
     }
 
-    private getIconSvg(icon: string, element: Shape) {
-        const pickedColor = element.businessObject.pickedColor;
-        if (isCustomIcon(icon)) {
-            let dataURL;
-            if (isCustomSvgIcon(icon)) {
-                dataURL = this.applyColorToCustomSvgIcon(pickedColor, icon);
-            } else {
-                dataURL = icon;
-                // `isDefaultColor`, not `!== DEFAULT_COLOR` (#74): files written
-                // before #65 persist the literal `"black"`, which *is* the
-                // default in intent but not by string equality — so a raster
-                // custom icon in such a file used to fire this error for a colour
-                // the user never picked.
-                if (!isDefaultColor(pickedColor)) {
-                    document.dispatchEvent(
-                        new CustomEvent("errorColoringOnlySvg"),
-                    );
-                }
-            }
-            return (
-                '<svg viewBox="0 0 24 24" width="48" height="48" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">' +
-                '<image width="24" height="24" xlink:href="' +
-                dataURL +
-                '"/></svg>'
-            );
-        } else {
-            return this.applyColorToIcon(pickedColor, icon);
-        }
-    }
-
-    private applyColorToCustomSvgIcon(pickedColor: string, iconSvg: string) {
-        if (!pickedColor) {
-            return iconSvg;
-        }
-        const [rest, base64Svg] = iconSvg.split("base64,");
-        const svg = atob(base64Svg);
-        const coloredSvg = this.applyColorToIcon(pickedColor, svg);
-        const encodedColoredSvg = btoa(coloredSvg);
-        return rest + "base64," + encodedColoredSvg;
-    }
-
-    private applyColorToIcon(pickedColor = DEFAULT_COLOR, iconSvg: string) {
-        const match = iconSvg.match(
-            /fill=\s*"(?!none).*?"|fill:\s*[#r]\w*[;\s]{1}/,
+    private drawIcon(
+        parent: SVGElement,
+        element: Shape,
+        dimensions: Record<string, number>,
+    ): SVGElement {
+        const icon = this.iconDictionaryService.getIconSource(
+            getIconId(element["type"]),
         );
-        if (match && match.some((it) => it)) {
-            return iconSvg
-                .replaceAll(/fill=\s*"(?!none).*?"/g, `fill="${pickedColor}"`)
-                .replaceAll(/fill:\s*[#r]\w*[;\s]{1}/g, `fill:${pickedColor};`);
-        } else {
-            const index = iconSvg.indexOf("<svg ") + 5;
-            return (
-                iconSvg.substring(0, index) +
-                ' fill=" ' +
-                pickedColor +
-                '" ' +
-                iconSvg.substring(index)
-            );
+        const pickedColor = element.businessObject.pickedColor;
+        if (
+            isCustomIcon(icon) &&
+            !isCustomSvgIcon(icon) &&
+            !isDefaultColor(pickedColor)
+        ) {
+            document.dispatchEvent(new CustomEvent("errorColoringOnlySvg"));
         }
+
+        const safeMarkup = this.iconSanitizer.prepareForRendering(
+            icon,
+            pickedColor ?? DEFAULT_COLOR,
+        );
+        const rendered = svgCreate(safeMarkup);
+        svgAttr(rendered, dimensions);
+        svgAppend(parent, rendered);
+        return rendered;
     }
 
     /**

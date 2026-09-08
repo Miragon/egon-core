@@ -52,6 +52,7 @@ export default defineConfig({
                     "diagram-js",
                     "diagram-js-direct-editing",
                     "didi",
+                    "dompurify",
                     "ids",
                     "min-dash",
                     "min-dom",

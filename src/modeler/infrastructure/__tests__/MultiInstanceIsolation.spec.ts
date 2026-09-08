@@ -111,6 +111,9 @@ describe("multi-instance isolation (issue #12)", () => {
         expect(a.get("domainStoryIconDictionaryService")).not.toBe(
             b.get("domainStoryIconDictionaryService"),
         );
+        expect(a.get("domainStoryIconSanitizer")).not.toBe(
+            b.get("domainStoryIconSanitizer"),
+        );
     });
 
     it("keeps mutations in one injector out of another", () => {

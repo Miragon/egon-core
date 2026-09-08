@@ -1,6 +1,7 @@
 import { IconDictionaryService } from "./IconDictionaryService";
 import { IconSetImportExportService } from "./IconSetImportExportService";
 import { IconCssInjector } from "../infrastructure/IconCssInjector";
+import { DomPurifyIconSanitizer } from "../infrastructure/DomPurifyIconSanitizer";
 
 /**
  * Public surface of the iconSet feature. Sibling features import the icon
@@ -25,4 +26,7 @@ export default {
     // Not in __init__: didi resolves it lazily via IconDictionaryService's
     // $inject. Implements IconStyleSheetPort so the service stays DOM-free.
     domainStoryIconStyleSheet: ["type", IconCssInjector],
+    // One DOMPurify-backed adapter per diagram injector. Both storage and the
+    // final renderer boundary use this same policy without exposing it publicly.
+    domainStoryIconSanitizer: ["type", DomPurifyIconSanitizer],
 };
