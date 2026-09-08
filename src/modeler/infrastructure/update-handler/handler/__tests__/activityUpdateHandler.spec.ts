@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { ActivityChangedHandler } from "../activityUpdateHandler";
+import {
+    ActivityChangedHandler,
+    ActivityDirectionChangedHandler,
+} from "../activityUpdateHandler";
 import type EventBus from "diagram-js/lib/core/EventBus";
 import type { CommandContext } from "diagram-js/lib/command/CommandStack";
+import type { Connection, Element } from "diagram-js/lib/model/Types";
 import type { ElementRegistryService } from "../../../../service/ElementRegistryService";
 import { DomainStoryNumberingRegistry } from "../../../popup/DomainStoryNumberingRegistry";
 
@@ -320,5 +324,154 @@ describe("ActivityChangedHandler", () => {
 
             expect(unrelated.businessObject.number).toBe(5);
         });
+    });
+});
+
+type TestWaypoint = {
+    x: number;
+    y: number;
+    original?: { x: number; y: number };
+};
+
+function directionContext(
+    element: Connection,
+    newNumber: number | null,
+): CommandContext {
+    return {
+        businessObject: element.businessObject,
+        element,
+        newNumber,
+    } as unknown as CommandContext;
+}
+
+function directionActivity(waypoints: TestWaypoint[]): Connection {
+    const source = { id: "actor_1" } as Element;
+    const target = { id: "work_object_1" } as Element;
+    const businessObject = {
+        id: "activity_1",
+        source: source.id,
+        target: target.id,
+        number: 1,
+        waypoints,
+    };
+
+    return {
+        id: businessObject.id,
+        source,
+        target,
+        waypoints,
+        businessObject,
+    } as unknown as Connection;
+}
+
+describe("ActivityDirectionChangedHandler", () => {
+    it.each([
+        {
+            name: "straight activity",
+            waypoints: [
+                { x: 150, y: 200, original: { x: 140, y: 200 } },
+                { x: 550, y: 200, original: { x: 560, y: 200 } },
+            ],
+        },
+        {
+            name: "activity with bendpoints",
+            waypoints: [
+                { x: 150, y: 200, original: { x: 140, y: 200 } },
+                { x: 300, y: 320 },
+                { x: 450, y: 320 },
+                { x: 550, y: 200, original: { x: 560, y: 200 } },
+            ],
+        },
+    ])(
+        "keeps complete persisted geometry synchronized through execute → undo → redo → undo ($name)",
+        ({ waypoints }) => {
+            const eventBus = { fire: vi.fn() } as unknown as EventBus;
+            const handler = new ActivityDirectionChangedHandler(eventBus);
+            const element = directionActivity(waypoints);
+            const originalArray = element.waypoints;
+            const originalPoints = originalArray.map((point) => point);
+            const originalGeometry = structuredClone(waypoints);
+            const context = directionContext(element, null);
+
+            handler.preExecute!(context);
+            handler.execute!(context);
+
+            expect(element.source?.id).toBe("work_object_1");
+            expect(element.target?.id).toBe("actor_1");
+            expect(element.businessObject.source).toBe("work_object_1");
+            expect(element.businessObject.target).toBe("actor_1");
+            expect(element.waypoints).toEqual([...originalGeometry].reverse());
+            expect(element.businessObject.waypoints).toEqual(
+                [...originalGeometry].reverse(),
+            );
+            expect(element.waypoints).not.toBe(originalArray);
+            expect(element.businessObject.waypoints).not.toBe(
+                element.waypoints,
+            );
+            // Reversal must not mutate the array or nested docking points that
+            // the command captured for undo.
+            expect(originalArray).toEqual(originalGeometry);
+            expect(originalArray).toEqual(originalPoints);
+            const liveWaypoints = element.waypoints as TestWaypoint[];
+            const persistedWaypoints = element.businessObject
+                .waypoints as TestWaypoint[];
+            liveWaypoints.forEach((point, index) => {
+                expect(persistedWaypoints[index]).not.toBe(point);
+                if (point.original) {
+                    expect(persistedWaypoints[index].original).not.toBe(
+                        point.original,
+                    );
+                }
+            });
+
+            handler.revert!(context);
+            expect(element.source?.id).toBe("actor_1");
+            expect(element.target?.id).toBe("work_object_1");
+            expect(element.businessObject.source).toBe("actor_1");
+            expect(element.businessObject.target).toBe("work_object_1");
+            expect(element.waypoints).toEqual(originalGeometry);
+            expect(element.businessObject.waypoints).toEqual(originalGeometry);
+            expect(element.businessObject.waypoints).not.toBe(
+                element.waypoints,
+            );
+
+            handler.execute!(context);
+            expect(element.waypoints).toEqual([...originalGeometry].reverse());
+            expect(element.businessObject.waypoints).toEqual(
+                [...originalGeometry].reverse(),
+            );
+
+            handler.revert!(context);
+            expect(element.source?.id).toBe("actor_1");
+            expect(element.target?.id).toBe("work_object_1");
+            expect(element.businessObject.waypoints).toEqual(originalGeometry);
+        },
+    );
+
+    it("restores the original direction after two consecutive changes", () => {
+        const eventBus = { fire: vi.fn() } as unknown as EventBus;
+        const handler = new ActivityDirectionChangedHandler(eventBus);
+        const element = directionActivity([
+            { x: 150, y: 200, original: { x: 140, y: 200 } },
+            { x: 300, y: 320 },
+            { x: 550, y: 200, original: { x: 560, y: 200 } },
+        ]);
+        const expected = structuredClone(element.waypoints);
+
+        const first = directionContext(element, null);
+        handler.preExecute!(first);
+        handler.execute!(first);
+
+        const second = directionContext(element, 7);
+        handler.preExecute!(second);
+        handler.execute!(second);
+
+        expect(element.source?.id).toBe("actor_1");
+        expect(element.target?.id).toBe("work_object_1");
+        expect(element.businessObject.source).toBe("actor_1");
+        expect(element.businessObject.target).toBe("work_object_1");
+        expect(element.waypoints).toEqual(expected);
+        expect(element.businessObject.waypoints).toEqual(expected);
+        expect(element.businessObject.waypoints).not.toBe(element.waypoints);
     });
 });
