@@ -168,6 +168,68 @@ function storyWithIconVersion(version: "A" | "B"): DomainStoryDocument {
     };
 }
 
+/** A two-level group hierarchy whose live shapes use both icon categories. */
+function nestedIconStory(): DomainStoryDocument {
+    const actorSvg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" data-artwork="actor"><circle cx="12" cy="12" r="10" fill="#123"/></svg>';
+    const workObjectSvg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" data-artwork="work-object"><rect x="2" y="2" width="20" height="20" fill="#456"/></svg>';
+
+    return {
+        iconSet: {
+            name: "nested-icons",
+            actors: { Person: actorSvg },
+            workObjects: { Document: workObjectSvg },
+        },
+        domainStory: {
+            businessObjects: [
+                {
+                    id: "group_outer",
+                    type: ElementTypes.GROUP,
+                    name: "Outer",
+                    x: 40,
+                    y: 40,
+                    width: 500,
+                    height: 400,
+                },
+                {
+                    id: "group_inner",
+                    type: ElementTypes.GROUP,
+                    name: "Inner",
+                    x: 90,
+                    y: 90,
+                    width: 350,
+                    height: 250,
+                    parent: "group_outer",
+                },
+                {
+                    id: "nested_actor",
+                    type: ElementTypes.ACTOR + "Person",
+                    name: "Alice",
+                    x: 140,
+                    y: 140,
+                    width: 75,
+                    height: 75,
+                    parent: "group_inner",
+                },
+                {
+                    id: "nested_work_object",
+                    type: ElementTypes.WORKOBJECT + "Document",
+                    name: "Report",
+                    x: 280,
+                    y: 140,
+                    width: 75,
+                    height: 75,
+                    parent: "group_inner",
+                },
+            ],
+            title: "nested icon retention",
+            description: "",
+            version: "4.0.0",
+        },
+    };
+}
+
 function renderedIconVersion(
     container: HTMLElement,
     elementId: string,
@@ -654,6 +716,92 @@ describe("EgonClient on real adapters (browser)", () => {
                 TEST_ACTOR_ICONS[TEST_ICON_NAMES.person],
             );
         });
+
+        it.each([
+            {
+                name: "removeIcon",
+                apply(client: EgonClient) {
+                    client.removeIcon("actor", "Person");
+                    client.removeIcon("workObject", "Document");
+                },
+            },
+            {
+                name: "replacement loadIcons",
+                apply(client: EgonClient) {
+                    client.loadIcons({
+                        name: "replacement",
+                        actors: { Other: '<svg data-artwork="other"/>' },
+                        workObjects: {},
+                    });
+                },
+            },
+            {
+                name: "empty loadIcons",
+                apply(client: EgonClient) {
+                    client.loadIcons({});
+                },
+            },
+        ])(
+            "retains nested live icon artwork after $name and a fresh-client import",
+            async ({ apply }) => {
+                diagram = await createTestDiagram();
+                diagram.client.import(nestedIconStory());
+                const iconsChanged = vi.fn();
+                diagram.client.on("icons.changed", iconsChanged);
+
+                apply(diagram.client);
+                await vi.waitFor(() =>
+                    expect(iconsChanged).toHaveBeenCalledTimes(1),
+                );
+
+                // The creation selection remains exactly what the caller chose;
+                // exporting must not smuggle retained assets back into it.
+                expect(diagram.client.hasIcon("actor", "Person")).toBe(false);
+                expect(diagram.client.hasIcon("workObject", "Document")).toBe(
+                    false,
+                );
+
+                const exported = diagram.client.export();
+                await settle();
+                expect(iconsChanged).toHaveBeenCalledTimes(1);
+                expect(exported.iconSet.actors["Person"]).toContain(
+                    'data-artwork="actor"',
+                );
+                expect(exported.iconSet.workObjects["Document"]).toContain(
+                    'data-artwork="work-object"',
+                );
+
+                diagram.cleanup();
+                diagram = await createTestDiagram();
+                diagram.client.import(exported);
+
+                expect(svgPublishedFor(diagram.container, "Person")).toContain(
+                    'data-artwork="actor"',
+                );
+                expect(
+                    svgPublishedFor(diagram.container, "Document"),
+                ).toContain('data-artwork="work-object"');
+                const imported = diagram.client.export().domainStory
+                    .businessObjects as any[];
+                expect(
+                    Object.fromEntries(
+                        imported.map((element) => [element.id, element.type]),
+                    ),
+                ).toMatchObject({
+                    nested_actor: ElementTypes.ACTOR + "Person",
+                    nested_work_object: ElementTypes.WORKOBJECT + "Document",
+                });
+                expect(
+                    Object.fromEntries(
+                        imported.map((element) => [element.id, element.parent]),
+                    ),
+                ).toMatchObject({
+                    group_inner: "group_outer",
+                    nested_actor: "group_inner",
+                    nested_work_object: "group_inner",
+                });
+            },
+        );
     });
 
     describe("destroy", () => {

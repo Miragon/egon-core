@@ -50,6 +50,7 @@ describe("v4.0.0 open→save round-trip", () => {
                 domainStory.businessObjects.map((businessObject) => ({
                     businessObject,
                 })),
+            getUsedIcons: () => ({ actors: [], workObjects: [] }),
         } as unknown as ElementRegistryService;
 
         const result = JSON.parse(
@@ -116,6 +117,7 @@ describe("v4.0.0 open→save round-trip", () => {
                 domainStory.businessObjects.map((businessObject) => ({
                     businessObject,
                 })),
+            getUsedIcons: () => ({ actors: [], workObjects: [] }),
         } as unknown as ElementRegistryService;
 
         const result = JSON.parse(

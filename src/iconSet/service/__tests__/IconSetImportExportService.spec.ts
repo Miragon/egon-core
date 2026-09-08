@@ -6,6 +6,7 @@ import {
 } from "../IconSetImportExportService";
 import { IconStyleSheetPort } from "../../domain/ports/IconStyleSheetPort";
 import { passThroughIconSanitizer } from "../../../__tests__/helpers/passThroughIconSanitizer";
+import { ElementTypes } from "../../../story/domain/elementTypes";
 
 // This suite exercises import/export, not CSS injection; a no-op port exactly
 // preserves what the real injector does with no style element configured — a
@@ -149,5 +150,126 @@ describe("IconSetImportExportService half-empty icon sets", () => {
 
         // `undefined` is what makes the export fall back to EMPTY_ICON_SET.
         expect(service.getCurrentConfigurationForExport()).toBeUndefined();
+    });
+});
+
+describe("IconSetImportExportService story export", () => {
+    let dictionaryService: IconDictionaryService;
+    let service: IconSetImportExportService;
+
+    beforeEach(() => {
+        dictionaryService = new IconDictionaryService(
+            noopStyleSheet,
+            passThroughIconSanitizer,
+        );
+        service = new IconSetImportExportService(dictionaryService);
+    });
+
+    function load(config: FileConfiguration) {
+        service.loadConfiguration(service.createIconSetConfiguration(config));
+    }
+
+    it("retains live actor and work-object assets removed from the selection", () => {
+        load(
+            iconSet(
+                { Person: "<person/>" },
+                { Document: "<document/>" },
+                "retained-assets",
+            ),
+        );
+        dictionaryService.unregisterIconForType(ElementTypes.ACTOR, "Person");
+        dictionaryService.unregisterIconForType(
+            ElementTypes.WORKOBJECT,
+            "Document",
+        );
+
+        expect(
+            service.getConfigurationForStoryExport({
+                actors: ["Person"],
+                workObjects: ["Document"],
+            }),
+        ).toEqual({
+            name: "retained-assets",
+            actors: { Person: "<person/>" },
+            workObjects: { Document: "<document/>" },
+        });
+    });
+
+    it("keeps selected icons, supplements only missing live references, and excludes historical extras", () => {
+        load(
+            iconSet(
+                { Person: "<person/>", Unused: "<unused/>" },
+                { Document: "<document/>" },
+                "first",
+            ),
+        );
+        load(iconSet({ Robot: "<robot/>" }, {}, "replacement"));
+
+        expect(
+            service.getConfigurationForStoryExport({
+                actors: ["Person", "Person", "Robot"],
+                workObjects: ["Document"],
+            }),
+        ).toEqual({
+            name: "replacement",
+            actors: { Robot: "<robot/>", Person: "<person/>" },
+            workObjects: { Document: "<document/>" },
+        });
+    });
+
+    it("retains dotted live names after an empty replacement", () => {
+        load(iconSet({ "person.v2": "<person/>" }, {}, "dotted"));
+        load(iconSet({}, {}, "empty-selection"));
+
+        expect(
+            service.getConfigurationForStoryExport({
+                actors: ["person.v2", "person.v2"],
+                workObjects: [],
+            }),
+        ).toEqual({
+            name: "empty-selection",
+            actors: { "person.v2": "<person/>" },
+            workObjects: {},
+        });
+    });
+
+    it("does not alter the selection while preparing a story export", () => {
+        load(iconSet({ Person: "<person/>" }, {}, "original"));
+        load(iconSet({ Robot: "<robot/>" }, {}, "replacement"));
+        const selectedActors = dictionaryService.getActorsDictionary();
+        const selectedWorkObjects =
+            dictionaryService.getWorkObjectsDictionary();
+
+        service.getConfigurationForStoryExport({
+            actors: ["Person"],
+            workObjects: [],
+        });
+
+        expect(dictionaryService.getActorsDictionary()).toBe(selectedActors);
+        expect(dictionaryService.getWorkObjectsDictionary()).toBe(
+            selectedWorkObjects,
+        );
+        expect(dictionaryService.getActorsDictionary().toRecord()).toEqual({
+            Robot: "<robot/>",
+        });
+        expect(dictionaryService.getWorkObjectsDictionary().toRecord()).toEqual(
+            {},
+        );
+        expect(service.getCurrentConfigurationForExport()).toEqual({
+            name: "replacement",
+            actors: { Robot: "<robot/>" },
+            workObjects: {},
+        });
+    });
+
+    it("still returns undefined when neither selected nor live icons exist", () => {
+        load(iconSet({}, {}, "empty"));
+
+        expect(
+            service.getConfigurationForStoryExport({
+                actors: [],
+                workObjects: [],
+            }),
+        ).toBeUndefined();
     });
 });
