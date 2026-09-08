@@ -7,6 +7,7 @@ import { IconDictionaryService } from "../../../iconSet/service/IconDictionarySe
 import { IconSetImportExportService } from "../../../iconSet/service/IconSetImportExportService";
 import { IconStyleSheetPort } from "../../../iconSet/domain/ports/IconStyleSheetPort";
 import type { ElementRegistryService } from "../../../modeler/service/ElementRegistryService";
+import { passThroughIconSanitizer } from "../../../__tests__/helpers/passThroughIconSanitizer";
 
 // The round-trip proves metadata/icon-set-name survival, not CSS injection; a
 // no-op port matches the real injector with no style element configured.
@@ -24,7 +25,10 @@ describe("v4.0.0 open→save round-trip", () => {
         const { iconSetConfiguration, domainStory } = parseExportFile(fixture);
 
         // --- import side: load the icon set and remember the metadata ---
-        const iconDictionaryService = new IconDictionaryService(noopStyleSheet);
+        const iconDictionaryService = new IconDictionaryService(
+            noopStyleSheet,
+            passThroughIconSanitizer,
+        );
         const iconService = new IconSetImportExportService(
             iconDictionaryService,
         );
@@ -88,7 +92,10 @@ describe("v4.0.0 open→save round-trip", () => {
 
         const { iconSetConfiguration, domainStory } = parseExportFile(fixture);
 
-        const iconDictionaryService = new IconDictionaryService(noopStyleSheet);
+        const iconDictionaryService = new IconDictionaryService(
+            noopStyleSheet,
+            passThroughIconSanitizer,
+        );
         const iconService = new IconSetImportExportService(
             iconDictionaryService,
         );

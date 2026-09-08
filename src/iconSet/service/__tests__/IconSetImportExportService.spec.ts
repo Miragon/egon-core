@@ -5,6 +5,7 @@ import {
     IconSetImportExportService,
 } from "../IconSetImportExportService";
 import { IconStyleSheetPort } from "../../domain/ports/IconStyleSheetPort";
+import { passThroughIconSanitizer } from "../../../__tests__/helpers/passThroughIconSanitizer";
 
 // This suite exercises import/export, not CSS injection; a no-op port exactly
 // preserves what the real injector does with no style element configured — a
@@ -32,7 +33,10 @@ describe("IconSetImportExportService dot-named icons", () => {
     let service: IconSetImportExportService;
 
     beforeEach(() => {
-        dictionaryService = new IconDictionaryService(noopStyleSheet);
+        dictionaryService = new IconDictionaryService(
+            noopStyleSheet,
+            passThroughIconSanitizer,
+        );
         service = new IconSetImportExportService(dictionaryService);
     });
 
@@ -105,7 +109,10 @@ describe("IconSetImportExportService half-empty icon sets", () => {
     let service: IconSetImportExportService;
 
     beforeEach(() => {
-        dictionaryService = new IconDictionaryService(noopStyleSheet);
+        dictionaryService = new IconDictionaryService(
+            noopStyleSheet,
+            passThroughIconSanitizer,
+        );
         service = new IconSetImportExportService(dictionaryService);
     });
 

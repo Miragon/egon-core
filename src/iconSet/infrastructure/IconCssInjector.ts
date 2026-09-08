@@ -45,7 +45,12 @@ export class IconCssInjector implements IconStyleSheetPort {
             return match.replace(/ (width|height)="[^"]*"/g, "");
         });
 
-        const base64Src = btoa(scalableSvg);
+        const bytes = new TextEncoder().encode(scalableSvg);
+        let binary = "";
+        for (const byte of bytes) {
+            binary += String.fromCharCode(byte);
+        }
+        const base64Src = btoa(binary);
 
         const iconStyle = `
             .${cssClassName}::before {
