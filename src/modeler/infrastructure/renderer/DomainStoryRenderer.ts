@@ -537,9 +537,9 @@ export class DomainStoryRenderer extends BaseRenderer {
         const id = element.id;
         let offset = 0;
 
-        const objects = document.getElementsByClassName(
-            "djs-element djs-shape",
-        );
+        const objects = this.canvas
+            .getContainer()
+            .getElementsByClassName("djs-element djs-shape");
         for (let i = 0; i < objects.length; i++) {
             const data_id = objects.item(i)?.getAttribute("data-element-id");
             if (data_id === id) {

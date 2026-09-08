@@ -37,6 +37,12 @@ static create(
 testing — when supplied, the client uses the injected `modelerPort`/`iconPort`
 instead of creating diagram-js adapters.
 
+Each additional-module instance belongs to one editor session. Import creates a
+new instance for its candidate, including candidates that ultimately fail.
+Extensions must release listeners, timers, and DOM in `diagram.destroy`.
+External effects and mutable shared `value` providers cannot be rolled back by
+the core transaction.
+
 ```ts
 const client = await EgonClient.create({
     container: document.getElementById("canvas")!,
@@ -54,6 +60,22 @@ export(): DomainStoryDocument
 `import` loads a domain story into the diagram (icons referenced by the
 document's domain section are loaded automatically). `export` returns the
 current diagram state as a `DomainStoryDocument`.
+
+Import treats every element, metadata field, scope value, and icon source as
+untrusted at runtime, even when a caller has typed the value as
+`DomainStoryDocument`. It accepts the current EGN v4 envelope and the supported
+legacy `domain`/`dst` and bare-array formats. Historical type/icon spelling,
+BPMN leftovers, annotation heights, missing activity numbers, dangling edges,
+and invalid group parents are repaired as documented by `import.repaired`.
+Malformed records, duplicate or reserved ids, unsupported element families,
+invalid metadata/scope, non-finite geometry, non-positive supplied dimensions,
+and retained connections with fewer than two valid waypoints are rejected.
+
+The replacement is atomic: parsing, icon preparation, module construction, and
+rendering happen in an isolated editor session. If any of them throws, the
+current story, icons, metadata, viewport, undo/redo history, subscriptions, and
+live element identities remain unchanged. A successful replacement preserves
+the viewport and starts with an empty undo/redo history.
 
 ## Events
 

@@ -13,10 +13,10 @@ import { DirtyFlagService } from "../../service/DirtyFlagService";
  * Dirtiness is a property of the model's history, not of the paint, so it is read
  * off the only thing that records that history.
  *
- * WHY it also listens to `diagram.clear`: an import wipes the canvas and the
- * command stack, but the stack clears silently, so no `commandStack.changed`
- * ever announces that history is gone. The freshly opened story would inherit
- * the previous one's dirty flag.
+ * WHY it also listens to `diagram.clear`: a raw diagram-js consumer may clear
+ * the canvas and command stack, but the stack clears silently, so no
+ * `commandStack.changed` announces that history is gone. Public import now
+ * promotes a fresh, clean session instead.
  *
  * WHY an adapter and not a method on `DirtyFlagService`: the service is
  * deliberately dependency-free (a plain listener API, no diagram-js, no rxjs), so
@@ -50,10 +50,8 @@ export class DomainStoryDirtyFlagUpdater {
             }
         });
 
-        // An import fires `diagram.clear`, which CommandStack answers with
-        // `this.clear(false)` — and `clear(emit = false)` fires nothing
-        // (CommandStack.js:159, :240). So opening a story leaves the flag
-        // wherever the *previous* story left it unless we reset it here.
+        // A raw clear makes CommandStack answer with `this.clear(false)` — and
+        // `clear(emit = false)` fires nothing (CommandStack.js:159, :240).
         eventBus.on("diagram.clear", () => dirtyFlagService.makeClean());
     }
 }

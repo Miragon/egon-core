@@ -97,7 +97,7 @@ export class EgonClient {
         );
 
         const iconAdapter = new DiagramJsIconAdapter(
-            modelerAdapter.getDiagram(),
+            modelerAdapter.getSessionOwner(),
         );
 
         return new EgonClient(modelerAdapter, iconAdapter, config.viewport);
@@ -109,8 +109,9 @@ export class EgonClient {
      * Import a domain story document into the diagram.
      * Icons from the document's domain section are automatically loaded.
      *
-     * A damaged document is repaired rather than rejected; subscribe to
-     * `import.repaired` to learn what had to be dropped.
+     * Supported historical damage is repaired; structurally invalid input is
+     * rejected atomically. Subscribe to `import.repaired` to learn what had to
+     * be dropped.
      */
     import(document: DomainStoryDocument): void {
         this.modelerPort.import(document);

@@ -1,9 +1,8 @@
-import Diagram from "diagram-js";
+import type Diagram from "diagram-js";
 import type { ModuleDeclaration } from "didi";
 import type Canvas from "diagram-js/lib/core/Canvas";
 import type EventBus from "diagram-js/lib/core/EventBus";
 
-import EgonPlugin from "./plugin";
 import {
     DomainStoryImportService,
     DomainStoryExportService,
@@ -12,6 +11,9 @@ import {
     createDebouncedCallback,
     type DebouncedCallback,
 } from "../../shared/infrastructure/debounce";
+import { reportPostCommitError } from "../../shared/infrastructure/reportError";
+import { EditorSession, EditorSessionOwner } from "./EditorSessionOwner";
+import { IconDictionaryService } from "../../iconSet/service";
 
 import { ImportRepairData, ModelerPort } from "../domain/ports";
 import {
@@ -35,10 +37,8 @@ function projectViewport(viewbox: ViewportData): ViewportData {
  * This adapter isolates all diagram-js framework dependencies.
  */
 export class DiagramJsModelerAdapter implements ModelerPort {
-    private readonly diagram: Diagram;
-    private readonly eventBus: EventBus;
-    private readonly canvas: Canvas;
-    private readonly iconStyleElement: HTMLStyleElement;
+    private readonly sessionOwner: EditorSessionOwner;
+    private importInProgress = false;
 
     // Two maps, not one union-keyed map: `EgonEventMap` makes a zero-arg
     // callback assignable to both events, so `on("story.changed", f)` followed
@@ -67,56 +67,94 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         additionalModules: ModuleDeclaration[] = [],
         textRenderer?: DomainStoryTextRendererConfig,
     ) {
-        // Must exist before `new Diagram`: IconCssInjector is constructed during
-        // boot (IconDictionaryService.$inject) and takes the node by reference.
-        this.iconStyleElement = this.createIconStyleElement(container);
-
-        // diagram-js injects `config.canvas` into its Canvas, so container/size
-        // must be nested under `canvas` — passed at the top level they are
-        // silently ignored and the canvas renders into document.body instead of
-        // the host-provided element, breaking multi-instance isolation.
-        // `domainStoryIconStyleSheet` rides the same mechanism to hand this
-        // instance's own <style> node to its own IconCssInjector, and
-        // `textRenderer` to reach `config.textRenderer` in the text renderer.
-        // The key is omitted when the host supplied nothing, so didi hands the
-        // renderer `undefined` and its built-in defaults stand.
-        this.diagram = new Diagram({
-            canvas: { container, width, height },
-            domainStoryIconStyleSheet: { styleElement: this.iconStyleElement },
-            ...(textRenderer ? { textRenderer } : {}),
-            modules: [EgonPlugin, ...additionalModules],
-        });
-
-        this.eventBus = this.diagram.get<EventBus>("eventBus");
-        this.canvas = this.diagram.get<Canvas>("canvas");
-
-        this.initializeRootElement();
+        this.sessionOwner = new EditorSessionOwner(
+            container,
+            width,
+            height,
+            additionalModules,
+            textRenderer,
+        );
     }
 
     import(document: DomainStoryDocument): void {
-        const importService = this.diagram.get<DomainStoryImportService>(
-            "domainStoryImportService",
-        );
-        importService.import(JSON.stringify(document));
+        if (this.importInProgress) {
+            throw new Error("Cannot start a reentrant import");
+        }
+
+        this.importInProgress = true;
+        let candidate: EditorSession | undefined;
+        let committed = false;
+
+        try {
+            const active = this.sessionOwner.getActiveSession();
+            const importService = active.diagram.get<DomainStoryImportService>(
+                "domainStoryImportService",
+            );
+            const prepared = importService.prepare(document);
+            const viewport = projectViewport(active.canvas.viewbox());
+
+            candidate = this.sessionOwner.createCandidate();
+            this.copyCustomIconPool(active, candidate);
+            candidate.diagram
+                .get<DomainStoryImportService>("domainStoryImportService")
+                .materialize(prepared);
+            candidate.canvas.viewbox(viewport);
+
+            const previous = this.sessionOwner.promote(candidate);
+            committed = true;
+            try {
+                this.transferSubscriptions(
+                    previous.eventBus,
+                    candidate.eventBus,
+                );
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+
+            // Candidate-local events prepared its palette/banner while hidden.
+            // Repeat only the public notifications after listeners have moved.
+            this.publishCommittedImport(candidate, prepared.removedConnections);
+
+            try {
+                this.sessionOwner.dispose(previous);
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        } catch (error) {
+            if (committed) {
+                reportPostCommitError(error);
+                return;
+            }
+            if (candidate && !committed) {
+                try {
+                    this.sessionOwner.dispose(candidate);
+                } catch (cleanupError) {
+                    reportPostCommitError(cleanupError);
+                }
+            }
+            throw error;
+        } finally {
+            this.importInProgress = false;
+        }
     }
 
     export(): DomainStoryDocument {
-        const exportService = this.diagram.get<DomainStoryExportService>(
+        const exportService = this.getDiagram().get<DomainStoryExportService>(
             "domainStoryExportService",
         );
         return JSON.parse(exportService.export());
     }
 
     getViewport(): ViewportData {
-        return projectViewport(this.canvas.viewbox());
+        return projectViewport(this.getCanvas().viewbox());
     }
 
     setViewport(viewport: ViewportData): void {
-        this.canvas.viewbox(viewport);
+        this.getCanvas().viewbox(viewport);
     }
 
     alignToOrigin(): void {
-        this.diagram.get<{ align(): void }>("alignToOrigin").align();
+        this.getDiagram().get<{ align(): void }>("alignToOrigin").align();
     }
 
     fitToScreen(): void {
@@ -124,7 +162,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         // Public equivalent of upstream fitStoryToScreen's
         // canvas._fitViewport({ x: 0, y: 0 }): in diagram-js, zoom
         // "fit-viewport" delegates directly to _fitViewport(center).
-        this.canvas.zoom("fit-viewport", { x: 0, y: 0 });
+        this.getCanvas().zoom("fit-viewport", { x: 0, y: 0 });
     }
 
     onStoryChanged(callback: () => void): void {
@@ -134,20 +172,30 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         // Built once and reused for every event: a debouncer created per event
         // shares no timer with the previous one, so nothing coalesces and each
         // command reaches the host a full window late.
-        const wrapped = createDebouncedCallback(() => callback());
+        const wrapped = createDebouncedCallback(() => {
+            try {
+                callback();
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        });
         this.storyCallbacks.set(callback, wrapped);
-        (this.eventBus.on as any)("commandStack.changed", wrapped);
+        (this.getEventBus().on as any)("commandStack.changed", wrapped);
     }
 
     onViewportChanged(callback: (viewport: ViewportData) => void): void {
         if (this.viewportCallbacks.has(callback)) {
             return;
         }
-        const wrapped = createDebouncedCallback((event: any) =>
-            callback(projectViewport(event.viewbox)),
-        );
+        const wrapped = createDebouncedCallback((event: any) => {
+            try {
+                callback(projectViewport(event.viewbox));
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        });
         this.viewportCallbacks.set(callback, wrapped);
-        (this.eventBus.on as any)("canvas.viewbox.changed", wrapped);
+        (this.getEventBus().on as any)("canvas.viewbox.changed", wrapped);
     }
 
     onImportRepaired(callback: (repair: ImportRepairData) => void): void {
@@ -156,20 +204,25 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         }
         // The internal event carries the dropped business objects; only their
         // ids cross the port, so the model stays on this side of it.
-        const wrapped = (event: any) =>
-            callback({
-                removedConnectionIds: (event.removedConnections ?? []).map(
-                    (connection: { id: string }) => connection.id,
-                ),
-            });
+        const wrapped = (event: any) => {
+            try {
+                callback({
+                    removedConnectionIds: (event.removedConnections ?? []).map(
+                        (connection: { id: string }) => connection.id,
+                    ),
+                });
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        };
         this.importRepairCallbacks.set(callback, wrapped);
-        (this.eventBus.on as any)("dst.import.repaired", wrapped);
+        (this.getEventBus().on as any)("dst.import.repaired", wrapped);
     }
 
     offStoryChanged(callback: () => void): void {
         const wrapped = this.storyCallbacks.get(callback);
         if (wrapped) {
-            (this.eventBus.off as any)("commandStack.changed", wrapped);
+            (this.getEventBus().off as any)("commandStack.changed", wrapped);
             // Cancel too, or unsubscribing drops the only handle to an armed
             // timer and the host is still called ~100 ms after off().
             wrapped.cancel();
@@ -180,7 +233,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     offViewportChanged(callback: (viewport: ViewportData) => void): void {
         const wrapped = this.viewportCallbacks.get(callback);
         if (wrapped) {
-            (this.eventBus.off as any)("canvas.viewbox.changed", wrapped);
+            (this.getEventBus().off as any)("canvas.viewbox.changed", wrapped);
             wrapped.cancel();
             this.viewportCallbacks.delete(callback);
         }
@@ -189,7 +242,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     offImportRepaired(callback: (repair: ImportRepairData) => void): void {
         const wrapped = this.importRepairCallbacks.get(callback);
         if (wrapped) {
-            (this.eventBus.off as any)("dst.import.repaired", wrapped);
+            (this.getEventBus().off as any)("dst.import.repaired", wrapped);
             this.importRepairCallbacks.delete(callback);
         }
     }
@@ -203,67 +256,93 @@ export class DiagramJsModelerAdapter implements ModelerPort {
      */
     destroy(): void {
         this.unsubscribeAll();
-        this.diagram.destroy();
-        this.iconStyleElement.remove();
+        this.sessionOwner.destroy();
     }
 
     /** Expose diagram instance for IconAdapter to access services */
     getDiagram(): Diagram {
-        return this.diagram;
+        return this.sessionOwner.getActiveDiagram();
     }
 
-    /**
-     * Creates this instance's own icon stylesheet node inside the host
-     * container.
-     *
-     * Unconditional — no "already there?" guard: two clients sharing one
-     * container must get two nodes, otherwise the second writes its icon rules
-     * into the first's sheet and destroying either deletes rules the other
-     * depends on. Marked by attribute rather than `id` for the same reason: ids
-     * must be document-unique.
-     */
-    private createIconStyleElement(container: HTMLElement): HTMLStyleElement {
-        const style = document.createElement("style");
-        style.setAttribute("data-egon-icons-css", "");
-        container.appendChild(style);
-        return style;
+    /** Internal active-session provider used by the icon adapter. */
+    getSessionOwner(): EditorSessionOwner {
+        return this.sessionOwner;
     }
 
     /** Detaches and disarms every host subscription, all three event kinds. */
     private unsubscribeAll(): void {
         this.storyCallbacks.forEach((wrapped) => {
-            (this.eventBus.off as any)("commandStack.changed", wrapped);
+            (this.getEventBus().off as any)("commandStack.changed", wrapped);
             wrapped.cancel();
         });
         this.storyCallbacks.clear();
 
         this.viewportCallbacks.forEach((wrapped) => {
-            (this.eventBus.off as any)("canvas.viewbox.changed", wrapped);
+            (this.getEventBus().off as any)("canvas.viewbox.changed", wrapped);
             wrapped.cancel();
         });
         this.viewportCallbacks.clear();
 
         this.importRepairCallbacks.forEach((wrapped) => {
-            (this.eventBus.off as any)("dst.import.repaired", wrapped);
+            (this.getEventBus().off as any)("dst.import.repaired", wrapped);
         });
         this.importRepairCallbacks.clear();
     }
 
-    /**
-     * Realizes the canvas root eagerly, so every service that reads it at boot
-     * sees the same element.
-     *
-     * It must be diagram-js' *implicit* root: `isBackground` (story/domain)
-     * identifies the canvas background by the `__implicitroot` id prefix, as
-     * upstream does. A root built via `elementFactory.createRoot()` instead gets
-     * a `root_<n>` id from DomainStoryIdFactory, so `isBackground` answered
-     * false for it — and `DomainStoryUpdater.updateElement` then took its
-     * "group dropped onto a shape" branch for a group created on the bare
-     * canvas, dereferencing `parent.parent` (undefined for a root) and throwing
-     * `TypeError: Cannot read properties of undefined (reading 'children')`.
-     * `getRootElement()` creates and installs the implicit root when none is set.
-     */
-    private initializeRootElement(): void {
-        this.canvas.getRootElement();
+    private getCanvas(): Canvas {
+        return this.sessionOwner.getActiveSession().canvas;
+    }
+
+    private getEventBus(): EventBus {
+        return this.sessionOwner.getActiveSession().eventBus;
+    }
+
+    private transferSubscriptions(previous: EventBus, current: EventBus): void {
+        this.storyCallbacks.forEach((wrapped) => {
+            (previous.off as any)("commandStack.changed", wrapped);
+            wrapped.cancel();
+            (current.on as any)("commandStack.changed", wrapped);
+        });
+        this.viewportCallbacks.forEach((wrapped) => {
+            (previous.off as any)("canvas.viewbox.changed", wrapped);
+            wrapped.cancel();
+            (current.on as any)("canvas.viewbox.changed", wrapped);
+        });
+        this.importRepairCallbacks.forEach((wrapped) => {
+            (previous.off as any)("dst.import.repaired", wrapped);
+            (current.on as any)("dst.import.repaired", wrapped);
+        });
+    }
+
+    private copyCustomIconPool(
+        previous: EditorSession,
+        candidate: EditorSession,
+    ): void {
+        const source = previous.diagram.get<IconDictionaryService>(
+            "domainStoryIconDictionaryService",
+        );
+        candidate.diagram
+            .get<IconDictionaryService>("domainStoryIconDictionaryService")
+            .restoreCustomIcons(source.getFullDictionary());
+    }
+
+    private publishCommittedImport(
+        session: EditorSession,
+        removedConnections: readonly { id: string }[],
+    ): void {
+        try {
+            session.eventBus.fire("dst.config.changed", {});
+        } catch (error) {
+            reportPostCommitError(error);
+        }
+        if (removedConnections.length > 0) {
+            try {
+                session.eventBus.fire("dst.import.repaired", {
+                    removedConnections,
+                });
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        }
     }
 }
