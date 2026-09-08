@@ -53,14 +53,7 @@ export function setLabel(element: Element, text: string) {
     return element;
 }
 
-/**
- * The direct-editing box is a recycled contenteditable <div>, not an <input>,
- * yet upstream reads and writes a `.value` on it to normalise the stale
- * recycled text before filtering. Model that access narrowly so the port keeps
- * the behaviour without pretending the element is a real form control.
- */
 type EditingBoxElement = HTMLElement & {
-    value?: string;
     __egonAutocompleteTeardown?: () => void;
 };
 
@@ -134,13 +127,15 @@ export function createAutocompleteForEdit(
             return;
         }
 
-        // the recycled direct-editing element carries an old value that must be
-        // overridden with its current text before we filter against it
-        if (isWorkObject(businessElement)) {
-            this.value = this.innerHTML;
-        }
-
-        const searchterm = this.value?.toUpperCase() ?? "";
+        // DirectEditing uses a contenteditable <div>. Read its rendered text so
+        // label markup remains literal and line breaks keep their browser
+        // representation. jsdom does not implement innerText, hence the
+        // textContent fallback used by the unit-test environment.
+        const searchterm = (
+            this.innerText ??
+            this.textContent ??
+            ""
+        ).toUpperCase();
         currentFocus = -1;
 
         clearOldAutocompleteList();
@@ -161,9 +156,7 @@ export function createAutocompleteForEdit(
             ) {
                 const autocompleteItem = document.createElement("div");
 
-                autocompleteItem.innerHTML = name;
-                autocompleteItem.innerHTML +=
-                    "<input type='hidden' value='" + name + "'>";
+                autocompleteItem.textContent = name;
 
                 autocompleteItem.addEventListener("click", function (e) {
                     e.preventDefault();
