@@ -116,8 +116,17 @@ getIcons(): IconSet
 hasIcon(category: IconCategory, name: string): boolean
 ```
 
-`loadIcons` merges the given actors/work-objects into the current set,
-overwriting entries with the same name.
+`loadIcons` replaces the selected icon set; omitted categories become empty.
+`addIcon` adds one actor or work-object icon to that selection.
+
+Icon names are preserved verbatim. Icon markup is treated as untrusted input and
+may be normalized when stored or exported. Static SVG artwork is supported,
+including shapes, text, transforms, gradients, clipping, masks, presentation
+attributes and a restricted set of inline presentation styles. Scripts, event
+handlers, `foreignObject`, animation, embedded stylesheets and executable or
+external references are removed. Malformed or fully removed artwork is retained
+under its original name as an empty inert SVG. Supported base64 PNG, JPEG, GIF
+and WebP data URLs are preserved after validation.
 
 ## Lifecycle
 

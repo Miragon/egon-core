@@ -61,9 +61,16 @@ export class DiagramJsIconAdapter implements IconPort {
     addIcon(category: IconCategory, name: string, svg: string): void {
         const elementType = this.toElementType(category);
 
-        this.iconDictionaryService.addIMGToIconDictionary(svg, name);
-        this.iconDictionaryService.registerIconForType(elementType, name, svg);
-        this.addIconToCss(name, svg);
+        const sanitized = this.iconDictionaryService.addIMGToIconDictionary(
+            svg,
+            name,
+        );
+        this.iconDictionaryService.registerIconForType(
+            elementType,
+            name,
+            sanitized,
+        );
+        this.addIconToCss(name, this.iconDictionaryService.getIconSource(name));
         this.fireIconsChangedEvent();
     }
 

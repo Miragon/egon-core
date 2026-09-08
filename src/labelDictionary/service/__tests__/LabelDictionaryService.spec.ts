@@ -5,6 +5,7 @@ import { IconStyleSheetPort } from "../../../iconSet/domain/ports/IconStyleSheet
 import { ElementTypes } from "../../../story/domain/elementTypes";
 import type { CanvasObject } from "../../../story/domain/canvasObject";
 import type { ElementRegistryService } from "../../../modeler/service";
+import { passThroughIconSanitizer } from "../../../__tests__/helpers/passThroughIconSanitizer";
 
 /**
  * First cover for the label dictionary, which the mass-rename UI (still
@@ -49,6 +50,7 @@ const activity = (name?: string) => canvasObject(ElementTypes.ACTIVITY, name);
 function makeSut(canvasObjects: CanvasObject[]) {
     const iconDictionaryService = new IconDictionaryService(
         new NoopStyleSheetPort(),
+        passThroughIconSanitizer,
     );
     const elementRegistryService = {
         getAllCanvasObjects: () => canvasObjects,

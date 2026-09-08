@@ -15,6 +15,7 @@ import { IconDictionaryService } from "../../../iconSet/service/IconDictionarySe
 import { IconSetImportExportService } from "../../../iconSet/service/IconSetImportExportService";
 import type { IconStyleSheetPort } from "../../../iconSet/domain/ports/IconStyleSheetPort";
 import { DomainStoryPropertiesService } from "../../../modeler/service/DomainStoryPropertiesService";
+import { passThroughIconSanitizer } from "../../../__tests__/helpers/passThroughIconSanitizer";
 
 // The import path under test never renders, so CSS injection is irrelevant here
 // (and with no style element configured the real injector no-ops anyway).
@@ -80,7 +81,10 @@ function makeHarness() {
         },
     } as unknown as EventBus;
 
-    const iconDictionaryService = new IconDictionaryService(noopStyleSheet);
+    const iconDictionaryService = new IconDictionaryService(
+        noopStyleSheet,
+        passThroughIconSanitizer,
+    );
     const iconSetService = new IconSetImportExportService(
         iconDictionaryService,
     );

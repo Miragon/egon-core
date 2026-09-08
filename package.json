@@ -49,6 +49,7 @@
         "diagram-js": "15.22.0",
         "diagram-js-direct-editing": "3.5.1",
         "didi": "10.2.2",
+        "dompurify": "3.4.15",
         "ids": "1.0.5",
         "min-dash": "4.2.3",
         "min-dom": "4.2.1",

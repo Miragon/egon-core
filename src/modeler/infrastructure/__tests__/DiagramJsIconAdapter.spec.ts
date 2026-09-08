@@ -25,10 +25,20 @@ function createMockDiagramServices() {
     const mockEventBus = createRecordingEventBus();
 
     const mockIconDictionaryService = {
-        addIMGToIconDictionary: vi.fn(),
+        addIMGToIconDictionary: vi.fn((svg: string, name: string) => {
+            void name;
+            return svg;
+        }),
         registerIconForType: vi.fn(),
         unregisterIconForType: vi.fn(),
         addIconsToCss: vi.fn(),
+        getIconSource: vi.fn((name: string) => {
+            const call =
+                mockIconDictionaryService.addIMGToIconDictionary.mock.calls.find(
+                    (candidate) => candidate[1] === name,
+                );
+            return call?.[0] ?? "";
+        }),
         getIconSetName: vi.fn(() => ""),
     };
 
