@@ -83,6 +83,8 @@ describe("canvas label editing", () => {
         await userEvent.cleanup();
         modeler?.cleanup();
         modeler = undefined;
+        delete (window as unknown as { __egonLabelProbe?: number })
+            .__egonLabelProbe;
     });
 
     it("commits actor and annotation labels and cancels a work-object edit", async () => {
@@ -193,6 +195,7 @@ describe("canvas label editing", () => {
         });
         const target = addWorkObject(modeler, {
             point: { x: 540, y: 100 },
+            name: "Original target",
         });
         const actor = addActor(modeler, { point: { x: 160, y: 300 } });
 
@@ -201,7 +204,7 @@ describe("canvas label editing", () => {
         modeler.modeling.updateLabel(alpine, "Alpine");
 
         let editor = await openInlineEditor(modeler, target);
-        await userEvent.type(editor, "Al");
+        await userEvent.fill(editor, "Al");
         await expect
             .poll(() =>
                 Array.from(
@@ -226,7 +229,7 @@ describe("canvas label editing", () => {
 
         await expect.poll(() => target.businessObject.name).toBe("Alpha");
         modeler.commandStack.undo();
-        expect(target.businessObject.name).toBe("");
+        expect(target.businessObject.name).toBe("Original target");
         modeler.commandStack.redo();
         expect(target.businessObject.name).toBe("Alpha");
 
@@ -248,5 +251,64 @@ describe("canvas label editing", () => {
         await userEvent.keyboard("{Enter}");
         expect(actor.businessObject.name).toBe("Al");
         expect(alpha.businessObject.name).toBe("Alpha");
+    });
+
+    it("renders and mouse-selects an HTML-shaped label as inert text", async () => {
+        modeler = createTestModeler();
+        const payload = '<img src=x onerror="window.__egonLabelProbe=1">';
+        const probeWindow = window as unknown as {
+            __egonLabelProbe?: number;
+        };
+        probeWindow.__egonLabelProbe = 0;
+
+        const source = addWorkObject(modeler, {
+            point: { x: 100, y: 100 },
+        });
+        const target = addWorkObject(modeler, {
+            point: { x: 250, y: 100 },
+            name: "Original mouse target",
+        });
+
+        // Seed the live dictionary through the same modeling command used by
+        // normal canvas editing.
+        modeler.modeling.updateLabel(source, payload);
+
+        const editor = await openInlineEditor(modeler, target);
+        await userEvent.fill(editor, "<img");
+        await expect
+            .poll(() =>
+                Array.from(
+                    modeler!.container.querySelectorAll(
+                        "#autocomplete-list > div",
+                    ),
+                ).map((item) => item.textContent),
+            )
+            .toContain(payload);
+
+        const items = Array.from(
+            modeler.container.querySelectorAll<HTMLElement>(
+                "#autocomplete-list > div",
+            ),
+        );
+        const payloadItem = items.find((item) => item.textContent === payload)!;
+        expect(payloadItem.childElementCount).toBe(0);
+        expect(
+            modeler.container.querySelector("#autocomplete-list img"),
+        ).toBeNull();
+        expect(probeWindow.__egonLabelProbe).toBe(0);
+
+        payloadItem.dispatchEvent(
+            new MouseEvent("click", { bubbles: true, cancelable: true }),
+        );
+        expect(payloadItem.classList).toContain("autocomplete-active");
+        await userEvent.keyboard("{Enter}");
+
+        await expect.poll(() => target.businessObject.name).toBe(payload);
+        expect(probeWindow.__egonLabelProbe).toBe(0);
+        modeler.commandStack.undo();
+        expect(target.businessObject.name).toBe("Original mouse target");
+        modeler.commandStack.redo();
+        expect(target.businessObject.name).toBe(payload);
+        expect(probeWindow.__egonLabelProbe).toBe(0);
     });
 });

@@ -28,8 +28,7 @@ function makeElement(type: string): Element {
     } as unknown as Element;
 }
 
-/** A recycled contenteditable box carries a `.value` the handlers read/write. */
-type EditingBox = HTMLElement & { value?: string };
+type EditingBox = HTMLElement;
 
 interface Harness {
     editingBox: EditingBox;
@@ -70,7 +69,7 @@ function makeEditingBox(): EditingBox {
 
 /** Simulate a keystroke that mutates the box text, then fire its input event. */
 function typeInto(editingBox: EditingBox, text: string) {
-    editingBox.innerHTML = text;
+    editingBox.textContent = text;
     editingBox.dispatchEvent(new Event("input"));
 }
 
@@ -105,6 +104,19 @@ function activeIndex(): number {
 
 const WORKOBJECT_TYPE = ElementTypes.WORKOBJECT + "Document";
 const ACTOR_TYPE = ElementTypes.ACTOR + "Person";
+const IMAGE_EVENT_HANDLER_LABEL =
+    '<img src=x onerror="window.__egonImagePayload=1">';
+const ATTRIBUTE_BREAKOUT_LABEL =
+    '\'><img src=x onerror="window.__egonAttributePayload=1">';
+const SPECIAL_CHARACTER_LABELS = [
+    "<tag>",
+    "Research & Development",
+    "single ' quote",
+    'double " quote',
+    "&lt;tag&gt;",
+    IMAGE_EVENT_HANDLER_LABEL,
+    ATTRIBUTE_BREAKOUT_LABEL,
+];
 
 // Each createAutocompleteForEdit call registers a document-level click listener
 // that survives DOM resets. Left in place they leak across tests and interfere
@@ -213,6 +225,72 @@ describe("createAutocompleteForEdit", () => {
                 "Apple",
                 "Apricot",
             ]);
+        });
+
+        it.each([
+            ["<t", "<tag>"],
+            ["research &", "Research & Development"],
+            ["single '", "single ' quote"],
+            ['double "', 'double " quote'],
+            ["&lt;", "&lt;tag&gt;"],
+            ["<img", IMAGE_EVENT_HANDLER_LABEL],
+            ["'><img", ATTRIBUTE_BREAKOUT_LABEL],
+        ])("matches the special-character prefix %s", (prefix, label) => {
+            const { editingBox, element, eventBus } = setup(WORKOBJECT_TYPE);
+            createAutocompleteForEdit(
+                editingBox,
+                SPECIAL_CHARACTER_LABELS,
+                element,
+                eventBus,
+            );
+
+            typeInto(editingBox, prefix);
+
+            expect(listItems().map((item) => item.textContent)).toEqual([
+                label,
+            ]);
+        });
+
+        it("preserves line breaks while filtering the editor text", () => {
+            const { editingBox, element, eventBus } = setup(WORKOBJECT_TYPE);
+            createAutocompleteForEdit(
+                editingBox,
+                ["first line\nsecond line", "first line only"],
+                element,
+                eventBus,
+            );
+
+            typeInto(editingBox, "first line\n");
+
+            expect(listItems().map((item) => item.textContent)).toEqual([
+                "first line\nsecond line",
+            ]);
+        });
+
+        it("renders every label as text without injected elements or attributes", () => {
+            const { editingBox, element, eventBus } = setup(WORKOBJECT_TYPE);
+            createAutocompleteForEdit(
+                editingBox,
+                SPECIAL_CHARACTER_LABELS,
+                element,
+                eventBus,
+            );
+
+            typeInto(editingBox, "");
+
+            const items = listItems();
+            expect(items.map((item) => item.textContent)).toEqual(
+                SPECIAL_CHARACTER_LABELS,
+            );
+            for (const item of items) {
+                expect(item.childElementCount).toBe(0);
+                expect(item.attributes).toHaveLength(0);
+            }
+            expect(
+                document.querySelector(
+                    "#autocomplete-list img, #autocomplete-list input, #autocomplete-list [onerror]",
+                ),
+            ).toBeNull();
         });
     });
 
@@ -336,6 +414,26 @@ describe("createAutocompleteForEdit", () => {
             expect(activeIndex()).toBe(1);
             expect(focusSpy).toHaveBeenCalled();
         });
+
+        it.each(SPECIAL_CHARACTER_LABELS)(
+            "places the original label into the editor verbatim: %s",
+            (label) => {
+                const { editingBox, element, eventBus } =
+                    setup(WORKOBJECT_TYPE);
+                createAutocompleteForEdit(
+                    editingBox,
+                    [label],
+                    element,
+                    eventBus,
+                );
+                typeInto(editingBox, "");
+                pressKey(editingBox, "ArrowDown");
+
+                pressKey(editingBox, "Enter");
+
+                expect(editingBox.innerText).toBe(label);
+            },
+        );
     });
 
     describe("listener cleanup", () => {
