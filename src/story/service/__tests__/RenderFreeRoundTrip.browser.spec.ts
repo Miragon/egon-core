@@ -423,6 +423,77 @@ describe("render-free round trip (browser)", () => {
                 exported(diagram.client.export(), "shape_actor").parent,
             ).toBe("shape_inner_group");
         });
+
+        it("imports newly modeled nested containment into a fresh client", async () => {
+            const firstProbe = injectorProbe();
+            diagram = await createTestDiagram({}, [firstProbe.module]);
+            const modeling = firstProbe.modeling();
+            const elementFactory = firstProbe.elementFactory();
+            const root = firstProbe
+                .elementRegistry()
+                .getAll()
+                .find((element) => !element["parent"])!;
+
+            const note = modeling.createShape(
+                elementFactory.create("shape", {
+                    type: ElementTypes.TEXTANNOTATION,
+                    width: 100,
+                    height: 40,
+                }),
+                { x: 350, y: 300 },
+                root,
+            );
+            const inner = modeling.createShape(
+                elementFactory.create("shape", {
+                    type: ElementTypes.GROUP,
+                    width: 180,
+                    height: 140,
+                }),
+                { x: 350, y: 300 },
+                root,
+            );
+            const outer = modeling.createShape(
+                elementFactory.create("shape", {
+                    type: ElementTypes.GROUP,
+                    width: 300,
+                    height: 250,
+                }),
+                { x: 350, y: 300 },
+                root,
+            );
+
+            expect(note.parent).toBe(inner);
+            expect(inner.parent).toBe(outer);
+            const saved = diagram.client.export();
+            expect(exported(saved, note.id).parent).toBe(inner.id);
+            expect(exported(saved, inner.id).parent).toBe(outer.id);
+
+            diagram.cleanup();
+            diagram = undefined;
+
+            const reopenedProbe = injectorProbe();
+            diagram = await createTestDiagram({}, [reopenedProbe.module]);
+            diagram.client.import(saved);
+
+            const registry = reopenedProbe.elementRegistry();
+            const reopenedNote = registry.get(note.id)! as any;
+            const reopenedInner = registry.get(inner.id)! as any;
+            const reopenedOuter = registry.get(outer.id)! as any;
+            expect(reopenedNote.parent).toBe(reopenedInner);
+            expect(reopenedInner.parent).toBe(reopenedOuter);
+
+            const noteGraphics = registry.getGraphics(reopenedNote);
+            const innerGraphics = registry.getGraphics(reopenedInner);
+            expect(noteGraphics.parentElement?.parentElement).toBe(
+                innerGraphics.parentElement?.querySelector(
+                    ":scope > .djs-children",
+                ),
+            );
+
+            const reexported = diagram.client.export();
+            expect(exported(reexported, note.id).parent).toBe(inner.id);
+            expect(exported(reexported, inner.id).parent).toBe(outer.id);
+        });
     });
     /**
      * The whole lifecycle in one case, ending in a byte comparison.

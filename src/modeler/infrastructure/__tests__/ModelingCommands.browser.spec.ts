@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import type { Element, Shape } from "diagram-js/lib/model/Types";
 
 import {
     createTestModeler,
@@ -35,6 +36,32 @@ describe("modeling commands (browser)", () => {
         modeler?.cleanup();
         modeler = undefined;
     });
+
+    function exportedParent(booted: TestModeler, element: Element) {
+        const document = JSON.parse(
+            booted
+                .get<{ export(): string }>("domainStoryExportService")
+                .export(),
+        );
+        return document.domainStory.businessObjects.find(
+            (businessObject: { id: string }) =>
+                businessObject.id === element.id,
+        )?.parent;
+    }
+
+    function expectGraphicsOwnedBy(
+        booted: TestModeler,
+        child: Shape,
+        parent: Shape,
+    ) {
+        const childGraphics = booted.canvas.getGraphics(child);
+        const parentGraphics = booted.canvas.getGraphics(parent);
+        expect(childGraphics.parentElement?.parentElement).toBe(
+            parentGraphics.parentElement?.querySelector(
+                ":scope > .djs-children",
+            ),
+        );
+    }
 
     describe("shape.create", () => {
         it("registers an actor with the default size and a typed id", () => {
@@ -217,20 +244,255 @@ describe("modeling commands (browser)", () => {
             modeler = createTestModeler();
             const actor = addActor(modeler, { point: { x: 400, y: 300 } });
 
-            // reworkGroupElements: a group created over existing shapes takes
-            // them as children so the story exports the containment.
+            // A group created over existing shapes adopts them transactionally
+            // so the story exports the containment.
             const group = addGroup(modeler, { point: { x: 400, y: 300 } });
 
             expect(group.children).toContain(actor);
             expect(actor.parent).toBe(group);
         });
 
+        it("adopts transactionally on create, undo and redo", () => {
+            modeler = createTestModeler();
+            const actor = addActor(modeler, { point: { x: 450, y: 300 } });
+            const actorPosition = { x: actor.x, y: actor.y };
+
+            const group = addGroup(modeler, {
+                point: { x: 450, y: 300 },
+                width: 300,
+                height: 250,
+            });
+
+            expect(actor.parent).toBe(group);
+            expect(
+                group.children.filter((child) => child === actor),
+            ).toHaveLength(1);
+            expect(actor.businessObject.parent).toBe(group.id);
+            expect(exportedParent(modeler, actor)).toBe(group.id);
+            expect({ x: actor.x, y: actor.y }).toEqual(actorPosition);
+            expectGraphicsOwnedBy(modeler, actor, group);
+
+            modeler.commandStack.undo();
+
+            expect(modeler.elementRegistry.get(group.id)).toBeUndefined();
+            expect(actor.parent).toBe(modeler.root);
+            expect(actor.businessObject.parent).toBeUndefined();
+            expect(exportedParent(modeler, actor)).toBeUndefined();
+            expect({ x: actor.x, y: actor.y }).toEqual(actorPosition);
+
+            modeler.commandStack.redo();
+
+            expect(modeler.elementRegistry.get(group.id)).toBe(group);
+            expect(actor.parent).toBe(group);
+            expect(actor.businessObject.parent).toBe(group.id);
+            expect(exportedParent(modeler, actor)).toBe(group.id);
+            expectGraphicsOwnedBy(modeler, actor, group);
+
+            // A second undo must leave the former child as an ordinary usable
+            // root shape, with a healthy command history.
+            modeler.commandStack.undo();
+            modeler.modeling.moveShape(actor, { x: 10, y: 5 }, modeler.root);
+            modeler.modeling.removeShape(actor);
+            modeler.commandStack.undo();
+            expect(modeler.elementRegistry.get(actor.id)).toBe(actor);
+            modeler.commandStack.undo();
+            expect({ x: actor.x, y: actor.y }).toEqual(actorPosition);
+        });
+
+        it("moves existing children once and adopts stationary siblings after a bulk move", () => {
+            modeler = createTestModeler();
+            const existingChild = addActor(modeler, {
+                point: { x: 200, y: 200 },
+            });
+            const group = addGroup(modeler, { point: { x: 200, y: 200 } });
+            const newChild = addWorkObject(modeler, {
+                point: { x: 500, y: 200 },
+            });
+            const nestedActor = addActor(modeler, {
+                point: { x: 510, y: 225 },
+            });
+            const nestedGroup = addGroup(modeler, {
+                point: { x: 510, y: 225 },
+                width: 120,
+                height: 100,
+            });
+            const rootOrder = modeler.root["children"].map(
+                (child: Element) => child.id,
+            );
+            const groupPosition = { x: group.x, y: group.y };
+            const existingPosition = {
+                x: existingChild.x,
+                y: existingChild.y,
+            };
+            const newPosition = { x: newChild.x, y: newChild.y };
+            const nestedPosition = { x: nestedGroup.x, y: nestedGroup.y };
+            const nestedActorPosition = { x: nestedActor.x, y: nestedActor.y };
+
+            // Selecting a parent and its child exercises MoveClosure's
+            // de-duplication as well as the updater's outermost-move queue.
+            modeler.modeling.moveElements(
+                [group, existingChild],
+                { x: 300, y: 0 },
+                modeler.root,
+                { primaryShape: group },
+            );
+
+            expect({ x: group.x, y: group.y }).toEqual({
+                x: groupPosition.x + 300,
+                y: groupPosition.y,
+            });
+            expect({ x: existingChild.x, y: existingChild.y }).toEqual({
+                x: existingPosition.x + 300,
+                y: existingPosition.y,
+            });
+            expect({ x: newChild.x, y: newChild.y }).toEqual(newPosition);
+            expect({ x: nestedGroup.x, y: nestedGroup.y }).toEqual(
+                nestedPosition,
+            );
+            expect({ x: nestedActor.x, y: nestedActor.y }).toEqual(
+                nestedActorPosition,
+            );
+            expect(group.children).toEqual([
+                existingChild,
+                newChild,
+                nestedGroup,
+            ]);
+            expect(nestedActor.parent).toBe(nestedGroup);
+            expect(newChild.businessObject.parent).toBe(group.id);
+            expect(nestedGroup.businessObject.parent).toBe(group.id);
+
+            modeler.commandStack.undo();
+
+            expect({ x: group.x, y: group.y }).toEqual(groupPosition);
+            expect({ x: existingChild.x, y: existingChild.y }).toEqual(
+                existingPosition,
+            );
+            expect({ x: newChild.x, y: newChild.y }).toEqual(newPosition);
+            expect(newChild.parent).toBe(modeler.root);
+            expect(nestedGroup.parent).toBe(modeler.root);
+            expect(nestedActor.parent).toBe(nestedGroup);
+            expect(
+                modeler.root["children"].map((child: Element) => child.id),
+            ).toEqual(rootOrder);
+
+            modeler.commandStack.redo();
+            expect(group.children).toEqual([
+                existingChild,
+                newChild,
+                nestedGroup,
+            ]);
+            expect({ x: newChild.x, y: newChild.y }).toEqual(newPosition);
+            expectGraphicsOwnedBy(modeler, newChild, group);
+            expectGraphicsOwnedBy(modeler, nestedGroup, group);
+        });
+
+        it("adopts on growth but retains children when the group shrinks", () => {
+            modeler = createTestModeler();
+            const group = addGroup(modeler, {
+                point: { x: 200, y: 200 },
+                width: 125,
+                height: 125,
+            });
+            const actor = addActor(modeler, { point: { x: 400, y: 200 } });
+            const actorPosition = { x: actor.x, y: actor.y };
+
+            modeler.modeling.resizeShape(group, {
+                x: group.x,
+                y: group.y,
+                width: 300,
+                height: group.height,
+            });
+
+            expect(actor.parent).toBe(group);
+            expect({ x: actor.x, y: actor.y }).toEqual(actorPosition);
+
+            modeler.modeling.resizeShape(group, {
+                x: group.x,
+                y: group.y,
+                width: 125,
+                height: group.height,
+            });
+
+            expect(actor.parent).toBe(group);
+            expect(actor.businessObject.parent).toBe(group.id);
+            expect({ x: actor.x, y: actor.y }).toEqual(actorPosition);
+        });
+
+        it("normalizes group drops and never parents a group beneath its descendant", () => {
+            modeler = createTestModeler();
+            const actor = addActor(modeler, { point: { x: 400, y: 300 } });
+            const groupShape = modeler.elementFactory.create("shape", {
+                type: ElementTypes.GROUP,
+                width: 300,
+                height: 250,
+            });
+
+            const group = modeler.modeling.createShape(
+                groupShape,
+                { x: 400, y: 300 },
+                actor as never,
+            );
+
+            expect(group.parent).toBe(modeler.root);
+            expect(actor.parent).toBe(group);
+
+            modeler.modeling.moveElements([group], { x: 0, y: 0 }, actor);
+
+            expect(group.parent).toBe(modeler.root);
+            expect(actor.parent).toBe(group);
+            expect(group.children).toContain(actor);
+
+            const selfTargetedShape = modeler.elementFactory.create("shape", {
+                type: ElementTypes.GROUP,
+                width: 125,
+                height: 125,
+            });
+            const selfTargeted = modeler.modeling.createShape(
+                selfTargetedShape,
+                { x: 700, y: 500 },
+                selfTargetedShape,
+            );
+            expect(selfTargeted.parent).toBe(modeler.root);
+        });
+
+        it("uses a connection's enclosing parent and never adopts the connection", () => {
+            modeler = createTestModeler();
+            const actor = addActor(modeler, { point: { x: 150, y: 150 } });
+            const workObject = addWorkObject(modeler, {
+                point: { x: 650, y: 150 },
+            });
+            const activity = connect(modeler, actor, workObject)!;
+            const groupShape = modeler.elementFactory.create("shape", {
+                type: ElementTypes.GROUP,
+                width: 300,
+                height: 250,
+            });
+
+            const group = modeler.modeling.createShape(
+                groupShape,
+                { x: 400, y: 400 },
+                activity as never,
+            );
+
+            expect(group.parent).toBe(modeler.root);
+            expect(activity.parent).toBe(modeler.root);
+            expect(group.children).not.toContain(activity);
+
+            modeler.modeling.moveElements(
+                [group],
+                { x: 0, y: 0 },
+                activity as never,
+            );
+            expect(group.parent).toBe(modeler.root);
+            expect(group.children).not.toContain(activity);
+        });
+
         it("moves a shape back out of a group", () => {
             modeler = createTestModeler();
             const group = addGroup(modeler, { point: { x: 400, y: 300 } });
-            // Creating a plain shape over a group does *not* adopt it — only
-            // reworkGroupElements does, and that runs when the *group* is the
-            // shape being created or moved. So move it in explicitly first.
+            // Creating a plain shape over a group does *not* adopt it — adoption
+            // runs when the *group* is created, moved or resized. So move the
+            // actor in explicitly first.
             const actor = addActor(modeler, { point: { x: 400, y: 300 } });
             modeler.modeling.moveElements([actor], { x: 0, y: 0 }, group);
             expect(actor.parent).toBe(group);
@@ -258,11 +520,10 @@ describe("modeling commands (browser)", () => {
             });
             const group = addGroup(modeler, { point: { x: 400, y: 300 } });
 
-            // Each group adopts only what was on the canvas when it was drawn,
-            // so the actor stays the *inner* group's child. `reworkGroupElements`
-            // assigns `innerShape.parent`, and diagram-js binds parent↔children
-            // as an object-refs inverse pair — assigning one side splices the
-            // other — so the actor lands in exactly one `children` array.
+            // Each group adopts only siblings that exist when it is drawn, so
+            // the actor stays the *inner* group's child. The nested move command
+            // reparents the inner group intact, leaving the actor in exactly one
+            // `children` array.
             expect(actor.parent).toBe(childGroup);
             expect(childGroup.parent).toBe(group);
             expect(modeler.root["children"]).not.toContain(actor);
