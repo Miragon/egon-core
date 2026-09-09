@@ -1,1 +1,1 @@
-.agent/AGENTS.md
+AGENTS.md
