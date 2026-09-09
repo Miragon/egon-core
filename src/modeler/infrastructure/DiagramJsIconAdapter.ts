@@ -11,6 +11,8 @@ import {
     createDebouncedCallback,
     type DebouncedCallback,
 } from "../../shared/infrastructure/debounce";
+import { reportPostCommitError } from "../../shared/infrastructure/reportError";
+import type { EditorSession, EditorSessionOwner } from "./EditorSessionOwner";
 
 import { IconPort } from "../domain/ports";
 import {
@@ -24,65 +26,70 @@ import {
  * This adapter isolates all diagram-js icon-related dependencies.
  */
 export class DiagramJsIconAdapter implements IconPort {
-    private readonly iconDictionaryService: IconDictionaryService;
-    private readonly iconSetImportExportService: IconSetImportExportService;
-    private readonly eventBus: EventBus;
+    private readonly sessionOwner?: EditorSessionOwner;
+    private readonly fixedDiagram?: Diagram;
+    private readonly stopFollowingPromotions?: () => void;
     private readonly callbackRegistry: Map<
         (icons: IconSet) => void,
         DebouncedCallback
     > = new Map();
 
-    constructor(diagram: Diagram) {
-        this.iconDictionaryService = diagram.get<IconDictionaryService>(
-            "domainStoryIconDictionaryService",
-        );
-        this.iconSetImportExportService =
-            diagram.get<IconSetImportExportService>(
-                "domainStoryIconSetImportExportService",
+    constructor(diagramOrOwner: Diagram | EditorSessionOwner) {
+        if ("getActiveDiagram" in diagramOrOwner) {
+            this.sessionOwner = diagramOrOwner;
+            this.stopFollowingPromotions = diagramOrOwner.onPromotion(
+                (previous, current) =>
+                    this.transferSubscriptions(previous, current),
             );
-        this.eventBus = diagram.get<EventBus>("eventBus");
+        } else {
+            this.fixedDiagram = diagramOrOwner;
+        }
     }
 
     loadIcons(icons: Partial<IconSetData>): void {
         const iconSetConfig =
-            this.iconSetImportExportService.createIconSetConfiguration({
+            this.iconSetImportExportService().createIconSetConfiguration({
                 // fall back to the currently loaded name so reloading icons
                 // after an import does not strip the icon-set name from the
                 // next export
-                name: icons.name ?? this.iconDictionaryService.getIconSetName(),
+                name:
+                    icons.name ?? this.iconDictionaryService().getIconSetName(),
                 actors: icons.actors ?? {},
                 workObjects: icons.workObjects ?? {},
             });
 
-        this.iconSetImportExportService.loadConfiguration(iconSetConfig);
+        this.iconSetImportExportService().loadConfiguration(iconSetConfig);
         this.fireIconsChangedEvent();
     }
 
     addIcon(category: IconCategory, name: string, svg: string): void {
         const elementType = this.toElementType(category);
 
-        const sanitized = this.iconDictionaryService.addIMGToIconDictionary(
+        const sanitized = this.iconDictionaryService().addIMGToIconDictionary(
             svg,
             name,
         );
-        this.iconDictionaryService.registerIconForType(
+        this.iconDictionaryService().registerIconForType(
             elementType,
             name,
             sanitized,
         );
-        this.addIconToCss(name, this.iconDictionaryService.getIconSource(name));
+        this.addIconToCss(
+            name,
+            this.iconDictionaryService().getIconSource(name),
+        );
         this.fireIconsChangedEvent();
     }
 
     removeIcon(category: IconCategory, name: string): void {
         const elementType = this.toElementType(category);
-        this.iconDictionaryService.unregisterIconForType(elementType, name);
+        this.iconDictionaryService().unregisterIconForType(elementType, name);
         this.fireIconsChangedEvent();
     }
 
     getIcons(): IconSet {
         const config =
-            this.iconSetImportExportService.getCurrentConfigurationForExport();
+            this.iconSetImportExportService().getCurrentConfigurationForExport();
         return {
             actors: config?.actors ?? {},
             workObjects: config?.workObjects ?? {},
@@ -99,17 +106,21 @@ export class DiagramJsIconAdapter implements IconPort {
         if (this.callbackRegistry.has(callback)) {
             return;
         }
-        const wrapped = createDebouncedCallback(() =>
-            callback(this.getIcons()),
-        );
+        const wrapped = createDebouncedCallback(() => {
+            try {
+                callback(this.getIcons());
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        });
         this.callbackRegistry.set(callback, wrapped);
-        (this.eventBus.on as any)("dst.config.changed", wrapped);
+        (this.eventBus().on as any)("dst.config.changed", wrapped);
     }
 
     offIconsChanged(callback: (icons: IconSet) => void): void {
         const wrapped = this.callbackRegistry.get(callback);
         if (wrapped) {
-            (this.eventBus.off as any)("dst.config.changed", wrapped);
+            (this.eventBus().off as any)("dst.config.changed", wrapped);
             // Cancel too: dropping the registry entry would otherwise leave an
             // armed timer nobody can reach, firing ~100 ms after off().
             wrapped.cancel();
@@ -126,10 +137,11 @@ export class DiagramJsIconAdapter implements IconPort {
      */
     destroy(): void {
         this.callbackRegistry.forEach((wrapped) => {
-            (this.eventBus.off as any)("dst.config.changed", wrapped);
+            (this.eventBus().off as any)("dst.config.changed", wrapped);
             wrapped.cancel();
         });
         this.callbackRegistry.clear();
+        this.stopFollowingPromotions?.();
     }
 
     private toElementType(category: IconCategory): ElementTypes {
@@ -141,10 +153,43 @@ export class DiagramJsIconAdapter implements IconPort {
     private addIconToCss(name: string, svg: string): void {
         const dict = new Dictionary<string>();
         dict.set(name, svg);
-        this.iconDictionaryService.addIconsToCss(dict);
+        this.iconDictionaryService().addIconsToCss(dict);
     }
 
     private fireIconsChangedEvent(): void {
-        this.eventBus.fire("dst.config.changed", { iconSet: this.getIcons() });
+        this.eventBus().fire("dst.config.changed", {
+            iconSet: this.getIcons(),
+        });
+    }
+
+    private diagram(): Diagram {
+        return this.sessionOwner?.getActiveDiagram() ?? this.fixedDiagram!;
+    }
+
+    private eventBus(): EventBus {
+        return this.diagram().get<EventBus>("eventBus");
+    }
+
+    private iconDictionaryService(): IconDictionaryService {
+        return this.diagram().get<IconDictionaryService>(
+            "domainStoryIconDictionaryService",
+        );
+    }
+
+    private iconSetImportExportService(): IconSetImportExportService {
+        return this.diagram().get<IconSetImportExportService>(
+            "domainStoryIconSetImportExportService",
+        );
+    }
+
+    private transferSubscriptions(
+        previous: EditorSession,
+        current: EditorSession,
+    ): void {
+        this.callbackRegistry.forEach((wrapped) => {
+            (previous.eventBus.off as any)("dst.config.changed", wrapped);
+            wrapped.cancel();
+            (current.eventBus.on as any)("dst.config.changed", wrapped);
+        });
     }
 }

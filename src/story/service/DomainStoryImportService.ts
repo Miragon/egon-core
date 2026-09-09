@@ -1,4 +1,3 @@
-import { assign } from "min-dash";
 import Canvas from "diagram-js/lib/core/Canvas";
 import {
     Connection,
@@ -11,7 +10,7 @@ import EventBus from "diagram-js/lib/core/EventBus";
 import ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import ElementFactory from "diagram-js/lib/core/ElementFactory";
 import { ImportRepairService } from "./ImportRepairService";
-import { parseExportFile } from "./ExportFileParser";
+import { parseExportFile, validateRetainedGeometry } from "./ExportFileParser";
 import { BusinessObject } from "../domain/businessObject";
 import { isActivity, isConnection, isGroup } from "../domain/elementPredicates";
 import { needsPreV050Repair } from "../domain/importRepair";
@@ -22,6 +21,11 @@ import {
 } from "../../iconSet/service";
 import { IconSet } from "../domain/iconSet";
 import { DomainStoryPropertiesService } from "../../modeler/service";
+import {
+    PreparedConnection,
+    PreparedImport,
+    PreparedShape,
+} from "./PreparedImport";
 
 export class DomainStoryImportService {
     static $inject: string[] = [
@@ -34,14 +38,6 @@ export class DomainStoryImportService {
         "domainStoryPropertiesService",
         "domainStoryVersionBanner",
     ];
-
-    /**
-     * Group shapes already added to the canvas, by business-object id, so a
-     * child can be parented onto its group. Cleared at the top of every
-     * `import()`: a second import runs after `diagram.clear`, and stale entries
-     * would parent new shapes onto shapes that no longer exist.
-     */
-    private readonly groupElements = new Map<string, ElementLike>();
 
     private readonly importRepairService = new ImportRepairService();
 
@@ -73,15 +69,19 @@ export class DomainStoryImportService {
      * @throws Error if import fails
      * @param story serialized `{ iconSet, domainStory }` (or a legacy shape)
      */
-    import(story: string) {
-        const parsed = JSON.parse(story);
+    import(story: unknown): void {
+        const prepared = this.prepare(story);
+        this.materialize(prepared);
+    }
 
+    /**
+     * Normalize, validate, and repair an untrusted import without touching any
+     * editor-owned service. The returned value is safe to materialize in an
+     * isolated candidate session.
+     */
+    prepare(story: unknown): PreparedImport {
+        const parsed = typeof story === "string" ? JSON.parse(story) : story;
         const { iconSetConfiguration, domainStory } = parseExportFile(parsed);
-
-        const iconSet: IconSet =
-            this.iconSetImportExportService.createIconSetConfiguration(
-                iconSetConfiguration,
-            );
 
         this.importRepairService.removeWhitespacesFromIcons(
             domainStory.businessObjects,
@@ -94,18 +94,13 @@ export class DomainStoryImportService {
                 domainStory.businessObjects,
             );
 
-        this.eventBus.fire("diagram.clear", {});
-        // A previous import's groups were just destroyed; keeping their shapes
-        // would parent this story's children onto dead elements.
-        this.groupElements.clear();
-
-        // The normalizer already stripped web-only trailers; the version now
-        // lives on the story. Feed it through so pre-v0.5.0 files still get the
-        // custom-element repair and the version box renders as before.
-        const domainStoryElements = this.handleVersionNumber(
-            domainStory.version,
-            prunedElements,
-        );
+        let domainStoryElements = prunedElements;
+        if (needsPreV050Repair(domainStory.version)) {
+            domainStoryElements =
+                this.importRepairService.updateCustomElementsPreviousV050(
+                    domainStoryElements,
+                );
+        }
 
         // Two repairs the *renderer* used to perform on every paint (#74).
         // Drawing is a read now, so they happen here — once, before the canvas
@@ -116,19 +111,44 @@ export class DomainStoryImportService {
             domainStoryElements,
         );
 
-        const connections: Connection[] = [],
-            groups: BusinessObject[] = [],
-            otherElementTypes: BusinessObject[] = [];
+        validateRetainedGeometry(domainStoryElements);
 
-        domainStoryElements.forEach(function (bo: any) {
+        const connections: PreparedConnection[] = [],
+            groups: PreparedShape[] = [],
+            shapes: PreparedShape[] = [];
+
+        domainStoryElements.forEach((bo) => {
             if (isOfTypeConnection(bo)) {
-                connections.push(bo as unknown as Connection);
+                connections.push(this.prepareConnection(bo));
             } else if (isOfTypeGroup(bo)) {
-                groups.push(bo);
+                groups.push(this.prepareShape(bo));
             } else {
-                otherElementTypes.push(bo);
+                shapes.push(this.prepareShape(bo));
             }
         });
+
+        return {
+            iconSetConfiguration,
+            metadata: {
+                title: domainStory.title,
+                description: domainStory.description,
+                version: domainStory.version,
+                scope: domainStory.scope,
+            },
+            groups,
+            shapes,
+            connections,
+            removedConnections,
+        };
+    }
+
+    /** Materialize a prepared import into this service's editor session. */
+    materialize(prepared: PreparedImport): void {
+        const iconSet: IconSet =
+            this.iconSetImportExportService.createIconSetConfiguration(
+                prepared.iconSetConfiguration,
+            );
+        const groupElements = new Map<string, ElementLike>();
 
         this.iconSetImportExportService.loadConfiguration(iconSet);
         this.eventBus.fire("dst.config.changed", { iconSet });
@@ -136,44 +156,70 @@ export class DomainStoryImportService {
         // Add groups in parent-before-child order, then the remaining shapes,
         // then connections. This lets nested groups retain their persisted
         // membership even when a stable id-sorted export puts a child first.
-        this.addGroupsInDependencyOrder(groups);
-        otherElementTypes.forEach(this.createElementFromBusinessObject, this);
-        connections.forEach(this.addConnection, this);
+        this.addGroupsInDependencyOrder(prepared.groups, groupElements);
+        prepared.shapes.forEach((shape) =>
+            this.createShape(shape, groupElements),
+        );
+        prepared.connections.forEach((connection) =>
+            this.addConnection(connection),
+        );
+
+        this.versionBanner.show(prepared.metadata.version);
 
         // Surface the repair so a host can tell the user the file was lossy.
         // This is the internal half of the public `import.repaired` event
         // (ADR 0017): `DiagramJsModelerAdapter` listens here and re-emits the
         // dropped ids through `ModelerPort`. Fired only when something was
         // actually dropped, so a host handler doubles as "the file was damaged".
-        if (removedConnections.length > 0) {
-            this.eventBus.fire("dst.import.repaired", { removedConnections });
+        if (prepared.removedConnections.length > 0) {
+            this.eventBus.fire("dst.import.repaired", {
+                removedConnections: prepared.removedConnections,
+            });
         }
 
         // Persist story-level metadata: the element registry keeps only diagram
         // elements, so without this the title/description/scope would be lost
         // on the next export.
         this.propertiesService.setProperties(
-            domainStory.title,
-            domainStory.description,
-            domainStory.scope,
-            domainStory.version,
+            prepared.metadata.title,
+            prepared.metadata.description,
+            prepared.metadata.scope,
+            prepared.metadata.version,
         );
     }
 
-    private createElementFromBusinessObject(businessObject: any) {
-        const parentId = businessObject.parent;
-        delete businessObject.children;
-        delete businessObject.parent;
+    private createShape(
+        prepared: PreparedShape,
+        groupElements: Map<string, ElementLike>,
+    ) {
+        const businessObject = prepared.businessObject as unknown as Record<
+            string,
+            unknown
+        >;
+        delete businessObject["children"];
+        delete businessObject["parent"];
 
-        const attributes = assign({ businessObject }, businessObject);
+        const attributes = {
+            businessObject,
+            id: prepared.id,
+            type: prepared.type,
+            x: prepared.x,
+            y: prepared.y,
+            width: prepared.width,
+            height: prepared.height,
+            name: businessObject["name"] as string,
+            ...(typeof businessObject["text"] === "string"
+                ? { text: businessObject["text"] }
+                : {}),
+        };
         const shape = this.elementFactory.create("shape", attributes);
 
-        if (isOfTypeGroup(businessObject)) {
-            this.groupElements.set(businessObject.id, shape);
+        if (isOfTypeGroup(prepared.businessObject)) {
+            groupElements.set(prepared.id, shape);
         }
 
-        if (parentId) {
-            const parentShape = this.groupElements.get(parentId);
+        if (prepared.parentId) {
+            const parentShape = groupElements.get(prepared.parentId);
 
             if (isOfTypeGroup(parentShape)) {
                 // No `parentIndex`: diagram-js appends when it is omitted, which
@@ -184,7 +230,7 @@ export class DomainStoryImportService {
                 const addedShape = this.canvas.addShape(shape, parentShape);
                 // diagram-js needs the live shape reference above; EGN persists
                 // the corresponding group's id on the business object instead.
-                businessObject.parent = parentId;
+                businessObject["parent"] = prepared.parentId;
                 return addedShape;
             }
         }
@@ -198,7 +244,10 @@ export class DomainStoryImportService {
      * back to the root without retaining a parent id that would not match the
      * live diagram.
      */
-    private addGroupsInDependencyOrder(groups: BusinessObject[]): void {
+    private addGroupsInDependencyOrder(
+        groups: PreparedShape[],
+        groupElements: Map<string, ElementLike>,
+    ): void {
         const unresolved = [...groups];
 
         while (unresolved.length > 0) {
@@ -206,10 +255,10 @@ export class DomainStoryImportService {
 
             for (let index = 0; index < unresolved.length;) {
                 const group = unresolved[index];
-                const parentId = (group as any).parent;
+                const parentId = group.parentId;
 
-                if (!parentId || this.groupElements.has(parentId)) {
-                    this.createElementFromBusinessObject(group);
+                if (!parentId || groupElements.has(parentId)) {
+                    this.createShape(group, groupElements);
                     unresolved.splice(index, 1);
                     madeProgress = true;
                 } else {
@@ -225,49 +274,67 @@ export class DomainStoryImportService {
             // missing, not a group, or part of a cycle. Keep these shapes, but
             // make their persisted state accurately describe their root home.
             unresolved.forEach((group) => {
-                delete (group as any).parent;
-                this.createElementFromBusinessObject(group);
+                delete (
+                    group.businessObject as unknown as Record<string, unknown>
+                )["parent"];
+                this.createShape(
+                    { ...group, parentId: undefined },
+                    groupElements,
+                );
             });
             return;
         }
     }
 
     // FIXME: use an actual type for element. It should be BusinessObject from the domain.
-    private addConnection(element: any) {
-        const attributes = assign({ businessObject: element }, element);
-
-        if (element.source === undefined || element.target === undefined) {
-            throw new Error("source and target must be defined");
-        }
-
-        const connection = this.elementFactory.create(
-            "connection",
-            assign(attributes, {
-                source: this.elementRegistry.get(element.source),
-                target: this.elementRegistry.get(element.target),
-            }),
-            // this.elementRegistry.get(element.source!.id).parent,
-        );
+    private addConnection(prepared: PreparedConnection) {
+        const connection = this.elementFactory.create("connection", {
+            businessObject: prepared.businessObject,
+            id: prepared.id,
+            type: prepared.type,
+            name: prepared.businessObject.name,
+            waypoints: prepared.waypoints,
+            source: this.elementRegistry.get(prepared.sourceId),
+            target: this.elementRegistry.get(prepared.targetId),
+        } as any);
 
         return this.canvas.addConnection(connection);
     }
 
-    private handleVersionNumber(
-        importVersionNumber: string,
-        elements: BusinessObject[],
-    ): BusinessObject[] {
-        if (needsPreV050Repair(importVersionNumber)) {
-            elements =
-                this.importRepairService.updateCustomElementsPreviousV050(
-                    elements,
-                );
-            // TODO: add V050 dialog
-            // this.showPreviousV050Dialog(versionPrefix);
-        }
+    private prepareShape(businessObject: BusinessObject): PreparedShape {
+        const defaultSize = isOfTypeGroup(businessObject)
+            ? { width: 300, height: 200 }
+            : businessObject.type.startsWith("domainStory:textAnnotation")
+              ? { width: 100, height: 30 }
+              : { width: 75, height: 75 };
+        const record = businessObject as unknown as Record<string, unknown>;
+        return {
+            businessObject,
+            id: businessObject.id,
+            type: businessObject.type,
+            x: businessObject.x,
+            y: businessObject.y,
+            width: businessObject.width ?? defaultSize.width,
+            height: businessObject.height ?? defaultSize.height,
+            parentId:
+                typeof record["parent"] === "string"
+                    ? record["parent"]
+                    : undefined,
+        };
+    }
 
-        this.versionBanner.show(importVersionNumber);
-
-        return elements;
+    private prepareConnection(
+        businessObject: BusinessObject,
+    ): PreparedConnection {
+        const record = businessObject as unknown as Record<string, unknown>;
+        return {
+            businessObject,
+            id: businessObject.id,
+            type: businessObject.type,
+            sourceId: record["source"] as string,
+            targetId: record["target"] as string,
+            waypoints: record["waypoints"] as PreparedConnection["waypoints"],
+        };
     }
 }
 

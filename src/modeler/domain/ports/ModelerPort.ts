@@ -19,7 +19,7 @@ export interface ImportRepairData {
  */
 export interface ModelerPort {
     /**
-     * Import a domain story document into the diagram.
+     * Import an untrusted domain story document atomically.
      */
     import(document: DomainStoryDocument): void;
 

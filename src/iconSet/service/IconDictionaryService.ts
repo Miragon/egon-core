@@ -107,6 +107,16 @@ export class IconDictionaryService {
         return fullDictionary;
     }
 
+    /** Seed a new editor session with an isolated copy of the sanitized pool. */
+    restoreCustomIcons(icons: Dictionary<string>): void {
+        const restored = this.sanitizeDictionary(icons);
+        restored.keysArray().forEach((name) => {
+            this.customIcons.delete(name);
+            this.customIcons.set(name, restored.get(name));
+        });
+        this.addIconsToCss(restored);
+    }
+
     getIconsAssignedAs(type: ElementTypes): Dictionary<string> {
         if (type === ElementTypes.ACTOR) {
             return this.selectedActorsDictionary;

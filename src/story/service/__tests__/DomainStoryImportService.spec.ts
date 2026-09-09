@@ -171,7 +171,10 @@ const activity = (id: string, source: string, target: string) => ({
     source,
     target,
     number: 1,
-    waypoints: [{ x: 0, y: 0 }],
+    waypoints: [
+        { x: 0, y: 0 },
+        { x: 100, y: 100 },
+    ],
 });
 
 describe("DomainStoryImportService insertion order", () => {
@@ -324,12 +327,14 @@ describe("DomainStoryImportService version gating", () => {
 });
 
 describe("DomainStoryImportService canvas lifecycle", () => {
-    it("clears the diagram before adding anything", () => {
+    it("materializes without destructively clearing its session", () => {
         const harness = makeHarness();
 
         harness.service.import(storyFile([actor("shape_actor")]));
 
-        expect(harness.fired[0].event).toBe("diagram.clear");
+        expect(
+            harness.fired.some((call) => call.event === "diagram.clear"),
+        ).toBe(false);
         expect(harness.added).toHaveLength(1);
     });
 
@@ -339,7 +344,7 @@ describe("DomainStoryImportService canvas lifecycle", () => {
         { what: "an unrecognized payload", story: '{"foo":1}' },
         { what: "a non-story array", story: '"not a story"' },
         { what: "invalid JSON", story: "{" },
-    ])("throws on $what before firing diagram.clear", ({ story }) => {
+    ])("throws on $what before firing editor events", ({ story }) => {
         const harness = makeHarness();
 
         expect(() => harness.service.import(story)).toThrow();
