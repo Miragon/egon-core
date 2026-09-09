@@ -64,8 +64,9 @@ export class DomainStoryExportService {
 
     private createExportFile(businessObjects: BusinessObject[]): EgnExportFile {
         const iconSet =
-            this.iconSetImportExportService.getCurrentConfigurationForExport() ??
-            EMPTY_ICON_SET;
+            this.iconSetImportExportService.getConfigurationForStoryExport(
+                this.elementRegistryService.getUsedIcons(),
+            ) ?? EMPTY_ICON_SET;
 
         return new EgnExportFile(iconSet, {
             businessObjects,

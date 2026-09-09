@@ -5,6 +5,7 @@ import {
 } from "../../story/domain/iconSet";
 import { Dictionary } from "../../story/domain/dictionary";
 import { ElementTypes } from "../../story/domain/elementTypes";
+import { UsedIconList } from "../../story/domain/UsedIconList";
 
 export type { IconSetExportConfiguration };
 
@@ -67,6 +68,42 @@ export class IconSetImportExportService {
         return;
     }
 
+    /**
+     * Builds the icon-set portion of a story export.
+     *
+     * The selected dictionaries remain the public creation vocabulary. A
+     * diagram can, however, still contain an icon removed from that vocabulary
+     * or displaced by `loadIcons()`. Keep such live references in the document
+     * using the instance's historical icon pool, without changing either pool
+     * or selection as a side effect of exporting.
+     */
+    getConfigurationForStoryExport(
+        usedIcons: UsedIconList,
+    ): IconSetExportConfiguration | undefined {
+        const actors = this.iconDictionaryService
+            .getActorsDictionary()
+            .toRecord();
+        const workObjects = this.iconDictionaryService
+            .getWorkObjectsDictionary()
+            .toRecord();
+
+        this.addReferencedIcons(actors, usedIcons.actors);
+        this.addReferencedIcons(workObjects, usedIcons.workObjects);
+
+        if (
+            Object.keys(actors).length === 0 &&
+            Object.keys(workObjects).length === 0
+        ) {
+            return;
+        }
+
+        return {
+            name: this.iconDictionaryService.getIconSetName(),
+            actors,
+            workObjects,
+        };
+    }
+
     private getCurrentConfiguration(): IconSet | undefined {
         const actors = this.iconDictionaryService.getActorsDictionary();
         const workObjects =
@@ -118,5 +155,21 @@ export class IconSetImportExportService {
             actors: newActors,
             workObjects: newWorkobjects,
         };
+    }
+
+    private addReferencedIcons(
+        selectedIcons: Record<string, string>,
+        usedIconNames: string[],
+    ): void {
+        for (const name of new Set(usedIconNames)) {
+            if (name in selectedIcons) {
+                continue;
+            }
+
+            const source = this.iconDictionaryService.getIconSource(name);
+            if (source) {
+                selectedIcons[name] = source;
+            }
+        }
     }
 }
