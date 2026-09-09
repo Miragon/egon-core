@@ -2,6 +2,7 @@ import { CommandContext } from "diagram-js/lib/command/CommandStack";
 import EventBus from "diagram-js/lib/core/EventBus";
 import CommandHandler from "diagram-js/lib/command/CommandHandler";
 import { Connection, Element, ElementLike } from "diagram-js/lib/model/Types";
+import type { Point } from "diagram-js/lib/util/Types";
 import { ElementRegistryService } from "../../../service/ElementRegistryService";
 import { ActivityCanvasObject } from "../../../../story/domain/canvasObject";
 import { restoredNumberAssignments } from "../../../../story/domain/activityNumbering";
@@ -160,12 +161,12 @@ export class ActivityDirectionChangedHandler implements CommandHandler {
         const businessObject = context.businessObject;
         const element: Connection = context.element;
         const swapSource = element.source;
-        const newWaypoints = [];
         const waypoints = element.waypoints;
-
-        for (let i = waypoints.length - 1; i >= 0; i--) {
-            newWaypoints.push(waypoints[i]);
-        }
+        // Reverse the array without changing the live waypoint order in place.
+        // The persisted copy below must also be independent of these points:
+        // imported connections can have `element.waypoints` and
+        // `businessObject.waypoints` aliased before this command runs.
+        const newWaypoints = [...waypoints].reverse();
 
         element.source = element.target;
         businessObject.source = businessObject.target;
@@ -176,6 +177,7 @@ export class ActivityDirectionChangedHandler implements CommandHandler {
         // work object the source", and nothing downstream normalizes it any more.
         businessObject.number = context.newNumber ?? null;
         element.waypoints = newWaypoints;
+        businessObject.waypoints = copyWaypoints(newWaypoints);
 
         this.eventBus.fire("element.changed", { element });
 
@@ -194,11 +196,41 @@ export class ActivityDirectionChangedHandler implements CommandHandler {
 
         semantic.number = context.oldNumber;
         element.waypoints = context.oldWaypoints;
+        semantic.waypoints = copyWaypoints(context.oldWaypoints);
 
         this.eventBus.fire("element.changed", { element });
 
         return [element];
     }
+}
+
+/**
+ * Copies connection points the same way the connection updater does.
+ *
+ * `diagram-js` does not declare the optional `original` docking anchor on its
+ * `Point` type, but imported and cropped activities can carry it. Clone that
+ * nested point too so persisted geometry never aliases the live connection.
+ */
+function copyWaypoints(waypoints: readonly Point[]): Point[] {
+    return waypoints.map((point) => {
+        const original = (point as Point & { original?: Point }).original;
+
+        if (original) {
+            return {
+                x: point.x,
+                y: point.y,
+                original: {
+                    x: original.x,
+                    y: original.y,
+                },
+            } as Point;
+        }
+
+        return {
+            x: point.x,
+            y: point.y,
+        };
+    });
 }
 
 // reverts the automatic changes done by the automatic number-generation at editing
