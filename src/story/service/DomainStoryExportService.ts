@@ -6,6 +6,8 @@ import { BusinessObject } from "../domain/businessObject";
 import { IconSetExportConfiguration } from "../domain/iconSet";
 import { IconSetImportExportService } from "../../iconSet/service";
 import { EgnExportFile } from "../domain/egnExportFile";
+import type { CanvasObject } from "../domain/canvasObject";
+import { isAnnotation } from "../domain/elementPredicates";
 
 /** The format version this library converges every export on. */
 const EGN_EXPORT_VERSION = "4.0.0";
@@ -53,7 +55,7 @@ export class DomainStoryExportService {
     private getStory(): BusinessObject[] {
         return this.elementRegistryService
             .createObjectListForDSTDownload()
-            .map((canvasObject) => canvasObject.businessObject)
+            .map(projectBusinessObject)
             .sort((objA: BusinessObject, objB: BusinessObject) => {
                 if (objA.id !== undefined && objB.id !== undefined) {
                     return objA.id.localeCompare(objB.id);
@@ -76,4 +78,18 @@ export class DomainStoryExportService {
             scope: this.propertiesService.getScope(),
         });
     }
+}
+
+/**
+ * Export-time geometry is projected into a detached record. In particular,
+ * annotation height belongs to the live shape and must never be written into
+ * its business object merely because a document was serialized (ADR 0016).
+ */
+function projectBusinessObject(canvasObject: CanvasObject): BusinessObject {
+    const businessObject = { ...canvasObject.businessObject };
+    if (isAnnotation(canvasObject)) {
+        businessObject.width = canvasObject.width;
+        businessObject.height = canvasObject.height;
+    }
+    return businessObject;
 }

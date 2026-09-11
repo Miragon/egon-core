@@ -1,4 +1,5 @@
 import {
+    IconConfiguration,
     IconSet,
     IconSetData,
     IconCategory,
@@ -33,6 +34,12 @@ export interface IconPort {
      * Get all currently registered icons.
      */
     getIcons(): IconSet;
+
+    /** Returns the retained catalog, selection order, set name, and usage. */
+    getIconConfiguration(): IconConfiguration;
+
+    /** Reorders one selected category using an exact permutation. */
+    setIconOrder(category: IconCategory, names: readonly string[]): void;
 
     /**
      * Check if an icon exists.

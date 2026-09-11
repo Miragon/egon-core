@@ -14,10 +14,12 @@ import {
 } from "../../shared/infrastructure/debounce";
 import { reportPostCommitError } from "../../shared/infrastructure/reportError";
 import type { EditorSession, EditorSessionOwner } from "./EditorSessionOwner";
+import type { ElementRegistryService } from "../service/ElementRegistryService";
 
 import { IconPort } from "../domain/ports";
 import {
     IconCategory,
+    IconConfiguration,
     IconSet,
     IconSetData,
 } from "../../iconSet/domain/IconTypes";
@@ -97,6 +99,33 @@ export class DiagramJsIconAdapter implements IconPort {
         const icons = this.getIcons();
         const iconMap = category === "actor" ? icons.actors : icons.workObjects;
         return name in iconMap;
+    }
+
+    getIconConfiguration(): IconConfiguration {
+        const dictionary = this.iconDictionaryService();
+        const used = this.diagram()
+            .get<ElementRegistryService>("domainStoryElementRegistryService")
+            .getUsedIcons();
+        return {
+            name: dictionary.getIconSetName(),
+            catalog: dictionary.getFullDictionary().toRecord(),
+            selected: {
+                actor: [...dictionary.getActorsDictionary().keysArray()],
+                workObject: [
+                    ...dictionary.getWorkObjectsDictionary().keysArray(),
+                ],
+            },
+            used: {
+                actor: [...new Set(used.actors)],
+                workObject: [...new Set(used.workObjects)],
+            },
+        };
+    }
+
+    setIconOrder(category: IconCategory, names: readonly string[]): void {
+        if (this.iconDictionaryService().setIconOrder(category, names)) {
+            this.fireIconsChangedEvent();
+        }
     }
 
     onIconsChanged(callback: (icons: IconSet) => void): void {

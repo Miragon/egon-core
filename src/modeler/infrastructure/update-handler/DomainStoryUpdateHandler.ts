@@ -7,6 +7,7 @@ import {
     ElementColorChangeHandler,
     RemoveGroupWithoutChildrenHandler,
 } from "./handler/elementUpdateHandler";
+import { BatchRenameLabelsHandler } from "./handler/BatchRenameLabelsHandler";
 
 export class DomainStoryUpdateHandler {
     static $inject: string[] = ["commandStack"];
@@ -28,6 +29,10 @@ export class DomainStoryUpdateHandler {
         commandStack.registerHandler(
             "shape.removeGroupWithoutChildren",
             RemoveGroupWithoutChildrenHandler,
+        );
+        commandStack.registerHandler(
+            "labels.renameBatch",
+            BatchRenameLabelsHandler,
         );
     }
 }

@@ -167,6 +167,8 @@ const FEATURE_ROOTS: readonly string[] = [
  */
 const FROZEN_INDEX_SPECIFIERS: readonly string[] = [
     "./iconSet/domain/IconTypes",
+    "./labelDictionary/domain/LabelDictionary",
+    "./modeler/domain/export/VisualExport",
     "./modeler/domain/model/TextRendererConfig",
     "./modeler/domain/model/Viewport",
     "./modeler/domain/ports/IconPort",
@@ -175,6 +177,7 @@ const FROZEN_INDEX_SPECIFIERS: readonly string[] = [
     "./modeler/service/EgonClientConfig",
     "./story/domain/DomainStoryDocument",
     "./story/domain/iconSet",
+    "./story/domain/replay",
     "./story/domain/scope",
 ];
 

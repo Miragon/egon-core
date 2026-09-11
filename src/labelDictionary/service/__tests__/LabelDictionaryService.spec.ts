@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { LabelDictionaryService } from "../LabelDictionaryService";
 import { IconDictionaryService } from "../../../iconSet/service";
 import { IconStyleSheetPort } from "../../../iconSet/domain/ports/IconStyleSheetPort";
@@ -8,12 +8,10 @@ import type { ElementRegistryService } from "../../../modeler/service";
 import { passThroughIconSanitizer } from "../../../__tests__/helpers/passThroughIconSanitizer";
 
 /**
- * First cover for the label dictionary, which the mass-rename UI (still
- * commented out in the service) will read verbatim. The dictionary is a
- * projection over the canvas, so every rule that decides *what lands in it*
- * — dedup, the empty-name filter, case-insensitive ordering, and the silent
- * skip of a work object whose icon is not in the current set — is behaviour a
- * host depends on and none of it was pinned before.
+ * The dictionary is a current projection over the canvas, so every rule that
+ * decides what lands in it — dedup, the empty-name filter, case-insensitive
+ * ordering, optional representative artwork, and detached snapshots — is
+ * behavior a host depends on.
  *
  * No canvas is booted: the service only ever reads `ElementRegistryService`,
  * so a duck-typed stub is enough (same style as
@@ -60,12 +58,14 @@ function makeSut(canvasObjects: CanvasObject[]) {
             ),
     } as unknown as ElementRegistryService;
 
+    const commandStack = { execute: vi.fn() };
     const service = new LabelDictionaryService(
         elementRegistryService,
         iconDictionaryService,
+        commandStack as any,
     );
 
-    return { service, iconDictionaryService };
+    return { service, iconDictionaryService, commandStack };
 }
 
 describe("LabelDictionaryService", () => {
@@ -77,9 +77,7 @@ describe("LabelDictionaryService", () => {
                 activity("receive"),
             ]);
 
-            service.createLabelDictionaries();
-
-            expect(service.getActivityLabels()).toEqual([
+            expect(service.getDictionary().activities).toEqual([
                 { name: "receive", originalName: "receive" },
                 { name: "send", originalName: "send" },
             ]);
@@ -92,9 +90,7 @@ describe("LabelDictionaryService", () => {
                 activity("send"),
             ]);
 
-            service.createLabelDictionaries();
-
-            expect(service.getActivityLabels()).toEqual([
+            expect(service.getDictionary().activities).toEqual([
                 { name: "send", originalName: "send" },
             ]);
         });
@@ -107,10 +103,8 @@ describe("LabelDictionaryService", () => {
                 activity("apple"),
             ]);
 
-            service.createLabelDictionaries();
-
             expect(
-                service.getActivityLabels().map((entry) => entry.name),
+                service.getDictionary().activities.map((entry) => entry.name),
             ).toEqual(["apple", "Banana"]);
         });
     });
@@ -123,9 +117,7 @@ describe("LabelDictionaryService", () => {
             ]);
             iconDictionaryService.addIMGToIconDictionary("<svg/>", "Document");
 
-            service.createLabelDictionaries();
-
-            expect(service.getWorkObjectLabels()).toEqual([
+            expect(service.getDictionary().workObjects).toEqual([
                 {
                     name: "invoice",
                     originalName: "invoice",
@@ -134,14 +126,12 @@ describe("LabelDictionaryService", () => {
             ]);
         });
 
-        it("skips a work object whose icon is not in the current set", () => {
-            // `getIconSource` answers "" on a miss, and the service bails out of
-            // that element rather than emitting an entry with a broken image.
+        it("keeps a work object editable when its icon is unavailable", () => {
             const { service } = makeSut([workObject("Missing", "invoice")]);
 
-            service.createLabelDictionaries();
-
-            expect(service.getWorkObjectLabels()).toEqual([]);
+            expect(service.getDictionary().workObjects).toEqual([
+                { name: "invoice", originalName: "invoice" },
+            ]);
         });
 
         it("prefixes raw SVG source but leaves a data URL untouched", () => {
@@ -155,12 +145,10 @@ describe("LabelDictionaryService", () => {
                 "Encoded",
             );
 
-            service.createLabelDictionaries();
-
             const icons = Object.fromEntries(
                 service
-                    .getWorkObjectLabels()
-                    .map((entry) => [entry.name, entry.icon]),
+                    .getDictionary()
+                    .workObjects.map((entry) => [entry.name, entry.icon]),
             );
             expect(icons["raw"]).toBe("data:image/svg+xml,<svg/>");
             expect(icons["encoded"]).toBe("data:image/png;base64,AAA");
@@ -173,26 +161,22 @@ describe("LabelDictionaryService", () => {
             ]);
             iconDictionaryService.addIMGToIconDictionary("<svg/>", "Doc");
 
-            service.createLabelDictionaries();
-
             expect(
-                service.getWorkObjectLabels().map((entry) => entry.name),
+                service.getDictionary().workObjects.map((entry) => entry.name),
             ).toEqual(["apple", "Banana"]);
         });
     });
 
-    it("resets rather than appends when built twice", () => {
+    it("derives a fresh snapshot on every read", () => {
         const { service, iconDictionaryService } = makeSut([
             activity("send"),
             workObject("Doc", "invoice"),
         ]);
         iconDictionaryService.addIMGToIconDictionary("<svg/>", "Doc");
 
-        service.createLabelDictionaries();
-        service.createLabelDictionaries();
-
-        expect(service.getActivityLabels()).toHaveLength(1);
-        expect(service.getWorkObjectLabels()).toHaveLength(1);
+        expect(service.getDictionary()).not.toBe(service.getDictionary());
+        expect(service.getDictionary().activities).toHaveLength(1);
+        expect(service.getDictionary().workObjects).toHaveLength(1);
     });
 
     it("hands out copies so a caller cannot mutate the dictionary", () => {
@@ -201,15 +185,20 @@ describe("LabelDictionaryService", () => {
             workObject("Doc", "invoice"),
         ]);
         iconDictionaryService.addIMGToIconDictionary("<svg/>", "Doc");
-        service.createLabelDictionaries();
+        const snapshot = service.getDictionary();
+        (
+            snapshot.activities as Array<{ name: string; originalName: string }>
+        ).push({ name: "x", originalName: "x" });
+        (
+            snapshot.workObjects as Array<{
+                name: string;
+                originalName: string;
+                icon?: string;
+            }>
+        ).push({ name: "x", originalName: "x", icon: "" });
 
-        service.getActivityLabels().push({ name: "x", originalName: "x" });
-        service
-            .getWorkObjectLabels()
-            .push({ name: "x", originalName: "x", icon: "" });
-
-        expect(service.getActivityLabels()).toHaveLength(1);
-        expect(service.getWorkObjectLabels()).toHaveLength(1);
+        expect(service.getDictionary().activities).toHaveLength(1);
+        expect(service.getDictionary().workObjects).toHaveLength(1);
     });
 
     describe("getUniqueWorkObjectNames", () => {
@@ -229,14 +218,97 @@ describe("LabelDictionaryService", () => {
             ]);
         });
 
-        it("reads the canvas directly, without createLabelDictionaries", () => {
-            // Unlike the two label getters this one is not backed by the
-            // dictionaries, so it answers before they have ever been built —
-            // and it is unaffected by the missing-icon skip above.
+        it("reads the canvas directly", () => {
             const { service } = makeSut([workObject("Missing", "invoice")]);
 
             expect(service.getUniqueWorkObjectNames()).toEqual(["invoice"]);
-            expect(service.getWorkObjectLabels()).toEqual([]);
+            expect(service.getDictionary().workObjects).toEqual([
+                { name: "invoice", originalName: "invoice" },
+            ]);
+        });
+    });
+
+    describe("renameLabels", () => {
+        it("resolves swaps and category-specific mappings before mutation", () => {
+            const first = activity("send");
+            first.id = "a";
+            const second = activity("receive");
+            second.id = "b";
+            const object = workObject("Doc", "send");
+            object.id = "w";
+            const { service, commandStack } = makeSut([first, second, object]);
+
+            expect(
+                service.renameLabels([
+                    {
+                        category: "activity",
+                        originalName: "send",
+                        name: "receive",
+                    },
+                    {
+                        category: "activity",
+                        originalName: "receive",
+                        name: "send",
+                    },
+                    {
+                        category: "workObject",
+                        originalName: "send",
+                        name: "stored",
+                    },
+                ]),
+            ).toEqual(["a", "b", "w"]);
+            expect(commandStack.execute).toHaveBeenCalledWith(
+                "labels.renameBatch",
+                {
+                    updates: [
+                        { element: first, name: "receive" },
+                        { element: second, name: "send" },
+                        { element: object, name: "stored" },
+                    ],
+                },
+            );
+            expect(first.businessObject.name).toBe("send");
+            expect(second.businessObject.name).toBe("receive");
+        });
+
+        it("rejects conflicting replacements before starting a command", () => {
+            const { service, commandStack } = makeSut([activity("send")]);
+
+            expect(() =>
+                service.renameLabels([
+                    {
+                        category: "activity",
+                        originalName: "send",
+                        name: "one",
+                    },
+                    {
+                        category: "activity",
+                        originalName: "send",
+                        name: "two",
+                    },
+                ]),
+            ).toThrow(/Conflicting replacements/);
+            expect(commandStack.execute).not.toHaveBeenCalled();
+        });
+
+        it("does not create history for unchanged or unmatched entries", () => {
+            const { service, commandStack } = makeSut([activity("send")]);
+
+            expect(
+                service.renameLabels([
+                    {
+                        category: "activity",
+                        originalName: "send",
+                        name: "send",
+                    },
+                    {
+                        category: "workObject",
+                        originalName: "missing",
+                        name: "new",
+                    },
+                ]),
+            ).toEqual([]);
+            expect(commandStack.execute).not.toHaveBeenCalled();
         });
     });
 });

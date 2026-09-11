@@ -1,5 +1,19 @@
 import { DomainStoryDocument } from "../../../story/domain/DomainStoryDocument";
 import { ViewportData } from "../model/Viewport";
+import type {
+    PngExportRequest,
+    PngExportResult,
+    SvgExportOptions,
+    SvgExportResult,
+} from "../export/VisualExport";
+import type {
+    LabelDictionary,
+    LabelRenameBatch,
+} from "../../../labelDictionary/domain/LabelDictionary";
+import type {
+    ReplayStartOptions,
+    ReplayState,
+} from "../../../story/domain/replay";
 
 /**
  * What an import had to throw away to produce a loadable story.
@@ -39,6 +53,20 @@ export interface ModelerPort {
      * Export the current diagram state.
      */
     export(): DomainStoryDocument;
+
+    exportSVG(options?: SvgExportOptions): Promise<SvgExportResult>;
+    exportPNG(options?: PngExportRequest): Promise<PngExportResult>;
+
+    getLabelDictionary(): LabelDictionary;
+    renameLabels(changes: LabelRenameBatch): readonly string[];
+
+    getReplayState(): ReplayState;
+    startReplay(options?: ReplayStartOptions): ReplayState;
+    stopReplay(): ReplayState;
+    nextReplayStep(): ReplayState;
+    previousReplayStep(): ReplayState;
+    seekReplayStep(index: number): ReplayState;
+    setReplayShowGroups(value: boolean): ReplayState;
 
     /**
      * Get the current viewport as a fresh object containing exactly
@@ -91,6 +119,11 @@ export interface ModelerPort {
     offStoryChanged(callback: () => void): void;
     offViewportChanged(callback: (viewport: ViewportData) => void): void;
     offImportRepaired(callback: (repair: ImportRepairData) => void): void;
+
+    onLabelsChanged(callback: (labels: LabelDictionary) => void): void;
+    offLabelsChanged(callback: (labels: LabelDictionary) => void): void;
+    onReplayChanged(callback: (state: ReplayState) => void): void;
+    offReplayChanged(callback: (state: ReplayState) => void): void;
 
     /**
      * Color-picker events are synchronous and idempotent per callback. The

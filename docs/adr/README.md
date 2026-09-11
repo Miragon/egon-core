@@ -33,3 +33,8 @@ and the rules (when to write one, how superseding works).
 | [0025](0025-retain-live-icon-assets-on-export.md)                        | Retain live icon assets on export                   | accepted                                                                    |
 | [0026](0026-client-scoped-color-picker-requests-and-passive-previews.md) | Client-scoped picker requests + passive previews    | accepted                                                                    |
 | [0027](0027-refresh-shared-icon-artwork-on-add.md)                       | Refresh shared icon artwork on add                  | accepted                                                                    |
+| [0028](0028-export-static-svg-from-a-captured-session.md)                | Export static SVG from a captured session           | accepted                                                                    |
+| [0029](0029-rasterize-png-with-cancellable-host-neutral-work.md)         | Cancellable host-neutral PNG rasterization          | accepted                                                                    |
+| [0030](0030-batch-label-renames-through-one-parent-command.md)           | Batch label renames through one parent command      | accepted                                                                    |
+| [0031](0031-expose-retained-icon-configuration-and-explicit-order.md)    | Expose retained icon configuration and order        | accepted                                                                    |
+| [0032](0032-headless-replay-with-domain-traversal.md)                    | Headless replay with domain traversal               | accepted                                                                    |
