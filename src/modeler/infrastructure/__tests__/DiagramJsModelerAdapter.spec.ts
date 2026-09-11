@@ -34,6 +34,12 @@ function createMockDiagramServices() {
     const mockAlignToOrigin = {
         align: vi.fn(),
     };
+    const mockColorPickerCoordinator = {
+        preview: vi.fn(),
+        confirm: vi.fn(),
+        cancel: vi.fn(),
+        cancelActive: vi.fn(),
+    };
 
     const get = vi.fn((serviceName: string) => {
         switch (serviceName) {
@@ -43,6 +49,8 @@ function createMockDiagramServices() {
                 return mockCanvas;
             case "alignToOrigin":
                 return mockAlignToOrigin;
+            case "domainStoryColorPickerCoordinator":
+                return mockColorPickerCoordinator;
             default:
                 return {};
         }
@@ -54,6 +62,7 @@ function createMockDiagramServices() {
         mockEventBus,
         mockCanvas,
         mockAlignToOrigin,
+        mockColorPickerCoordinator,
     };
 }
 
@@ -293,6 +302,75 @@ describe("DiagramJsModelerAdapter", () => {
             services.mockEventBus.fire("dst.import.repaired", REPAIRED);
 
             expect(importRepaired).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("color picker bridge", () => {
+        it("projects requested and closed events synchronously", () => {
+            const requested = vi.fn();
+            const closed = vi.fn();
+            adapter.onColorPickerRequested(requested);
+            adapter.onColorPickerClosed(closed);
+
+            services.mockEventBus.fire("dst.colorPicker.requested", {
+                requestId: "request-1",
+                elementIds: ["Actor_1"],
+                color: "#000000",
+            });
+            services.mockEventBus.fire("dst.colorPicker.closed", {
+                requestId: "request-1",
+            });
+
+            expect(requested).toHaveBeenCalledWith({
+                requestId: "request-1",
+                elementIds: ["Actor_1"],
+                color: "#000000",
+            });
+            expect(closed).toHaveBeenCalledWith({ requestId: "request-1" });
+        });
+
+        it("keeps subscriptions idempotent and independently removable", () => {
+            const requested = vi.fn();
+            adapter.onColorPickerRequested(requested);
+            adapter.onColorPickerRequested(requested);
+            expect(services.mockEventBus.listenerCount()).toBe(1);
+
+            adapter.offColorPickerRequested(requested);
+            services.mockEventBus.fire("dst.colorPicker.requested", {
+                requestId: "request-1",
+                elementIds: [],
+                color: "#000000",
+            });
+            expect(requested).not.toHaveBeenCalled();
+        });
+
+        it("routes preview, confirmation, and cancellation to the coordinator", () => {
+            services.mockColorPickerCoordinator.preview.mockReturnValue(true);
+            services.mockColorPickerCoordinator.confirm.mockReturnValue(true);
+            services.mockColorPickerCoordinator.cancel.mockReturnValue(true);
+
+            expect(adapter.previewPickedColor("request-1", "#111111")).toBe(
+                true,
+            );
+            expect(adapter.confirmPickedColor("request-1", "#222222")).toBe(
+                true,
+            );
+            expect(adapter.cancelColorPicker("request-1")).toBe(true);
+        });
+
+        it("returns false without reaching the coordinator after destroy", () => {
+            adapter.destroy();
+
+            expect(adapter.previewPickedColor("request-1", "#111111")).toBe(
+                false,
+            );
+            expect(adapter.confirmPickedColor("request-1", "#222222")).toBe(
+                false,
+            );
+            expect(adapter.cancelColorPicker("request-1")).toBe(false);
+            expect(
+                services.mockColorPickerCoordinator.preview,
+            ).not.toHaveBeenCalled();
         });
     });
 

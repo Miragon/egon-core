@@ -13,6 +13,18 @@ export interface ImportRepairData {
     removedConnectionIds: string[];
 }
 
+/** A host-owned color picker request scoped to one EgonClient instance. */
+export interface ColorPickerRequestData {
+    requestId: string;
+    elementIds: readonly string[];
+    color: string;
+}
+
+/** Identifies the host-owned picker that should be dismissed. */
+export interface ColorPickerClosedData {
+    requestId: string;
+}
+
 /**
  * Port interface for diagram modeler operations.
  * Infrastructure layer provides the concrete implementation.
@@ -79,6 +91,27 @@ export interface ModelerPort {
     offStoryChanged(callback: () => void): void;
     offViewportChanged(callback: (viewport: ViewportData) => void): void;
     offImportRepaired(callback: (repair: ImportRepairData) => void): void;
+
+    /**
+     * Color-picker events are synchronous and idempotent per callback. The
+     * picker UI remains host-owned; these methods only bridge its lifecycle.
+     */
+    onColorPickerRequested(
+        callback: (request: ColorPickerRequestData) => void,
+    ): void;
+    onColorPickerClosed(
+        callback: (closed: ColorPickerClosedData) => void,
+    ): void;
+    offColorPickerRequested(
+        callback: (request: ColorPickerRequestData) => void,
+    ): void;
+    offColorPickerClosed(
+        callback: (closed: ColorPickerClosedData) => void,
+    ): void;
+
+    previewPickedColor(requestId: string, color: string): boolean;
+    confirmPickedColor(requestId: string, color: string): boolean;
+    cancelColorPicker(requestId: string): boolean;
 
     /**
      * Clean up resources.

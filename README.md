@@ -56,21 +56,37 @@ Both the runtime (`dist/index.js`) and its type declarations
 
 ## Host integration: color picker
 
-Recoloring an element is host-owned: the core dispatches and listens for
-document-level `CustomEvent`s, and the host supplies the actual color picker
-UI. Wire a picker to these events; a host without one still shows the pad's
-color button, but it does nothing.
+Recoloring UI is host-owned and communicates with the core through a
+client-scoped request protocol. A host without a picker still shows the pad's
+color button, but clicking it has no visual effect.
 
-- **Core dispatches `openColorPicker`** when the pad's color button is clicked.
-  The host should open its picker in response.
-- **Core dispatches `defaultColor`** (`detail.color`) whenever a context pad
-  opens, carrying the current selection's color so the host can pre-select the
-  matching swatch.
-- **Core listens for `pickedColor`** (`detail.color`) and applies the color to
-  the selected element(s) — one undo step per element on a multi-select.
-- **Core dispatches `errorColoringOnlySvg`** when a color is applied to an
-  element whose custom icon is not SVG (raster icons cannot be recolored). The
-  host may surface this as a notification.
+```ts
+const requested = ({ requestId, color }) => {
+    picker.open({ color });
+    picker.onPreview((next) => client.previewPickedColor(requestId, next));
+    picker.onConfirm((final) => client.confirmPickedColor(requestId, final));
+    picker.onCancel(() => client.cancelColorPicker(requestId));
+};
+const closed = ({ requestId }) => picker.close(requestId);
+
+client.on("colorPicker.requested", requested);
+client.on("colorPicker.closed", closed);
+
+// During host teardown, close the UI and remove subscriptions before destroy.
+picker.close();
+client.off("colorPicker.requested", requested);
+client.off("colorPicker.closed", closed);
+client.destroy();
+```
+
+Preview calls may be repeated. They repaint without changing the exported
+story, dirty state, or undo history. Confirmation applies one existing color
+command per selected element; cancellation restores the persisted appearance.
+Unknown, expired, other-client, and destroyed-client request IDs return `false`.
+The core still dispatches `errorColoringOnlySvg` when a color is applied to an
+element whose custom icon is not SVG (raster icons cannot be recolored). The
+host may surface this as a notification. See [docs/Client.md](docs/Client.md)
+for webview routing and lifecycle details.
 
 ## Scripts
 

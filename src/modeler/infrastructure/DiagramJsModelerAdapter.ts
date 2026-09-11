@@ -15,12 +15,18 @@ import { reportPostCommitError } from "../../shared/infrastructure/reportError";
 import { EditorSession, EditorSessionOwner } from "./EditorSessionOwner";
 import { IconDictionaryService } from "../../iconSet/service";
 
-import { ImportRepairData, ModelerPort } from "../domain/ports";
+import {
+    ColorPickerClosedData,
+    ColorPickerRequestData,
+    ImportRepairData,
+    ModelerPort,
+} from "../domain/ports";
 import {
     DomainStoryDocument,
     DomainStoryTextRendererConfig,
     ViewportData,
 } from "../domain";
+import { ColorPickerCoordinator } from "./color-picker/ColorPickerCoordinator";
 
 /** Project diagram-js' richer viewbox onto the stable public port shape. */
 function projectViewport(viewbox: ViewportData): ViewportData {
@@ -39,6 +45,7 @@ function projectViewport(viewbox: ViewportData): ViewportData {
 export class DiagramJsModelerAdapter implements ModelerPort {
     private readonly sessionOwner: EditorSessionOwner;
     private importInProgress = false;
+    private destroyed = false;
 
     // Two maps, not one union-keyed map: `EgonEventMap` makes a zero-arg
     // callback assignable to both events, so `on("story.changed", f)` followed
@@ -59,6 +66,14 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         (repair: ImportRepairData) => void,
         (event: any) => void
     > = new Map();
+    private readonly colorPickerRequestedCallbacks = new Map<
+        (request: ColorPickerRequestData) => void,
+        (event: any) => void
+    >();
+    private readonly colorPickerClosedCallbacks = new Map<
+        (closed: ColorPickerClosedData) => void,
+        (event: any) => void
+    >();
 
     constructor(
         container: HTMLElement,
@@ -102,6 +117,14 @@ export class DiagramJsModelerAdapter implements ModelerPort {
 
             const previous = this.sessionOwner.promote(candidate);
             committed = true;
+            // The old request remains valid throughout candidate staging. Only
+            // a successful promotion expires it, while its old-bus callbacks
+            // are still attached and can synchronously dismiss the host UI.
+            try {
+                this.getColorPickerCoordinator(previous).cancelActive();
+            } catch (error) {
+                reportPostCommitError(error);
+            }
             try {
                 this.transferSubscriptions(
                     previous.eventBus,
@@ -247,6 +270,79 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         }
     }
 
+    onColorPickerRequested(
+        callback: (request: ColorPickerRequestData) => void,
+    ): void {
+        if (this.colorPickerRequestedCallbacks.has(callback)) return;
+        const wrapped = (event: any) => {
+            try {
+                callback({
+                    requestId: event.requestId,
+                    elementIds: [...event.elementIds],
+                    color: event.color,
+                });
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        };
+        this.colorPickerRequestedCallbacks.set(callback, wrapped);
+        (this.getEventBus().on as any)("dst.colorPicker.requested", wrapped);
+    }
+
+    onColorPickerClosed(
+        callback: (closed: ColorPickerClosedData) => void,
+    ): void {
+        if (this.colorPickerClosedCallbacks.has(callback)) return;
+        const wrapped = (event: any) => {
+            try {
+                callback({ requestId: event.requestId });
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        };
+        this.colorPickerClosedCallbacks.set(callback, wrapped);
+        (this.getEventBus().on as any)("dst.colorPicker.closed", wrapped);
+    }
+
+    offColorPickerRequested(
+        callback: (request: ColorPickerRequestData) => void,
+    ): void {
+        const wrapped = this.colorPickerRequestedCallbacks.get(callback);
+        if (!wrapped) return;
+        (this.getEventBus().off as any)("dst.colorPicker.requested", wrapped);
+        this.colorPickerRequestedCallbacks.delete(callback);
+    }
+
+    offColorPickerClosed(
+        callback: (closed: ColorPickerClosedData) => void,
+    ): void {
+        const wrapped = this.colorPickerClosedCallbacks.get(callback);
+        if (!wrapped) return;
+        (this.getEventBus().off as any)("dst.colorPicker.closed", wrapped);
+        this.colorPickerClosedCallbacks.delete(callback);
+    }
+
+    previewPickedColor(requestId: string, color: string): boolean {
+        return (
+            !this.destroyed &&
+            this.getColorPickerCoordinator().preview(requestId, color)
+        );
+    }
+
+    confirmPickedColor(requestId: string, color: string): boolean {
+        return (
+            !this.destroyed &&
+            this.getColorPickerCoordinator().confirm(requestId, color)
+        );
+    }
+
+    cancelColorPicker(requestId: string): boolean {
+        return (
+            !this.destroyed &&
+            this.getColorPickerCoordinator().cancel(requestId)
+        );
+    }
+
     /**
      * Teardown order is deliberate: unsubscribe (and disarm) first, so no event
      * raised by diagram-js' own teardown — `diagram.destroy` fires
@@ -255,6 +351,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
      * container and so survives `diagram.destroy()`.
      */
     destroy(): void {
+        this.destroyed = true;
         this.unsubscribeAll();
         this.sessionOwner.destroy();
     }
@@ -269,7 +366,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         return this.sessionOwner;
     }
 
-    /** Detaches and disarms every host subscription, all three event kinds. */
+    /** Detaches and disarms every host subscription. */
     private unsubscribeAll(): void {
         this.storyCallbacks.forEach((wrapped) => {
             (this.getEventBus().off as any)("commandStack.changed", wrapped);
@@ -287,6 +384,19 @@ export class DiagramJsModelerAdapter implements ModelerPort {
             (this.getEventBus().off as any)("dst.import.repaired", wrapped);
         });
         this.importRepairCallbacks.clear();
+
+        this.colorPickerRequestedCallbacks.forEach((wrapped) => {
+            (this.getEventBus().off as any)(
+                "dst.colorPicker.requested",
+                wrapped,
+            );
+        });
+        this.colorPickerRequestedCallbacks.clear();
+
+        this.colorPickerClosedCallbacks.forEach((wrapped) => {
+            (this.getEventBus().off as any)("dst.colorPicker.closed", wrapped);
+        });
+        this.colorPickerClosedCallbacks.clear();
     }
 
     private getCanvas(): Canvas {
@@ -312,6 +422,22 @@ export class DiagramJsModelerAdapter implements ModelerPort {
             (previous.off as any)("dst.import.repaired", wrapped);
             (current.on as any)("dst.import.repaired", wrapped);
         });
+        this.colorPickerRequestedCallbacks.forEach((wrapped) => {
+            (previous.off as any)("dst.colorPicker.requested", wrapped);
+            (current.on as any)("dst.colorPicker.requested", wrapped);
+        });
+        this.colorPickerClosedCallbacks.forEach((wrapped) => {
+            (previous.off as any)("dst.colorPicker.closed", wrapped);
+            (current.on as any)("dst.colorPicker.closed", wrapped);
+        });
+    }
+
+    private getColorPickerCoordinator(
+        session: EditorSession = this.sessionOwner.getActiveSession(),
+    ): ColorPickerCoordinator {
+        return session.diagram.get<ColorPickerCoordinator>(
+            "domainStoryColorPickerCoordinator",
+        );
     }
 
     private copyCustomIconPool(

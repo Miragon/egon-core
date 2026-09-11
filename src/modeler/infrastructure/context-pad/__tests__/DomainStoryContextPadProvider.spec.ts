@@ -83,15 +83,9 @@ describe("computeReplaceMenuPosition", () => {
 });
 
 /**
- * Behavioral tests for the host color-picker contract (issue #46, upstream
- * `e21c72ee`). The core owns no picker UI: it exposes a `colorChange` pad
- * entry and applies whatever color the host reports back via a document-level
- * `pickedColor` event. These tests drive that round-trip directly on a provider
- * instance, asserting the resulting `element.colorChange` command executions.
- *
- * Each test builds its own instance with its own `commandStack` spy; instances
- * from earlier tests are never destroyed, so their listeners fire against their
- * own (now-irrelevant) spies and never touch the spy under assertion.
+ * The context-pad half of the client-scoped picker contract (ADR 0026). This
+ * provider owns no request or async response state; it only hands the exact pad
+ * target to the session coordinator when the user clicks the color entry.
  */
 
 /** A minimal element carrying only what the color-change path reads. */
@@ -105,10 +99,8 @@ function element(id: string, type: ElementTypes, pickedColor?: string): any {
  * answering `true`, so every entry is offered; pass an override to drive the
  * delete-rule cases.
  *
- * The event bus is the real diagram-js one, because two of the provider's
- * behaviours are about *when* its listeners run relative to diagram-js' own
- * (the ctrl-drop replace menu) and *whether* they still run at all (teardown on
- * `diagram.destroy`) — neither is observable through a stubbed `on`.
+ * The event bus is the real diagram-js one because ctrl-drop behavior depends
+ * on when its listener runs relative to diagram-js' own selection listener.
  */
 function provider(rulesOverride?: { allowed: (...args: any[]) => unknown }) {
     const rules = rulesOverride ?? { allowed: vi.fn(() => true) };
@@ -116,6 +108,7 @@ function provider(rulesOverride?: { allowed: (...args: any[]) => unknown }) {
     const dirtyFlagService = { makeDirty: vi.fn() };
     const connect = { start: vi.fn() };
     const replaceEntryClick = vi.fn();
+    const colorPickerCoordinator = { request: vi.fn() };
     const eventBus = new EventBus();
 
     // Stands in for ContextPad: opened by whoever selects the created shape.
@@ -153,6 +146,7 @@ function provider(rulesOverride?: { allowed: (...args: any[]) => unknown }) {
         { registerProvider: () => undefined } as any, // popupMenu
         commandStack as any,
         eventBus,
+        colorPickerCoordinator as any,
     );
 
     return {
@@ -163,6 +157,7 @@ function provider(rulesOverride?: { allowed: (...args: any[]) => unknown }) {
         connect,
         eventBus,
         replaceEntryClick,
+        colorPickerCoordinator,
         openPadOnSelection: () => {
             padOpen = true;
         },
@@ -181,135 +176,28 @@ function primaryModifierDrop(shape: any) {
 }
 
 describe("DomainStoryContextPadProvider color change", () => {
-    it("applies a picked color to a single selected element", () => {
-        const { instance, commandStack, dirtyFlagService } = provider();
-        const el = element("Annotation_1", ElementTypes.TEXTANNOTATION);
+    it("opens a client-scoped request only when the color entry is clicked", () => {
+        const { instance, colorPickerCoordinator } = provider();
+        const el = element("Actor_1", ElementTypes.ACTOR);
 
-        instance.getContextPadEntries(el);
-        document.dispatchEvent(
-            new CustomEvent("pickedColor", { detail: { color: "#ff0000" } }),
-        );
+        const entries = instance.getContextPadEntries(el);
+        expect(colorPickerCoordinator.request).not.toHaveBeenCalled();
 
-        expect(commandStack.execute).toHaveBeenCalledTimes(1);
-        expect(commandStack.execute).toHaveBeenCalledWith(
-            "element.colorChange",
-            {
-                businessObject: el.businessObject,
-                newColor: "#ff0000",
-                element: el,
-            },
-        );
-        expect(dirtyFlagService.makeDirty).toHaveBeenCalledTimes(1);
+        (entries["colorChange"].action as any).click({}, el);
+
+        expect(colorPickerCoordinator.request).toHaveBeenCalledWith(el);
     });
 
-    it("applies a picked color once per element on multi-select", () => {
-        const { instance, commandStack, dirtyFlagService } = provider();
+    it("passes the complete multi-selection to the coordinator", () => {
+        const { instance, colorPickerCoordinator } = provider();
         const el1 = element("Annotation_1", ElementTypes.TEXTANNOTATION);
         const el2 = element("Actor_1", ElementTypes.ACTOR);
+        const elements = [el1, el2];
 
-        instance.getMultiElementContextPadEntries([el1, el2]);
-        document.dispatchEvent(
-            new CustomEvent("pickedColor", { detail: { color: "#00ff00" } }),
-        );
+        const entries = instance.getMultiElementContextPadEntries(elements);
+        (entries["colorChange"].action as any).click({}, elements);
 
-        expect(commandStack.execute).toHaveBeenCalledTimes(2);
-        expect(commandStack.execute).toHaveBeenNthCalledWith(
-            1,
-            "element.colorChange",
-            {
-                businessObject: el1.businessObject,
-                newColor: "#00ff00",
-                element: el1,
-            },
-        );
-        expect(commandStack.execute).toHaveBeenNthCalledWith(
-            2,
-            "element.colorChange",
-            {
-                businessObject: el2.businessObject,
-                newColor: "#00ff00",
-                element: el2,
-            },
-        );
-        // A single dirty flag for the whole multi-select gesture.
-        expect(dirtyFlagService.makeDirty).toHaveBeenCalledTimes(1);
-    });
-
-    it.each([
-        ["rgb(12, 128, 255)", "#0c80ffff"],
-        ["rgba(12.4, 127.5, 254.6, .5)", "#0c80ff80"],
-        ["rebeccapurple", "rebeccapurple"],
-    ])(
-        "converts picked color %s only when the previous color has hex alpha",
-        (pickedColor, expected) => {
-            const { instance, commandStack } = provider();
-            const el = element("Actor_1", ElementTypes.ACTOR, "#12345680");
-
-            instance.getContextPadEntries(el);
-            document.dispatchEvent(
-                new CustomEvent("pickedColor", {
-                    detail: { color: pickedColor },
-                }),
-            );
-
-            expect(commandStack.execute).toHaveBeenCalledTimes(1);
-            expect(commandStack.execute).toHaveBeenCalledWith(
-                "element.colorChange",
-                expect.objectContaining({ newColor: expected }),
-            );
-            expect(
-                commandStack.execute.mock.calls[0][1].newColor,
-            ).not.toContain("NaN");
-        },
-    );
-
-    it("converts each mixed multi-selection according to its previous color", () => {
-        const { instance, commandStack } = provider();
-        const alphaHex = element("Actor_1", ElementTypes.ACTOR, "#1234");
-        const namedColor = element(
-            "Annotation_1",
-            ElementTypes.TEXTANNOTATION,
-            "black",
-        );
-
-        instance.getMultiElementContextPadEntries([alphaHex, namedColor]);
-        document.dispatchEvent(
-            new CustomEvent("pickedColor", {
-                detail: { color: "rgba(1, 2, 3, .5)" },
-            }),
-        );
-
-        expect(commandStack.execute).toHaveBeenCalledTimes(2);
-        expect(commandStack.execute).toHaveBeenNthCalledWith(
-            1,
-            "element.colorChange",
-            expect.objectContaining({
-                element: alphaHex,
-                newColor: "#01020380",
-            }),
-        );
-        expect(commandStack.execute).toHaveBeenNthCalledWith(
-            2,
-            "element.colorChange",
-            expect.objectContaining({
-                element: namedColor,
-                newColor: "rgba(1, 2, 3, .5)",
-            }),
-        );
-    });
-
-    it("stops listening for picked colors once the diagram is destroyed", () => {
-        const { instance, commandStack, eventBus } = provider();
-        instance.getContextPadEntries(
-            element("Annotation_1", ElementTypes.TEXTANNOTATION),
-        );
-
-        eventBus.fire("diagram.destroy", {});
-        document.dispatchEvent(
-            new CustomEvent("pickedColor", { detail: { color: "#ff0000" } }),
-        );
-
-        expect(commandStack.execute).not.toHaveBeenCalled();
+        expect(colorPickerCoordinator.request).toHaveBeenCalledWith(elements);
     });
 
     it("offers a colorChange entry for multi-selections", () => {
@@ -419,60 +307,22 @@ describe("DomainStoryContextPadProvider delete entry", () => {
 });
 
 /**
- * The color picker lives in the host, so its answer arrives asynchronously and
- * long after the pad decided which element it acts on (issue #85). The provider
- * must therefore let go of that element whenever the pad moves on, or a reply
- * recolors a selection the user has left — possibly one already deleted, minting
- * an undo entry for a detached element.
+ * Legacy global events must no longer provide an unowned response path.
  */
-describe("DomainStoryContextPadProvider stale selection", () => {
-    /** A connection: its pad branch offers delete only, never a color change. */
-    function connection(id: string): any {
-        return { id, type: ElementTypes.CONNECTION, businessObject: {} };
-    }
-
-    it("drops the previous element when a connection's pad opens", () => {
-        const { instance, commandStack } = provider();
-
+describe("DomainStoryContextPadProvider legacy picker events", () => {
+    it("ignores pickedColor, openColorPicker, and defaultColor events", () => {
+        const { instance, commandStack, colorPickerCoordinator } = provider();
         instance.getContextPadEntries(element("Actor_1", ElementTypes.ACTOR));
-        instance.getContextPadEntries(connection("Activity_1"));
         document.dispatchEvent(
             new CustomEvent("pickedColor", { detail: { color: "#ff0000" } }),
         );
-
-        expect(commandStack.execute).not.toHaveBeenCalled();
-    });
-
-    it("drops the selection when the pad closes", () => {
-        const { instance, commandStack, dirtyFlagService, eventBus } =
-            provider();
-
-        instance.getContextPadEntries(element("Actor_1", ElementTypes.ACTOR));
-        eventBus.fire("contextPad.close", { current: {} });
+        document.dispatchEvent(new CustomEvent("openColorPicker"));
         document.dispatchEvent(
-            new CustomEvent("pickedColor", { detail: { color: "#ff0000" } }),
+            new CustomEvent("defaultColor", { detail: { color: "#000000" } }),
         );
 
         expect(commandStack.execute).not.toHaveBeenCalled();
-        expect(dirtyFlagService.makeDirty).not.toHaveBeenCalled();
-    });
-
-    it("stops pre-seeding the picker with the previous element's color", () => {
-        const { instance } = provider();
-        const colors: string[] = [];
-        const onDefaultColor = (event: any) => colors.push(event.detail.color);
-        document.addEventListener("defaultColor", onDefaultColor);
-
-        try {
-            instance.getContextPadEntries(
-                element("Actor_1", ElementTypes.ACTOR, "#ff0000"),
-            );
-            instance.getContextPadEntries(connection("Activity_1"));
-        } finally {
-            document.removeEventListener("defaultColor", onDefaultColor);
-        }
-
-        expect(colors).toEqual(["#ff0000", "#000000"]);
+        expect(colorPickerCoordinator.request).not.toHaveBeenCalled();
     });
 });
 
