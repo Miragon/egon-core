@@ -9,7 +9,10 @@ import { IconStyleSheetPort } from "../../domain/ports/IconStyleSheetPort";
 import { IconSetImportExportService } from "../IconSetImportExportService";
 import type { IconSet } from "../../../story/domain/iconSet";
 import { passThroughIconSanitizer } from "../../../__tests__/helpers/passThroughIconSanitizer";
-import { DomPurifyIconSanitizer } from "../../infrastructure/DomPurifyIconSanitizer";
+import {
+    DomPurifyIconSanitizer,
+    INERT_ICON_SVG,
+} from "../../infrastructure/DomPurifyIconSanitizer";
 
 /**
  * Regression cover for issue #4: a custom icon whose name contains a dot must
@@ -249,6 +252,182 @@ describe("IconDictionaryService CSS class generation", () => {
         });
     });
 
+    describe("add-icon upsert", () => {
+        it.each([
+            ["actor", ElementTypes.ACTOR],
+            ["work object", ElementTypes.WORKOBJECT],
+        ])(
+            "refreshes the %s pool and selection through add, replace, remove, and re-add",
+            (_category, type) => {
+                const service = new IconDictionaryService(
+                    new RecordingStyleSheetPort(),
+                    passThroughIconSanitizer,
+                );
+                service.updateIconRegistries(
+                    iconSet(
+                        { UnrelatedActor: "<svg>actor</svg>" },
+                        { UnrelatedObject: "<svg>object</svg>" },
+                    ),
+                );
+
+                expect(
+                    service.upsertIconForType(
+                        type,
+                        "Changing",
+                        "<svg><circle/></svg>",
+                    ),
+                ).toBe("<svg><circle/></svg>");
+                service.upsertIconForType(
+                    type,
+                    "Changing",
+                    "<svg><rect/></svg>",
+                );
+                service.unregisterIconForType(type, "Changing");
+
+                expect(service.getIconSource("Changing")).toBe(
+                    "<svg><rect/></svg>",
+                );
+                expect(service.getIconsAssignedAs(type).has("Changing")).toBe(
+                    false,
+                );
+
+                service.upsertIconForType(
+                    type,
+                    "Changing",
+                    "<svg><polygon/></svg>",
+                );
+
+                expect(service.getIconSource("Changing")).toBe(
+                    "<svg><polygon/></svg>",
+                );
+                expect(service.getFullDictionary().get("Changing")).toBe(
+                    "<svg><polygon/></svg>",
+                );
+                expect(service.getIconsAssignedAs(type).get("Changing")).toBe(
+                    "<svg><polygon/></svg>",
+                );
+                expect(
+                    service.getActorsDictionary().get("UnrelatedActor"),
+                ).toBe("<svg>actor</svg>");
+                expect(
+                    service.getWorkObjectsDictionary().get("UnrelatedObject"),
+                ).toBe("<svg>object</svg>");
+            },
+        );
+
+        it("refreshes both selected categories for a shared name without adding unrelated membership", () => {
+            const service = new IconDictionaryService(
+                new RecordingStyleSheetPort(),
+                passThroughIconSanitizer,
+            );
+            service.updateIconRegistries(
+                iconSet(
+                    { Shared: "<svg>old actor</svg>", ActorOnly: "<svg/>" },
+                    { Shared: "<svg>old object</svg>", ObjectOnly: "<svg/>" },
+                ),
+            );
+
+            service.upsertIconForType(
+                ElementTypes.WORKOBJECT,
+                "Shared",
+                "<svg>latest</svg>",
+            );
+            service.upsertIconForType(
+                ElementTypes.ACTOR,
+                "ActorOnly",
+                "<svg>new actor</svg>",
+            );
+
+            expect(service.getIconSource("Shared")).toBe("<svg>latest</svg>");
+            expect(service.getActorsDictionary().get("Shared")).toBe(
+                "<svg>latest</svg>",
+            );
+            expect(service.getWorkObjectsDictionary().get("Shared")).toBe(
+                "<svg>latest</svg>",
+            );
+            expect(service.getWorkObjectsDictionary().has("ActorOnly")).toBe(
+                false,
+            );
+            expect(service.getActorsDictionary().has("ObjectOnly")).toBe(false);
+        });
+
+        it.each([
+            [
+                ElementTypes.ACTIVITY,
+                "ValidName",
+                "Unsupported icon element type",
+            ],
+            [
+                ElementTypes.ACTOR,
+                `Invalid${ElementTypes.ACTOR}Name`,
+                "Name should not include type",
+            ],
+        ])(
+            "validates type and name before changing any dictionary",
+            (type, name, message) => {
+                const service = new IconDictionaryService(
+                    new RecordingStyleSheetPort(),
+                    passThroughIconSanitizer,
+                );
+                service.updateIconRegistries(
+                    iconSet({ Existing: "<svg>actor</svg>" }, {}),
+                );
+                const before = {
+                    pool: service.getFullDictionary().toRecord(),
+                    actors: service.getActorsDictionary().toRecord(),
+                    workObjects: service.getWorkObjectsDictionary().toRecord(),
+                };
+
+                expect(() =>
+                    service.upsertIconForType(type, name, "<svg>new</svg>"),
+                ).toThrow(message);
+                expect({
+                    pool: service.getFullDictionary().toRecord(),
+                    actors: service.getActorsDictionary().toRecord(),
+                    workObjects: service.getWorkObjectsDictionary().toRecord(),
+                }).toEqual(before);
+            },
+        );
+
+        it("finishes sanitization before mutating existing entries", () => {
+            const sanitizer = {
+                sanitize(source: string): string {
+                    if (source === "rejected") {
+                        throw new Error("sanitization failed");
+                    }
+                    return source;
+                },
+                prepareForRendering(source: string): string {
+                    return source;
+                },
+            };
+            const service = new IconDictionaryService(
+                new RecordingStyleSheetPort(),
+                sanitizer,
+            );
+            service.upsertIconForType(
+                ElementTypes.ACTOR,
+                "Existing",
+                "<svg>old</svg>",
+            );
+
+            expect(() =>
+                service.upsertIconForType(
+                    ElementTypes.ACTOR,
+                    "Existing",
+                    "rejected",
+                ),
+            ).toThrow("sanitization failed");
+            expect(service.getFullDictionary().toRecord()).toEqual({
+                Existing: "<svg>old</svg>",
+            });
+            expect(service.getActorsDictionary().toRecord()).toEqual({
+                Existing: "<svg>old</svg>",
+            });
+            expect(service.getWorkObjectsDictionary().toRecord()).toEqual({});
+        });
+    });
+
     describe("type validation", () => {
         it.each(["register", "unregister"])(
             "throws before mutating dictionaries on unsupported %s",
@@ -352,6 +531,35 @@ describe("IconDictionaryService icon-content boundary", () => {
         );
         expect(port.calls.at(-1)?.[1]).not.toMatch(
             /onload|script|__egonExecuted/,
+        );
+    });
+
+    it("stores and returns sanitized replacement artwork, including the inert fallback", () => {
+        const service = new IconDictionaryService(
+            new RecordingStyleSheetPort(),
+            new DomPurifyIconSanitizer(),
+        );
+
+        const safe = service.upsertIconForType(
+            ElementTypes.ACTOR,
+            "Changing",
+            unsafe,
+        );
+        expect(safe).toContain("<path");
+        expect(safe).not.toMatch(/onload|script|__egonExecuted/);
+        expect(service.getIconSource("Changing")).toBe(safe);
+
+        const fallback = service.upsertIconForType(
+            ElementTypes.ACTOR,
+            "Changing",
+            "<svg><path></svg>",
+        );
+        expect(fallback).toBe(INERT_ICON_SVG);
+        expect(service.getFullDictionary().get("Changing")).toBe(
+            INERT_ICON_SVG,
+        );
+        expect(service.getActorsDictionary().get("Changing")).toBe(
+            INERT_ICON_SVG,
         );
     });
 });

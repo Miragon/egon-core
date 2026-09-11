@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type CommandStack from "diagram-js/lib/command/CommandStack";
+import type Canvas from "diagram-js/lib/core/Canvas";
+import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import type EventBus from "diagram-js/lib/core/EventBus";
+import type { Shape } from "diagram-js/lib/model/Types";
 import type { ModuleDeclaration } from "didi";
 
 import {
@@ -15,6 +18,9 @@ import { ElementTypes } from "../../../story/domain/elementTypes";
 import type { DomainStoryDocument } from "../../../story/domain/DomainStoryDocument";
 import { EgonClient } from "../EgonClient";
 import type { ViewportData } from "../../domain";
+import type { DomainStoryElementFactory } from "../../infrastructure/element-factory/DomainStoryElementFactory";
+import type { DomainStoryModeling } from "../../infrastructure/modeling/DomainStoryModeling";
+import type { IconDictionaryService } from "../../../iconSet/service";
 
 /**
  * The other half of `EgonClient.spec.ts`: the same public API, but wired to the
@@ -230,6 +236,41 @@ function nestedIconStory(): DomainStoryDocument {
     };
 }
 
+function sharedNestedIconStory(): DomainStoryDocument {
+    const story = nestedIconStory();
+    const source =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" data-revision="circle"><circle cx="12" cy="12" r="10"/></svg>';
+    return {
+        ...story,
+        iconSet: {
+            name: "shared-icons",
+            actors: { Shared: source },
+            workObjects: { Shared: source },
+        },
+        domainStory: {
+            ...story.domainStory,
+            businessObjects: story.domainStory.businessObjects.map(
+                (unknownElement) => {
+                    const element = unknownElement as Record<string, unknown>;
+                    if (element["id"] === "nested_actor") {
+                        return {
+                            ...element,
+                            type: ElementTypes.ACTOR + "Shared",
+                        };
+                    }
+                    if (element["id"] === "nested_work_object") {
+                        return {
+                            ...element,
+                            type: ElementTypes.WORKOBJECT + "Shared",
+                        };
+                    }
+                    return element;
+                },
+            ),
+        },
+    };
+}
+
 function renderedIconVersion(
     container: HTMLElement,
     elementId: string,
@@ -349,6 +390,99 @@ function eventBusProbe(): {
             return captured;
         },
     };
+}
+
+interface IconRefreshProbe {
+    module: ModuleDeclaration;
+    create(category: "actor" | "workObject", icon: string): Shape;
+    commandStack(): CommandStack;
+    dictionary(): IconDictionaryService;
+}
+
+/** Canvas-driving access used only to verify new-shape rendering and history. */
+function iconRefreshProbe(): IconRefreshProbe {
+    let canvas: Canvas | undefined;
+    let elementFactory: DomainStoryElementFactory | undefined;
+    let modeling: DomainStoryModeling | undefined;
+    let commandStack: CommandStack | undefined;
+    let dictionary: IconDictionaryService | undefined;
+    let registry: ElementRegistry | undefined;
+    let created = 0;
+
+    function capture(
+        injectedCanvas: Canvas,
+        injectedElementFactory: DomainStoryElementFactory,
+        injectedModeling: DomainStoryModeling,
+        injectedCommandStack: CommandStack,
+        injectedDictionary: IconDictionaryService,
+        injectedRegistry: ElementRegistry,
+    ): void {
+        canvas = injectedCanvas;
+        elementFactory = injectedElementFactory;
+        modeling = injectedModeling;
+        commandStack = injectedCommandStack;
+        dictionary = injectedDictionary;
+        registry = injectedRegistry;
+    }
+    capture.$inject = [
+        "canvas",
+        "elementFactory",
+        "modeling",
+        "commandStack",
+        "domainStoryIconDictionaryService",
+        "elementRegistry",
+    ];
+
+    const requireCaptured = () => {
+        if (
+            !canvas ||
+            !elementFactory ||
+            !modeling ||
+            !commandStack ||
+            !dictionary ||
+            !registry
+        ) {
+            throw new Error("icon refresh probe was never injected");
+        }
+        return {
+            canvas,
+            elementFactory,
+            modeling,
+            commandStack,
+            dictionary,
+        };
+    };
+
+    return {
+        module: { __init__: [capture] },
+        create(category, icon) {
+            const services = requireCaptured();
+            const type =
+                category === "actor"
+                    ? ElementTypes.ACTOR
+                    : ElementTypes.WORKOBJECT;
+            const shape = services.elementFactory.create("shape", {
+                type: type + icon,
+            });
+            created += 1;
+            return services.modeling.createShape(
+                shape,
+                { x: 100 + created * 90, y: 500 },
+                services.canvas.getRootElement() as unknown as Shape,
+            );
+        },
+        commandStack: () => requireCaptured().commandStack,
+        dictionary: () => requireCaptured().dictionary,
+    };
+}
+
+function renderedArtwork(
+    container: HTMLElement,
+    elementId: string,
+): string | undefined {
+    return container
+        .querySelector(`[data-element-id="${elementId}"] .djs-visual > svg`)
+        ?.querySelector("circle, rect, polygon")?.localName;
 }
 
 describe("EgonClient on real adapters (browser)", () => {
@@ -628,6 +762,156 @@ describe("EgonClient on real adapters (browser)", () => {
             expect(
                 diagram.client.hasIcon("actor", TEST_ICON_NAMES.person),
             ).toBe(true);
+        });
+
+        it("replaces shared artwork immediately for existing and new shapes without crossing clients", async () => {
+            const primaryProbe = iconRefreshProbe();
+            const isolatedProbe = iconRefreshProbe();
+            const reopenedProbe = iconRefreshProbe();
+            diagram = await createTestDiagram({}, [primaryProbe.module]);
+            const isolated = await createTestDiagram({}, [
+                isolatedProbe.module,
+            ]);
+            let reopened: TestDiagram | undefined;
+
+            try {
+                diagram.client.import(sharedNestedIconStory());
+                isolated.client.import(sharedNestedIconStory());
+                const businessObjectsBefore = JSON.stringify(
+                    diagram.client.export().domainStory.businessObjects,
+                );
+                expect(primaryProbe.commandStack().canUndo()).toBe(false);
+
+                const rectangle =
+                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" data-revision="rectangle" onload="unsafe()">' +
+                    '<script>unsafe()</script><rect x="2" y="2" width="20" height="20"/></svg>';
+                diagram.client.addIcon("actor", "Shared", rectangle);
+
+                // Repaint is synchronous: no timer/import is awaited between
+                // addIcon() and reading geometry from both nested categories.
+                expect(renderedArtwork(diagram.container, "nested_actor")).toBe(
+                    "rect",
+                );
+                expect(
+                    renderedArtwork(diagram.container, "nested_work_object"),
+                ).toBe("rect");
+                expect(
+                    JSON.stringify(
+                        diagram.client.export().domainStory.businessObjects,
+                    ),
+                ).toBe(businessObjectsBefore);
+                expect(primaryProbe.commandStack().canUndo()).toBe(false);
+
+                const rectangleActor = primaryProbe.create("actor", "Shared");
+                const rectangleObject = primaryProbe.create(
+                    "workObject",
+                    "Shared",
+                );
+                expect(
+                    renderedArtwork(diagram.container, rectangleActor.id),
+                ).toBe("rect");
+                expect(
+                    renderedArtwork(diagram.container, rectangleObject.id),
+                ).toBe("rect");
+
+                diagram.client.removeIcon("actor", "Shared");
+                expect(diagram.client.hasIcon("actor", "Shared")).toBe(false);
+                expect(diagram.client.hasIcon("workObject", "Shared")).toBe(
+                    true,
+                );
+                const storyBeforeReAdd = JSON.stringify(
+                    diagram.client.export().domainStory.businessObjects,
+                );
+                const triangle =
+                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" data-revision="triangle">' +
+                    '<polygon points="12,2 22,22 2,22" onclick="unsafe()"/></svg>';
+                diagram.client.addIcon("actor", "Shared", triangle);
+
+                for (const id of [
+                    "nested_actor",
+                    "nested_work_object",
+                    rectangleActor.id,
+                    rectangleObject.id,
+                ]) {
+                    expect(renderedArtwork(diagram.container, id)).toBe(
+                        "polygon",
+                    );
+                }
+                expect(
+                    JSON.stringify(
+                        diagram.client.export().domainStory.businessObjects,
+                    ),
+                ).toBe(storyBeforeReAdd);
+
+                const triangleActor = primaryProbe.create("actor", "Shared");
+                const triangleObject = primaryProbe.create(
+                    "workObject",
+                    "Shared",
+                );
+                expect(
+                    renderedArtwork(diagram.container, triangleActor.id),
+                ).toBe("polygon");
+                expect(
+                    renderedArtwork(diagram.container, triangleObject.id),
+                ).toBe("polygon");
+
+                const latest = diagram.client.getIcons().actors["Shared"];
+                expect(latest).toContain('data-revision="triangle"');
+                expect(latest).not.toContain("onclick");
+                expect(diagram.client.getIcons().workObjects["Shared"]).toBe(
+                    latest,
+                );
+                expect(primaryProbe.dictionary().getIconSource("Shared")).toBe(
+                    latest,
+                );
+                expect(svgPublishedFor(diagram.container, "Shared")).toBe(
+                    latest,
+                );
+                expect(
+                    iconRules(diagram.container).filter(
+                        (rule) =>
+                            rule.selectorText ===
+                            ".icon-domain-story-shared::before",
+                    ),
+                ).toHaveLength(1);
+
+                const exported = diagram.client.export();
+                expect(exported.iconSet.actors["Shared"]).toBe(latest);
+                expect(exported.iconSet.workObjects["Shared"]).toBe(latest);
+
+                // The second client's pool, selected maps, CSS, and existing
+                // geometry stay on the source it imported.
+                expect(
+                    isolatedProbe.dictionary().getIconSource("Shared"),
+                ).toContain('data-revision="circle"');
+                expect(svgPublishedFor(isolated.container, "Shared")).toContain(
+                    'data-revision="circle"',
+                );
+                expect(
+                    renderedArtwork(isolated.container, "nested_actor"),
+                ).toBe("circle");
+
+                reopened = await createTestDiagram({}, [reopenedProbe.module]);
+                reopened.client.import(exported);
+                for (const id of [
+                    "nested_actor",
+                    "nested_work_object",
+                    rectangleActor.id,
+                    rectangleObject.id,
+                    triangleActor.id,
+                    triangleObject.id,
+                ]) {
+                    expect(renderedArtwork(reopened.container, id)).toBe(
+                        "polygon",
+                    );
+                }
+                expect(reopenedProbe.dictionary().getIconSource("Shared")).toBe(
+                    latest,
+                );
+            } finally {
+                reopened?.cleanup();
+                isolated.cleanup();
+            }
         });
 
         it("keeps unrelated icons when removing a work object", async () => {

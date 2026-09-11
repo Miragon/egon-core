@@ -31,3 +31,4 @@ and the rules (when to write one, how superseding works).
 | [0023](0023-sanitize-imported-svg-icons.md)                     | Sanitize imported icons at storage and render       | accepted                                                                    |
 | [0024](0024-stage-document-imports-in-editor-sessions.md)       | Stage imports in isolated editor sessions           | accepted                                                                    |
 | [0025](0025-retain-live-icon-assets-on-export.md)               | Retain live icon assets on export                   | accepted                                                                    |
+| [0026](0026-refresh-shared-icon-artwork-on-add.md)              | Refresh shared icon artwork on add                  | accepted                                                                    |

@@ -49,6 +49,35 @@ export class IconDictionaryService {
         );
     }
 
+    /**
+     * Add or replace one icon while preserving Dictionary's general
+     * first-write-wins contract.
+     *
+     * Artwork is shared by name: if the other category already selects the
+     * same name, refresh its source too, but do not add that membership when it
+     * was absent. Validation and sanitization finish before the first mutation
+     * so a rejected update leaves every dictionary untouched.
+     */
+    upsertIconForType(type: ElementTypes, name: string, src: string): string {
+        const selected = this.getSelectedDictionary(type);
+        if (name.includes(type)) {
+            throw new Error("Name should not include type!");
+        }
+        const sanitized = this.iconSanitizer.sanitize(src);
+        const otherSelected =
+            type === ElementTypes.ACTOR
+                ? this.selectedWorkObjectsDictionary
+                : this.selectedActorsDictionary;
+
+        this.replaceEntry(this.customIcons, name, sanitized);
+        this.replaceEntry(selected, name, sanitized);
+        if (otherSelected.has(name)) {
+            this.replaceEntry(otherSelected, name, sanitized);
+        }
+
+        return sanitized;
+    }
+
     unregisterIconForType(type: ElementTypes, name: string): void {
         if (name.includes(type)) {
             throw new Error("Name should not include type!");
@@ -180,6 +209,15 @@ export class IconDictionaryService {
             sanitized.set(name, this.iconSanitizer.sanitize(source.get(name)));
         });
         return sanitized;
+    }
+
+    private replaceEntry(
+        dictionary: Dictionary<string>,
+        name: string,
+        source: string,
+    ): void {
+        dictionary.delete(name);
+        dictionary.set(name, source);
     }
 
     private getSelectedDictionary(type: ElementTypes): Dictionary<string> {
