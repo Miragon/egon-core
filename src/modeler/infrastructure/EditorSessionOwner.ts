@@ -2,6 +2,7 @@ import Diagram from "diagram-js";
 import type Canvas from "diagram-js/lib/core/Canvas";
 import type EventBus from "diagram-js/lib/core/EventBus";
 import type { ModuleDeclaration } from "didi";
+import Ids from "ids";
 
 import EgonPlugin from "./plugin";
 import type { DomainStoryTextRendererConfig } from "../domain";
@@ -23,6 +24,7 @@ type PromotionListener = (
 /** Owns the one active diagram-js injector and any isolated import candidate. */
 export class EditorSessionOwner {
     private active: EditorSession;
+    private readonly sessionIds = new Ids();
     private readonly promotionListeners = new Set<PromotionListener>();
 
     constructor(
@@ -138,6 +140,7 @@ export class EditorSessionOwner {
 
     private createSession(stagingHost?: HTMLDivElement): EditorSession {
         const canvasHost = stagingHost ?? this.container;
+        const scopeId = this.sessionIds.next();
         const iconStyleElement = document.createElement("style");
         iconStyleElement.setAttribute("data-egon-icons-css", "");
         if (stagingHost) iconStyleElement.media = "not all";
@@ -151,7 +154,10 @@ export class EditorSessionOwner {
                     width: this.width,
                     height: this.height,
                 },
-                domainStoryIconStyleSheet: { styleElement: iconStyleElement },
+                domainStoryIconStyleSheet: {
+                    styleElement: iconStyleElement,
+                    scopeId,
+                },
                 ...(this.textRenderer
                     ? { textRenderer: this.textRenderer }
                     : {}),
@@ -159,6 +165,7 @@ export class EditorSessionOwner {
             });
             const canvas = diagram.get<Canvas>("canvas");
             const eventBus = diagram.get<EventBus>("eventBus");
+            canvas.getContainer().setAttribute("data-egon-icon-scope", scopeId);
             canvas.getRootElement();
             return {
                 diagram,

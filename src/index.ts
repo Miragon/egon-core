@@ -16,6 +16,8 @@ export type {
     ModelerPort,
     // Payload of the `import.repaired` event (ADR 0017).
     ImportRepairData,
+    ColorPickerRequestData,
+    ColorPickerClosedData,
 } from "./modeler/domain/ports/ModelerPort";
 export type { IconPort } from "./modeler/domain/ports/IconPort";
 

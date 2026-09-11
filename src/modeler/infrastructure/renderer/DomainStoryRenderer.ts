@@ -40,6 +40,7 @@ import { DomainStoryTextRenderer } from "../text-renderer/DomainStoryTextRendere
 import { IconDictionaryService } from "../../../iconSet/service";
 import { DEFAULT_COLOR, isDefaultColor } from "../../../story/domain/color";
 import type { IconSanitizerPort } from "../../../iconSet/domain/ports/IconSanitizerPort";
+import { ColorPickerPreviewState } from "../color-picker/ColorPickerPreviewState";
 
 /**
  * Draws Domain Storytelling elements — and **only** draws them.
@@ -62,6 +63,7 @@ export class DomainStoryRenderer extends BaseRenderer {
         "domainStoryTextRenderer",
         "domainStoryIconDictionaryService",
         "domainStoryIconSanitizer",
+        "domainStoryColorPickerPreviewState",
     ];
 
     // Per-instance so SVG marker ids never collide between two renderers on one
@@ -78,6 +80,7 @@ export class DomainStoryRenderer extends BaseRenderer {
         private readonly domainStoryTextRenderer: DomainStoryTextRenderer,
         private readonly iconDictionaryService: IconDictionaryService,
         private readonly iconSanitizer: IconSanitizerPort,
+        private readonly colorPreviewState: ColorPickerPreviewState,
     ) {
         super(eventBus, 2000);
 
@@ -202,7 +205,7 @@ export class DomainStoryRenderer extends BaseRenderer {
             assign(
                 {
                     fill: "none",
-                    stroke: element.businessObject.pickedColor ?? DEFAULT_COLOR,
+                    stroke: this.colorOf(element),
                 },
                 element["attrs"],
             ),
@@ -242,7 +245,7 @@ export class DomainStoryRenderer extends BaseRenderer {
     drawDSConnection(visuals: SVGElement, element: Connection): SVGElement {
         let attrs = "";
         attrs = this.styles.computeStyle(attrs, {
-            stroke: element.businessObject.pickedColor ?? DEFAULT_COLOR,
+            stroke: this.colorOf(element),
             strokeWidth: 1.5,
             strokeLinejoin: "round",
             strokeDasharray: "5, 5",
@@ -279,7 +282,7 @@ export class DomainStoryRenderer extends BaseRenderer {
         const textPathData = getAnnotationBracketSvg(element.height);
 
         this.drawPath(parentGfx, textPathData, {
-            stroke: element.businessObject.pickedColor ?? DEFAULT_COLOR,
+            stroke: this.colorOf(element),
         });
 
         this.renderLabel(parentGfx, text, {
@@ -287,7 +290,7 @@ export class DomainStoryRenderer extends BaseRenderer {
             align: "left-top",
             padding: 5,
             style: {
-                fill: element.businessObject.pickedColor ?? DEFAULT_COLOR,
+                fill: this.colorOf(element),
             },
         });
 
@@ -378,7 +381,7 @@ export class DomainStoryRenderer extends BaseRenderer {
         const icon = this.iconDictionaryService.getIconSource(
             getIconId(element["type"]),
         );
-        const pickedColor = element.businessObject.pickedColor;
+        const pickedColor = this.colorOf(element);
         if (
             isCustomIcon(icon) &&
             !isCustomSvgIcon(icon) &&
@@ -389,7 +392,7 @@ export class DomainStoryRenderer extends BaseRenderer {
 
         const safeMarkup = this.iconSanitizer.prepareForRendering(
             icon,
-            pickedColor ?? DEFAULT_COLOR,
+            pickedColor,
         );
         const rendered = svgCreate(safeMarkup);
         svgAttr(rendered, dimensions);
@@ -436,8 +439,16 @@ export class DomainStoryRenderer extends BaseRenderer {
         return waypoints;
     }
 
+    private colorOf(element: Element): string {
+        return (
+            this.colorPreviewState.get(element) ??
+            element.businessObject.pickedColor ??
+            DEFAULT_COLOR
+        );
+    }
+
     private useColorForActivity(element: Connection) {
-        const color = element.businessObject.pickedColor ?? DEFAULT_COLOR;
+        const color = this.colorOf(element);
         const attrs = "";
         return this.styles.computeStyle(attrs, {
             stroke: color,

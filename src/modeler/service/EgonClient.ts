@@ -1,7 +1,13 @@
 import type { ModuleDeclaration } from "didi";
 
 import { EgonClientConfig } from "./EgonClientConfig";
-import { IconPort, ImportRepairData, ModelerPort } from "../domain/ports";
+import {
+    ColorPickerClosedData,
+    ColorPickerRequestData,
+    IconPort,
+    ImportRepairData,
+    ModelerPort,
+} from "../domain/ports";
 
 import type {
     DomainStoryDocument,
@@ -24,6 +30,8 @@ export type EgonEventMap = {
      * returns, so a host can warn that saving now would make the loss permanent.
      */
     "import.repaired": (repair: ImportRepairData) => void;
+    "colorPicker.requested": (request: ColorPickerRequestData) => void;
+    "colorPicker.closed": (closed: ColorPickerClosedData) => void;
 };
 
 export type EgonEventName = keyof EgonEventMap;
@@ -51,6 +59,8 @@ export interface EgonClientPorts {
  * - Hides infrastructure complexity from consumers
  */
 export class EgonClient {
+    private destroyed = false;
+
     private constructor(
         private readonly modelerPort: ModelerPort,
         private readonly iconPort: IconPort,
@@ -154,6 +164,16 @@ export class EgonClient {
                     callback as EgonEventMap["icons.changed"],
                 );
                 break;
+            case "colorPicker.requested":
+                this.modelerPort.onColorPickerRequested(
+                    callback as EgonEventMap["colorPicker.requested"],
+                );
+                break;
+            case "colorPicker.closed":
+                this.modelerPort.onColorPickerClosed(
+                    callback as EgonEventMap["colorPicker.closed"],
+                );
+                break;
             default:
                 throw new TypeError(`Unknown Egon event: ${String(event)}`);
         }
@@ -184,6 +204,16 @@ export class EgonClient {
             case "icons.changed":
                 this.iconPort.offIconsChanged(
                     callback as EgonEventMap["icons.changed"],
+                );
+                break;
+            case "colorPicker.requested":
+                this.modelerPort.offColorPickerRequested(
+                    callback as EgonEventMap["colorPicker.requested"],
+                );
+                break;
+            case "colorPicker.closed":
+                this.modelerPort.offColorPickerClosed(
+                    callback as EgonEventMap["colorPicker.closed"],
                 );
                 break;
             default:
@@ -223,6 +253,26 @@ export class EgonClient {
      */
     fitToScreen(): void {
         this.modelerPort.fitToScreen();
+    }
+
+    // --- Host-owned Color Picker ---
+
+    previewPickedColor(requestId: string, color: string): boolean {
+        return (
+            !this.destroyed &&
+            this.modelerPort.previewPickedColor(requestId, color)
+        );
+    }
+
+    confirmPickedColor(requestId: string, color: string): boolean {
+        return (
+            !this.destroyed &&
+            this.modelerPort.confirmPickedColor(requestId, color)
+        );
+    }
+
+    cancelColorPicker(requestId: string): boolean {
+        return !this.destroyed && this.modelerPort.cancelColorPicker(requestId);
     }
 
     // --- Icon Management ---
@@ -280,6 +330,8 @@ export class EgonClient {
      * query destroyed services.
      */
     destroy(): void {
+        if (this.destroyed) return;
+        this.destroyed = true;
         this.iconPort.destroy();
         this.modelerPort.destroy();
     }
