@@ -248,11 +248,17 @@ function iconRules(container: HTMLElement): CSSStyleRule[] {
     return Array.from(style!.sheet!.cssRules) as CSSStyleRule[];
 }
 
+function iconSelector(container: HTMLElement, iconName: string): string {
+    const scopeId = container
+        .querySelector(".djs-container")!
+        .getAttribute("data-egon-icon-scope");
+    return `[data-egon-icon-scope="${scopeId}"] .icon-domain-story-${iconName}::before`.toLowerCase();
+}
+
 function svgPublishedFor(container: HTMLElement, iconName: string): string {
     const rule = iconRules(container).find(
         (candidate) =>
-            candidate.selectorText ===
-            `.icon-domain-story-${iconName}::before`.toLowerCase(),
+            candidate.selectorText === iconSelector(container, iconName),
     );
     const encoded = rule?.cssText.match(/base64,([^"')]+)/)?.[1];
     if (!encoded) {
@@ -679,9 +685,15 @@ describe("EgonClient on real adapters (browser)", () => {
                 iconRules(diagram.container).filter(
                     (rule) =>
                         rule.selectorText ===
-                            `.icon-domain-story-${TEST_ICON_NAMES.person}::before`.toLowerCase() ||
+                            iconSelector(
+                                diagram!.container,
+                                TEST_ICON_NAMES.person,
+                            ) ||
                         rule.selectorText ===
-                            `.icon-domain-story-${TEST_ICON_NAMES.document}::before`.toLowerCase(),
+                            iconSelector(
+                                diagram!.container,
+                                TEST_ICON_NAMES.document,
+                            ),
                 ),
             ).toHaveLength(2);
         });

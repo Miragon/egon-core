@@ -10,6 +10,7 @@ import { IconStyleSheetPort } from "../domain/ports/IconStyleSheetPort";
  */
 export interface IconStyleSheetConfig {
     styleElement?: HTMLStyleElement;
+    scopeId?: string;
 }
 
 /**
@@ -19,13 +20,10 @@ export interface IconStyleSheetConfig {
  * and publication through the owned `<style>` node live here, behind
  * {@link IconStyleSheetPort}.
  *
- * The node is per-EgonClient, created by `DiagramJsModelerAdapter` and injected
- * by reference, so two clients on one page never write into the same sheet.
- *
- * Note this buys *ownership*, not isolation: the rules themselves are
- * document-global wherever the `<style>` sits, so two clients with different
- * SVGs for one icon name still collide. Real isolation needs selector
- * prefixing (`.egon-<id> .icon-x::before`) — that is issue #12, not this one.
+ * The node and selector scope are per editor session, created by
+ * `EditorSessionOwner` and injected by reference. Every rule is anchored to
+ * that session's `.djs-container`, so clients may safely reuse icon class names
+ * even when their stylesheets share one host or document.
  */
 export class IconCssInjector implements IconStyleSheetPort {
     static $inject = ["config.domainStoryIconStyleSheet"];
@@ -36,7 +34,8 @@ export class IconCssInjector implements IconStyleSheetPort {
 
     addIconStyle(cssClassName: string, svgMarkup: string): void {
         const styleElement = this.config?.styleElement;
-        if (!styleElement) {
+        const scopeId = this.config?.scopeId;
+        if (!styleElement || !scopeId) {
             return;
         }
 
@@ -53,7 +52,7 @@ export class IconCssInjector implements IconStyleSheetPort {
         const base64Src = btoa(binary);
 
         const iconStyle = `
-            .${cssClassName}::before {
+            [data-egon-icon-scope="${scopeId}"] .${cssClassName}::before {
               mask-image: url('data:image/svg+xml;base64,${base64Src}');
             }
         `;

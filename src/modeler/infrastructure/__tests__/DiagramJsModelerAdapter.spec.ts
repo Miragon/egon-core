@@ -74,6 +74,7 @@ let services: ReturnType<typeof createMockDiagramServices>;
 // assert on wiring that only exists as a DI config key — the compiler cannot
 // check those strings from the producer side.
 let diagramOptions: Record<string, any>[] = [];
+let canvasContainers: HTMLElement[] = [];
 
 // Mock diagram-js so `new Diagram(...)` returns our stub injector instead of
 // instantiating a real modeler (jsdom has no SVG canvas). The other modeler
@@ -82,8 +83,18 @@ let diagramOptions: Record<string, any>[] = [];
 vi.mock("diagram-js", () => ({
     default: vi.fn((options: Record<string, any>) => {
         diagramOptions.push(options);
+        const canvasContainer = document.createElement("div");
+        canvasContainer.className = "djs-container";
+        options["canvas"].container.appendChild(canvasContainer);
+        canvasContainers.push(canvasContainer);
         return {
-            get: (name: string) => services.get(name),
+            get: (name: string) =>
+                name === "canvas"
+                    ? {
+                          ...services.mockCanvas,
+                          getContainer: () => canvasContainer,
+                      }
+                    : services.get(name),
             destroy: () => services.destroy(),
         };
     }),
@@ -102,6 +113,7 @@ describe("DiagramJsModelerAdapter", () => {
     beforeEach(() => {
         services = createMockDiagramServices();
         diagramOptions = [];
+        canvasContainers = [];
         container = document.createElement("div");
         adapter = new DiagramJsModelerAdapter(container, "100%", "100%");
     });
@@ -531,12 +543,18 @@ describe("DiagramJsModelerAdapter", () => {
     });
 
     describe("icon stylesheet wiring", () => {
-        it("hands its own style node to the icon stylesheet adapter", () => {
+        it("hands its style node and canvas scope to the icon stylesheet adapter", () => {
             // Pins the DI key name from the producer side; IconCssInjector's
             // `$inject` string is invisible to the compiler.
-            expect(diagramOptions[0]!["domainStoryIconStyleSheet"]).toEqual({
-                styleElement: container.querySelector(ICON_STYLE_SELECTOR),
-            });
+            const config = diagramOptions[0]!["domainStoryIconStyleSheet"];
+            expect(config.styleElement).toBe(
+                container.querySelector(ICON_STYLE_SELECTOR),
+            );
+            expect(config.scopeId).toEqual(expect.any(String));
+            expect(config.scopeId).not.toBe("");
+            expect(
+                canvasContainers[0]!.getAttribute("data-egon-icon-scope"),
+            ).toBe(config.scopeId);
         });
 
         it("gives two adapters on one container two separate nodes", () => {
@@ -553,6 +571,12 @@ describe("DiagramJsModelerAdapter", () => {
             ).not.toBe(
                 diagramOptions[0]!["domainStoryIconStyleSheet"].styleElement,
             );
+            expect(
+                diagramOptions[1]!["domainStoryIconStyleSheet"].scopeId,
+            ).not.toBe(diagramOptions[0]!["domainStoryIconStyleSheet"].scopeId);
+            expect(
+                canvasContainers[1]!.getAttribute("data-egon-icon-scope"),
+            ).toBe(diagramOptions[1]!["domainStoryIconStyleSheet"].scopeId);
 
             // Destroying one must not take the other's sheet — the rules in it
             // belong to a client that is still alive.

@@ -18,18 +18,23 @@ export interface TestDiagram {
  * lays out — only a real browser (vitest browser mode) exercises the full
  * bootstrap. Unit specs must keep mocking the ports instead.
  *
- * The container is sized and attached to `document.body` because diagram-js
- * reads the element's dimensions on init; `cleanup()` destroys the client and
- * detaches the node so specs don't leak canvases across the run.
+ * By default the container is sized and attached to `document.body` because
+ * diagram-js reads its dimensions on init; `cleanup()` destroys the client and
+ * detaches that owned node. A supplied `existingContainer` stays caller-owned,
+ * which lets isolation specs boot multiple clients into one real host.
  */
 export async function createTestDiagram(
     config: Partial<Omit<EgonClientConfig, "container">> = {},
     additionalModules: ModuleDeclaration[] = [],
+    existingContainer?: HTMLElement,
 ): Promise<TestDiagram> {
-    const container = document.createElement("div");
-    container.style.width = "800px";
-    container.style.height = "600px";
-    document.body.appendChild(container);
+    const ownsContainer = !existingContainer;
+    const container = existingContainer ?? document.createElement("div");
+    if (ownsContainer) {
+        container.style.width = "800px";
+        container.style.height = "600px";
+        document.body.appendChild(container);
+    }
 
     const client = await EgonClient.create(
         { container, ...config },
@@ -41,7 +46,7 @@ export async function createTestDiagram(
         container,
         cleanup: () => {
             client.destroy();
-            container.remove();
+            if (ownsContainer) container.remove();
         },
     };
 }
