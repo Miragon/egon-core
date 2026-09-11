@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import Diagram from "diagram-js";
+import type Canvas from "diagram-js/lib/core/Canvas";
 import type { ModuleDeclaration } from "didi";
 
 import ContextPadModule from "../context-pad";
@@ -48,9 +49,16 @@ describe("standalone module composition", () => {
 
         const diagram = new Diagram({
             canvas: { container },
-            domainStoryIconStyleSheet: { styleElement },
+            domainStoryIconStyleSheet: {
+                styleElement,
+                scopeId: "standalone-module",
+            },
             modules: [module],
         });
+        diagram
+            .get<Canvas>("canvas")
+            .getContainer()
+            .setAttribute("data-egon-icon-scope", "standalone-module");
         booted.push(diagram);
         return diagram;
     }

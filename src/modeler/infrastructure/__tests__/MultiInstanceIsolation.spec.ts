@@ -15,17 +15,18 @@ import { Dictionary } from "../../../story/domain/dictionary";
  * covered here until #74 deleted the mechanism outright: the renderer that read
  * it back no longer writes to the model at all.)
  *
- * It stops at the injector layer on purpose. A full two-`EgonClient`
- * boot/render test is infeasible under jsdom: rendering calls `getBBox`, which
- * jsdom's SVG has no layout engine for (see the "jsdom has no SVG canvas" note
- * in DiagramJsModelerAdapter.spec.ts, and EgonClient.spec.ts, which mocks the
- * ports rather than booting diagram-js). Once each offender is injector-owned,
- * non-leakage is structural — rule H in architecture.spec.ts locks it in — so
- * the injector-level proof is sufficient. Neither module needs diagram-js
- * primitives, so a bare injector over them plus a `config` value resolves every
- * service.
+ * This unit suite stops at the injector layer on purpose. A full two-client
+ * boot/render test needs Chromium because jsdom has no SVG layout engine; the
+ * live stylesheet and selector behavior is covered by
+ * `IconCssIsolation.browser.spec.ts`. For the instance-owned service state
+ * below, non-leakage is structural — rule H in architecture.spec.ts locks it
+ * in — and neither module needs diagram-js primitives, so a bare injector plus
+ * a `config` value resolves every service.
  */
-function makeInjector(styleElement?: HTMLStyleElement): Injector {
+function makeInjector(
+    styleElement?: HTMLStyleElement,
+    scopeId = "test-scope",
+): Injector {
     return new Injector([
         IdFactoryModule,
         IconSetModule,
@@ -33,7 +34,12 @@ function makeInjector(styleElement?: HTMLStyleElement): Injector {
         // throws `No provider for "config"!` when the whole `config` provider
         // is missing (a missing *key* on a present config is fine), so a bare
         // injector must supply one.
-        { config: ["value", { domainStoryIconStyleSheet: { styleElement } }] },
+        {
+            config: [
+                "value",
+                { domainStoryIconStyleSheet: { styleElement, scopeId } },
+            ],
+        },
     ]);
 }
 
@@ -132,17 +138,17 @@ describe("multi-instance isolation (issue #12)", () => {
         // rules landed in A's sheet.
         const styleA = createAttachedStyleElement();
         const styleB = createAttachedStyleElement();
-        const a = makeInjector(styleA);
-        const b = makeInjector(styleB);
+        const a = makeInjector(styleA, "scope-a");
+        const b = makeInjector(styleB, "scope-b");
 
         addIcon(a, "only-in-a");
         addIcon(b, "only-in-b");
 
         expect(selectorsOf(styleA)).toEqual([
-            ".icon-domain-story-only-in-a::before",
+            '[data-egon-icon-scope="scope-a"] .icon-domain-story-only-in-a::before',
         ]);
         expect(selectorsOf(styleB)).toEqual([
-            ".icon-domain-story-only-in-b::before",
+            '[data-egon-icon-scope="scope-b"] .icon-domain-story-only-in-b::before',
         ]);
     });
 
