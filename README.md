@@ -51,8 +51,10 @@ client.on("story.changed", () => {
 
 Both the runtime (`dist/index.js`) and its type declarations
 (`dist/index.d.ts`) are emitted to `dist/`, and the compiled styles to
-`dist/style.css`. See [docs/Client.md](docs/Client.md) for the full
-`EgonClient` API.
+`dist/style.css`. The exported stylesheet includes diagram-js's required editor
+layout, the BPMN icon font, and egon-core's built-in SVG masks. Hosts only need
+to give the canvas container a usable size. See
+[docs/Client.md](docs/Client.md) for the full `EgonClient` API.
 
 ## Host integration: color picker
 
@@ -99,8 +101,9 @@ for webview routing and lifecycle details.
 | `yarn test:watch`      | Run unit tests in watch mode                           |
 | `yarn test:coverage`   | Run unit tests with coverage                           |
 | `yarn test:browser`    | Run browser-tier Vitest integration specs              |
-| `yarn test:e2e`        | Run the four headless Playwright journeys              |
+| `yarn test:e2e`        | Run public Playwright journeys and stylesheet checks   |
 | `yarn test:e2e:headed` | Run the Playwright journeys in a visible browser       |
+| `yarn test:package`    | Pack and test an isolated installed-package consumer   |
 | `yarn typecheck`       | Type-check library, tests, demo, and e2e code          |
 | `yarn lint`            | Lint with ESLint                                       |
 
@@ -131,6 +134,22 @@ yarn playwright install chromium
 yarn test:e2e
 # or: yarn test:e2e:headed
 ```
+
+To exercise those same journeys against the package contents rather than the
+source aliases, run:
+
+```bash
+yarn test:package
+yarn test:package --archive /path/to/egon-core.tgz
+```
+
+Without `--archive`, the runner calls `yarn pack` (and therefore the package's
+`prepack` build). It stages the demo in a temporary project outside this
+repository, installs only the archive plus pinned Vite/TypeScript tooling,
+type-checks and builds that consumer, validates packaged CSS asset references,
+and serves the production build for Playwright. GitHub's **Release archive
+validation** workflow performs the same check against a selected commit's
+downloaded source archive and runs automatically for published releases.
 
 ## Architecture
 

@@ -38,6 +38,7 @@
         "test:browser": "vitest run --project browser",
         "test:e2e": "node scripts/demo.mjs test e2e",
         "test:e2e:headed": "node scripts/demo.mjs test e2e --headed",
+        "test:package": "node scripts/test-package.mjs",
         "lint": "eslint .",
         "format": "prettier --write .",
         "format:check": "prettier --check .",

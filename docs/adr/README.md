@@ -26,10 +26,11 @@ and the rules (when to write one, how superseding works).
 | [0018](0018-idempotent-event-subscriptions.md)                           | Make event subscriptions idempotent                 | accepted                                                                    |
 | [0019](0019-reject-unknown-public-event-names.md)                        | Reject unknown public event names at runtime        | accepted                                                                    |
 | [0020](0020-infrastructure-translates-domain-decisions.md)               | Infrastructure translates domain decisions          | accepted                                                                    |
-| [0021](0021-public-consumer-playwright-journeys.md)                      | Public-consumer Playwright journey tier             | accepted                                                                    |
+| [0021](0021-public-consumer-playwright-journeys.md)                      | Public-consumer Playwright journey tier             | superseded by [0028](0028-isolated-package-consumer-validation.md)          |
 | [0022](0022-node-24-and-portless-demo-routing.md)                        | Node 24 and portless demo routing                   | accepted                                                                    |
 | [0023](0023-sanitize-imported-svg-icons.md)                              | Sanitize imported icons at storage and render       | accepted                                                                    |
 | [0024](0024-stage-document-imports-in-editor-sessions.md)                | Stage imports in isolated editor sessions           | accepted                                                                    |
 | [0025](0025-retain-live-icon-assets-on-export.md)                        | Retain live icon assets on export                   | accepted                                                                    |
 | [0026](0026-client-scoped-color-picker-requests-and-passive-previews.md) | Client-scoped picker requests + passive previews    | accepted                                                                    |
 | [0027](0027-refresh-shared-icon-artwork-on-add.md)                       | Refresh shared icon artwork on add                  | accepted                                                                    |
+| [0028](0028-isolated-package-consumer-validation.md)                     | Shared journeys through isolated package consumer   | accepted                                                                    |
