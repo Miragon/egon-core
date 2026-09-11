@@ -873,11 +873,13 @@ describe("EgonClient on real adapters (browser)", () => {
                 expect(svgPublishedFor(diagram.container, "Shared")).toBe(
                     latest,
                 );
+                const sharedSelector = iconSelector(
+                    diagram.container,
+                    "Shared",
+                );
                 expect(
                     iconRules(diagram.container).filter(
-                        (rule) =>
-                            rule.selectorText ===
-                            ".icon-domain-story-shared::before",
+                        (rule) => rule.selectorText === sharedSelector,
                     ),
                 ).toHaveLength(1);
 
