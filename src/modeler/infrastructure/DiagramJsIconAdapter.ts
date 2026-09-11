@@ -1,11 +1,12 @@
 import type Diagram from "diagram-js";
 import type EventBus from "diagram-js/lib/core/EventBus";
+import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 
 import {
     IconDictionaryService,
     IconSetImportExportService,
 } from "../../iconSet/service";
-import { ElementTypes } from "../../story/domain/elementTypes";
+import { ElementTypes, getIconId } from "../../story/domain/elementTypes";
 import { Dictionary } from "../../story/domain/dictionary";
 import {
     createDebouncedCallback,
@@ -63,22 +64,18 @@ export class DiagramJsIconAdapter implements IconPort {
     }
 
     addIcon(category: IconCategory, name: string, svg: string): void {
+        const diagram = this.diagram();
         const elementType = this.toElementType(category);
+        const iconDictionaryService = this.iconDictionaryService(diagram);
 
-        const sanitized = this.iconDictionaryService().addIMGToIconDictionary(
-            svg,
-            name,
-        );
-        this.iconDictionaryService().registerIconForType(
+        const sanitized = iconDictionaryService.upsertIconForType(
             elementType,
             name,
-            sanitized,
+            svg,
         );
-        this.addIconToCss(
-            name,
-            this.iconDictionaryService().getIconSource(name),
-        );
-        this.fireIconsChangedEvent();
+        this.addIconToCss(iconDictionaryService, name, sanitized);
+        this.repaintMatchingIcons(diagram, name);
+        this.fireIconsChangedEvent(diagram);
     }
 
     removeIcon(category: IconCategory, name: string): void {
@@ -150,15 +147,41 @@ export class DiagramJsIconAdapter implements IconPort {
             : ElementTypes.WORKOBJECT;
     }
 
-    private addIconToCss(name: string, svg: string): void {
+    private addIconToCss(
+        iconDictionaryService: IconDictionaryService,
+        name: string,
+        svg: string,
+    ): void {
         const dict = new Dictionary<string>();
         dict.set(name, svg);
-        this.iconDictionaryService().addIconsToCss(dict);
+        iconDictionaryService.addIconsToCss(dict);
     }
 
-    private fireIconsChangedEvent(): void {
-        this.eventBus().fire("dst.config.changed", {
-            iconSet: this.getIcons(),
+    private repaintMatchingIcons(diagram: Diagram, name: string): void {
+        const matchingShapes = diagram
+            .get<ElementRegistry>("elementRegistry")
+            .getAll()
+            .filter((element) => {
+                const type = element["type"];
+                return (
+                    !element["labelTarget"] &&
+                    typeof type === "string" &&
+                    (type.startsWith(ElementTypes.ACTOR) ||
+                        type.startsWith(ElementTypes.WORKOBJECT)) &&
+                    getIconId(type) === name
+                );
+            });
+
+        if (matchingShapes.length > 0) {
+            this.eventBus(diagram).fire("elements.changed", {
+                elements: matchingShapes,
+            });
+        }
+    }
+
+    private fireIconsChangedEvent(diagram: Diagram = this.diagram()): void {
+        this.eventBus(diagram).fire("dst.config.changed", {
+            iconSet: this.getIconsFrom(diagram),
         });
     }
 
@@ -166,20 +189,35 @@ export class DiagramJsIconAdapter implements IconPort {
         return this.sessionOwner?.getActiveDiagram() ?? this.fixedDiagram!;
     }
 
-    private eventBus(): EventBus {
-        return this.diagram().get<EventBus>("eventBus");
+    private eventBus(diagram: Diagram = this.diagram()): EventBus {
+        return diagram.get<EventBus>("eventBus");
     }
 
-    private iconDictionaryService(): IconDictionaryService {
-        return this.diagram().get<IconDictionaryService>(
+    private iconDictionaryService(
+        diagram: Diagram = this.diagram(),
+    ): IconDictionaryService {
+        return diagram.get<IconDictionaryService>(
             "domainStoryIconDictionaryService",
         );
     }
 
-    private iconSetImportExportService(): IconSetImportExportService {
-        return this.diagram().get<IconSetImportExportService>(
+    private iconSetImportExportService(
+        diagram: Diagram = this.diagram(),
+    ): IconSetImportExportService {
+        return diagram.get<IconSetImportExportService>(
             "domainStoryIconSetImportExportService",
         );
+    }
+
+    private getIconsFrom(diagram: Diagram): IconSet {
+        const config =
+            this.iconSetImportExportService(
+                diagram,
+            ).getCurrentConfigurationForExport();
+        return {
+            actors: config?.actors ?? {},
+            workObjects: config?.workObjects ?? {},
+        };
     }
 
     private transferSubscriptions(
