@@ -1,4 +1,4 @@
-# 0026 — Refresh shared icon artwork on add
+# 0027 — Refresh shared icon artwork on add
 
 - Status: accepted
 - Date: 2026-09-11
