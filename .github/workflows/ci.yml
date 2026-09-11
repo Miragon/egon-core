@@ -68,8 +68,8 @@ jobs:
             - run: yarn playwright install --with-deps chromium
             - run: yarn test:browser
 
-    # Public-consumer browser journeys: build the package, start the demo on a
-    # portless route, and drive only the UI through Playwright.
+    # Source-based public-consumer browser journeys: resolve the public package
+    # specifiers through exact development aliases and drive only the UI.
     test-e2e:
         runs-on: ubuntu-latest
         steps:
@@ -86,6 +86,27 @@ jobs:
                   path: |
                       playwright-report
                       test-results
+                  if-no-files-found: ignore
+                  retention-days: 7
+
+    # Installed-package browser journeys: pack egon-core, create an isolated
+    # consumer outside the checkout, and run the shared Playwright suite against
+    # that consumer's production build.
+    test-package:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: ./.github/actions/setup
+            - run: yarn playwright install --with-deps chromium
+            - run: yarn test:package
+            - name: Upload package-consumer failure artifacts
+              if: failure()
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: package-playwright-report
+                  path: |
+                      playwright-report/package
+                      test-results/package
                   if-no-files-found: ignore
                   retention-days: 7
 
@@ -134,6 +155,7 @@ jobs:
                 test,
                 test-browser,
                 test-e2e,
+                test-package,
                 build,
                 pin-check,
                 dependency-review,

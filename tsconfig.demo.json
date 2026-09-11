@@ -5,7 +5,11 @@
         "moduleResolution": "Bundler",
         "target": "ES2022",
         "types": ["node", "vite/client", "@playwright/test"],
-        "allowImportingTsExtensions": true,
+        "baseUrl": ".",
+        "paths": {
+            "egon-core": ["./src/index.ts"],
+            "egon-core/style.css": ["./src/styles.scss"]
+        },
         "noEmit": true
     },
     "include": ["demo/**/*.ts", "playwright.config.ts", "src/types/**/*.d.ts"]

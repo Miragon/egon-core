@@ -27,6 +27,19 @@ export const diagramElement = (page: Page, id: string) =>
 export const hitTarget = (element: Locator) =>
     element.locator(":scope > .djs-hit").first();
 
+export async function clickDiagramElement(page: Page, elementId: string) {
+    const bounds = await hitTarget(
+        diagramElement(page, elementId),
+    ).boundingBox();
+    if (!bounds) {
+        throw new Error(`Could not measure diagram element ${elementId}.`);
+    }
+    await page.mouse.click(
+        bounds.x + bounds.width / 2,
+        bounds.y + bounds.height / 2,
+    );
+}
+
 export async function openDemo(page: Page) {
     await page.goto("/");
     await expect(page.getByRole("status")).toHaveText("Editor ready.");
@@ -73,10 +86,10 @@ export async function connectThroughContextPad(
     targetId: string,
 ) {
     const activitiesBefore = await activityIds(page);
-    await hitTarget(diagramElement(page, sourceId)).click({ force: true });
+    await clickDiagramElement(page, sourceId);
     await expect(page.getByTitle("Connect with activity")).toBeVisible();
     await page.getByTitle("Connect with activity").click();
-    await hitTarget(diagramElement(page, targetId)).click({ force: true });
+    await clickDiagramElement(page, targetId);
 
     await expect
         .poll(async () => (await activityIds(page)).length)

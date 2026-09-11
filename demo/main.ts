@@ -1,10 +1,9 @@
-import "diagram-js/assets/diagram-js.css";
-import "../src/styles.scss";
+import "egon-core/style.css";
 import "./styles.css";
 
 import actorIcon from "./icons/person.svg?raw";
 import workObjectIcon from "./icons/document.svg?raw";
-import { EgonClient, type DomainStoryDocument } from "../src/index.ts";
+import { EgonClient, type DomainStoryDocument } from "egon-core";
 
 function requiredElement<T extends Element>(selector: string): T {
     const element = document.querySelector<T>(selector);

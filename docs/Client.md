@@ -10,6 +10,13 @@ import { EgonClient } from "egon-core";
 import "egon-core/style.css";
 ```
 
+The stylesheet is the complete editor stylesheet: it contains diagram-js's
+base palette, context-pad, canvas, and interaction rules together with the BPMN
+icon font and egon-core's group, color-picker, and direction masks. Do not add a
+separate `diagram-js/assets/diagram-js.css` import in the host. The host remains
+responsible for sizing the container (directly or through `width` and `height`);
+the stylesheet cannot infer the available application layout.
+
 ## Creating a client
 
 ```ts
