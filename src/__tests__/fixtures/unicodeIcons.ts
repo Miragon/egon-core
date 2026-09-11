@@ -59,4 +59,3 @@ export function unicodeIconSource(representation: SvgRepresentation): string {
             return `data:image/svg+xml;utf8,${encodeURIComponent(UNICODE_ICON_SVG)}`;
     }
 }
-
