@@ -208,7 +208,9 @@ describe("atomic document import", () => {
         const failing = story({
             title: "candidate",
             ids: ["shape_candidate", "shape_fail"],
+            secondType: `${ElementTypes.WORKOBJECT}Repairable Icon`,
         });
+        failing.iconSet.workObjects["Repairable-Icon"] = ICON;
         const errorLog = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
@@ -246,6 +248,12 @@ describe("atomic document import", () => {
         ).toBe(beforeBanner);
         expect(active.dirtyFlag.dirty).toBe(beforeDirty);
         expect(active.elementRegistry.get("shape_1")).toBe(liveShape);
+        // Preparation repaired this candidate-local reference before the
+        // injected materialization failure. The caller's document and every
+        // live object in the active session nevertheless remain untouched.
+        expect(failing.domainStory.businessObjects[1]).toMatchObject({
+            type: `${ElementTypes.WORKOBJECT}Repairable Icon`,
+        });
         expect(storyChanged).toHaveBeenCalledTimes(1);
         expect(iconsChanged).not.toHaveBeenCalled();
         expect(repaired).not.toHaveBeenCalled();
