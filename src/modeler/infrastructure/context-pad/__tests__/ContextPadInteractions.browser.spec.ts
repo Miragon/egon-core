@@ -190,17 +190,15 @@ describe("context-pad DOM interactions", () => {
         expect(modeler.elementRegistry.get(workObject.id)).toBe(workObject);
         modeler.commandStack.redo();
 
-        const openPicker = vi.fn();
-        document.addEventListener("openColorPicker", openPicker, {
-            once: true,
+        let requestId: string | undefined;
+        modeler.eventBus.on("dst.colorPicker.requested", (event: any) => {
+            requestId = event.requestId;
         });
         await clickEntry(modeler, replacement, "colorChange");
-        expect(openPicker).toHaveBeenCalledTimes(1);
-        document.dispatchEvent(
-            new CustomEvent("pickedColor", {
-                detail: { color: "#8844cc" },
-            }),
-        );
+        expect(requestId).toBeTypeOf("string");
+        modeler
+            .get<any>("domainStoryColorPickerCoordinator")
+            .confirm(requestId, "#8844cc");
 
         await expect
             .poll(() => replacement.businessObject.pickedColor)

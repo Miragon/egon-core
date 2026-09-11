@@ -84,12 +84,14 @@ on<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void
 off<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void
 ```
 
-| Event              | Callback signature                   | Fired when …                     |
-| ------------------ | ------------------------------------ | -------------------------------- |
-| `story.changed`    | `() => void`                         | The diagram content changes.     |
-| `viewport.changed` | `(viewport: ViewportData) => void`   | The user scrolls or zooms.       |
-| `icons.changed`    | `(icons: IconSet) => void`           | The registered icon set changes. |
-| `import.repaired`  | `(repair: ImportRepairData) => void` | A damaged import is repaired.    |
+| Event                   | Callback signature                          | Fired when …                        |
+| ----------------------- | ------------------------------------------- | ----------------------------------- |
+| `story.changed`         | `() => void`                                | The diagram content changes.        |
+| `viewport.changed`      | `(viewport: ViewportData) => void`          | The user scrolls or zooms.          |
+| `icons.changed`         | `(icons: IconSet) => void`                  | The registered icon set changes.    |
+| `import.repaired`       | `(repair: ImportRepairData) => void`        | A damaged import is repaired.       |
+| `colorPicker.requested` | `(request: ColorPickerRequestData) => void` | A color button is clicked.          |
+| `colorPicker.closed`    | `(closed: ColorPickerClosedData) => void`   | Its request ends or is invalidated. |
 
 Passing any other event name throws `TypeError` with the message
 `Unknown Egon event: <name>`. TypeScript rejects unknown names at compile time;
@@ -102,6 +104,87 @@ client.on("story.changed", () => {
     // persist doc ...
 });
 ```
+
+### Host-owned color picker
+
+```ts
+previewPickedColor(requestId: string, color: string): boolean
+confirmPickedColor(requestId: string, color: string): boolean
+cancelColorPicker(requestId: string): boolean
+```
+
+The core creates a request only when the context pad's color button is clicked.
+`colorPicker.requested` synchronously supplies an opaque `requestId`, a copied
+`elementIds` array, and the initial `color`. Preview may be called repeatedly;
+it repaints the selected elements, activity markers, and annotation connectors
+without writing the model, marking the story dirty, emitting `story.changed`,
+or adding undo history. Confirmation persists the final color through one
+`element.colorChange` command per selected element. Cancellation clears every
+preview. Both terminal actions synchronously emit `colorPicker.closed`.
+
+Only the originating live client accepts a response. Unknown, expired,
+other-client, and destroyed-client IDs return `false` without changing state.
+A request also expires when its selection changes, its pad closes, a target is
+removed or replaced, another command (including undo/redo) runs, another picker
+request opens, a successful import replaces the editor session, or the client
+is destroyed. A failed import leaves it active. Reselecting the original
+elements never revives an expired request.
+
+```ts
+const requested = ({ requestId, color }: ColorPickerRequestData) => {
+    picker.open({ requestId, color });
+    picker.onPreview((nextColor) =>
+        client.previewPickedColor(requestId, nextColor),
+    );
+    picker.onConfirm((finalColor) =>
+        client.confirmPickedColor(requestId, finalColor),
+    );
+    picker.onCancel(() => client.cancelColorPicker(requestId));
+};
+const closed = ({ requestId }: ColorPickerClosedData) => {
+    picker.close(requestId);
+};
+
+client.on("colorPicker.requested", requested);
+client.on("colorPicker.closed", closed);
+
+// Component cleanup
+client.off("colorPicker.requested", requested);
+client.off("colorPicker.closed", closed);
+```
+
+For a webview, retain both the originating client and request ID instead of
+broadcasting a global color message:
+
+```ts
+const clients = new Map<string, EgonClient>();
+
+function wirePicker(clientKey: string, client: EgonClient) {
+    clients.set(clientKey, client);
+    client.on("colorPicker.requested", (request) =>
+        webview.postMessage({
+            type: "colorPicker.requested",
+            clientKey,
+            request,
+        }),
+    );
+}
+
+window.addEventListener("message", ({ data }) => {
+    const client = clients.get(data.clientKey);
+    if (!client) return;
+    if (data.type === "colorPicker.preview")
+        client.previewPickedColor(data.requestId, data.color);
+    if (data.type === "colorPicker.confirm")
+        client.confirmPickedColor(data.requestId, data.color);
+    if (data.type === "colorPicker.cancel")
+        client.cancelColorPicker(data.requestId);
+});
+```
+
+Hosts must close their picker as part of their own teardown before calling
+`client.destroy()`; teardown deliberately invokes no host callbacks after it
+begins. A future bundled/default picker must consume this same protocol.
 
 ## Viewport
 

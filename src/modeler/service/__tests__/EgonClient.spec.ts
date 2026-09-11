@@ -38,6 +38,13 @@ function createMockPorts() {
         offStoryChanged: vi.fn(),
         offViewportChanged: vi.fn(),
         offImportRepaired: vi.fn(),
+        onColorPickerRequested: vi.fn(),
+        onColorPickerClosed: vi.fn(),
+        offColorPickerRequested: vi.fn(),
+        offColorPickerClosed: vi.fn(),
+        previewPickedColor: vi.fn(),
+        confirmPickedColor: vi.fn(),
+        cancelColorPicker: vi.fn(),
         destroy: vi.fn(),
     };
 
@@ -183,6 +190,15 @@ describe("EgonClient (Application Service)", () => {
             expect(mockIconPort.onIconsChanged).toHaveBeenCalledWith(callback);
         });
 
+        it.each([
+            ["colorPicker.requested", "onColorPickerRequested"],
+            ["colorPicker.closed", "onColorPickerClosed"],
+        ] as const)("routes %s to the modeler port", (event, method) => {
+            const callback = vi.fn();
+            client.on(event, callback);
+            expect(mockModelerPort[method]).toHaveBeenCalledWith(callback);
+        });
+
         it("rejects an unknown event in on without calling a port", () => {
             const callback = vi.fn();
             const javascriptClient = client as unknown as {
@@ -230,6 +246,15 @@ describe("EgonClient (Application Service)", () => {
             client.off("icons.changed", callback);
 
             expect(mockIconPort.offIconsChanged).toHaveBeenCalledWith(callback);
+        });
+
+        it.each([
+            ["colorPicker.requested", "offColorPickerRequested"],
+            ["colorPicker.closed", "offColorPickerClosed"],
+        ] as const)("routes off %s to the modeler port", (event, method) => {
+            const callback = vi.fn();
+            client.off(event, callback);
+            expect(mockModelerPort[method]).toHaveBeenCalledWith(callback);
         });
 
         it("rejects an unknown event in off without calling a port", () => {
@@ -282,6 +307,48 @@ describe("EgonClient (Application Service)", () => {
             client.fitToScreen();
 
             expect(mockModelerPort.fitToScreen).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe("color picker responses", () => {
+        it.each([
+            ["previewPickedColor", "previewPickedColor"],
+            ["confirmPickedColor", "confirmPickedColor"],
+        ] as const)(
+            "delegates %s and returns its result",
+            (clientMethod, portMethod) => {
+                (mockModelerPort[portMethod] as Mock).mockReturnValue(true);
+
+                expect(client[clientMethod]("request-1", "#ff0000")).toBe(true);
+                expect(mockModelerPort[portMethod]).toHaveBeenCalledWith(
+                    "request-1",
+                    "#ff0000",
+                );
+            },
+        );
+
+        it("delegates cancellation and returns its result", () => {
+            (mockModelerPort.cancelColorPicker as Mock).mockReturnValue(true);
+
+            expect(client.cancelColorPicker("request-1")).toBe(true);
+            expect(mockModelerPort.cancelColorPicker).toHaveBeenCalledWith(
+                "request-1",
+            );
+        });
+
+        it("returns false without touching the port after destruction", () => {
+            client.destroy();
+
+            expect(client.previewPickedColor("request-1", "#ff0000")).toBe(
+                false,
+            );
+            expect(client.confirmPickedColor("request-1", "#ff0000")).toBe(
+                false,
+            );
+            expect(client.cancelColorPicker("request-1")).toBe(false);
+            expect(mockModelerPort.previewPickedColor).not.toHaveBeenCalled();
+            expect(mockModelerPort.confirmPickedColor).not.toHaveBeenCalled();
+            expect(mockModelerPort.cancelColorPicker).not.toHaveBeenCalled();
         });
     });
 

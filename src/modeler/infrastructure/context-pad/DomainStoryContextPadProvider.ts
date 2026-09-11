@@ -21,11 +21,6 @@ import { DomainStoryModeling } from "../modeling/DomainStoryModeling";
 import { DomainStoryReplaceMenuProvider } from "../replace/DomainStoryReplaceMenuProvider";
 import { DirtyFlagService } from "../../service/DirtyFlagService";
 import { IconDictionaryService } from "../../../iconSet/service";
-import {
-    hexToRGBA,
-    isHexWithAlpha,
-    rgbaToHex,
-} from "../../../shared/domain/colorConverter";
 import { ElementTypes } from "../../../story/domain/elementTypes";
 import {
     isActivity,
@@ -36,6 +31,7 @@ import {
     isWorkObject,
 } from "../../../story/domain/elementPredicates";
 import { DomainStoryNumberingRegistry } from "../popup/DomainStoryNumberingRegistry";
+import { ColorPickerCoordinator } from "../color-picker/ColorPickerCoordinator";
 
 /**
  * Positions the replace ("Change type") popup menu just below the open context
@@ -78,9 +74,8 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         "popupMenu",
         "commandStack",
         "eventBus",
+        "domainStoryColorPickerCoordinator",
     ];
-
-    private selectedElement: Element | Element[] | undefined;
 
     constructor(
         private readonly elementFactory: DomainStoryElementFactory,
@@ -101,6 +96,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         private readonly popupMenu: PopupMenu,
         private readonly commandStack: CommandStack,
         eventBus: EventBus,
+        private readonly colorPickerCoordinator: ColorPickerCoordinator,
     ) {
         contextPad.registerProvider(this);
         popupMenu.registerProvider("ds-replace", replaceMenuProvider);
@@ -125,41 +121,14 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
                 entries["replace"].action.click(event, shape);
             }
         });
-
-        // The host owns the color picker, so its answer arrives as a
-        // document-level event rather than through the event bus. That makes it
-        // this instance's job to let go again on teardown: otherwise a stale
-        // listener keeps executing commands on a destroyed command stack, and
-        // two live modelers both react to one picker event.
-        const onPickedColor = (event: any) => {
-            if (this.selectedElement) {
-                this.executeCommandStack(event);
-            }
-        };
-        document.addEventListener("pickedColor", onPickedColor);
-        eventBus.on("diagram.destroy", () =>
-            document.removeEventListener("pickedColor", onPickedColor),
-        );
-
-        // Picker replies are async and can arrive after the pad closed; letting
-        // go of the selection turns them into no-ops instead of recoloring a
-        // possibly-deleted element. Safe against a fresh selection because
-        // ContextPad#open() closes before it repopulates the providers.
-        eventBus.on("contextPad.close", () => {
-            this.selectedElement = undefined;
-        });
     }
 
     getContextPadEntries(element: Element): ContextPadEntries {
-        // Drop the previous selection before any branch runs: only branches that
-        // offer a color change re-record one, so a connection (delete only) must
-        // not leave the last shape reachable for the picker.
-        this.selectedElement = undefined;
         let entries: Map<string, ContextPadEntry> = new Map();
 
         if (isWorkObject(element)) {
             this.addDelete(entries, [element]);
-            entries.set(...this.addColorChange(element));
+            entries.set(...this.addColorChange());
             entries.set(...this.addConnectWithActivity());
             entries.set(...this.addTextAnnotation());
             entries = new Map([...entries, ...this.addActors()]);
@@ -167,7 +136,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
             entries.set(...this.addChangeWorkObjectTypeMenu());
         } else if (isActor(element)) {
             this.addDelete(entries, [element]);
-            entries.set(...this.addColorChange(element));
+            entries.set(...this.addColorChange());
             entries.set(...this.addConnectWithActivity());
             entries.set(...this.addTextAnnotation());
             entries = new Map([...entries, ...this.addWorkObjects()]);
@@ -175,88 +144,26 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         } else if (isGroup(element)) {
             entries.set(...this.addDeleteGroupWithoutChildren());
             entries.set(...this.addTextAnnotation());
-            entries.set(...this.addColorChange(element));
+            entries.set(...this.addColorChange());
         } else if (isActivity(element)) {
             this.addDelete(entries, [element]);
             entries.set(...this.addChangeDirection());
-            entries.set(...this.addColorChange(element));
+            entries.set(...this.addColorChange());
         } else if (isAnnotation(element)) {
             this.addDelete(entries, [element]);
-            entries.set(...this.addColorChange(element));
+            entries.set(...this.addColorChange());
         } else if (isConnection(element)) {
             this.addDelete(entries, [element]);
         }
-
-        this.notifyColorPickerOfCurrentElementColor();
 
         return Object.fromEntries(entries);
     }
 
     getMultiElementContextPadEntries(elements: Element[]): ContextPadEntries {
-        this.selectedElement = undefined;
         const entries: Map<string, ContextPadEntry> = new Map();
         this.addDelete(entries, elements);
-        entries.set(...this.addColorChange(elements));
+        entries.set(...this.addColorChange());
         return Object.fromEntries(entries);
-    }
-
-    /**
-     * Pre-seeds the host's color picker with the current selection's color so
-     * it opens on the right swatch. Only a single selected element carries a
-     * meaningful color; a multi-select (array) or an absent selection (the
-     * CONNECTION branch never calls addColorChange) falls back to black.
-     */
-    private notifyColorPickerOfCurrentElementColor() {
-        let pickedColor: string | undefined;
-        if (this.selectedElement && !isArray(this.selectedElement)) {
-            pickedColor = this.selectedElement.businessObject.pickedColor;
-        }
-
-        if (isHexWithAlpha(pickedColor)) {
-            pickedColor = hexToRGBA(pickedColor!);
-        }
-        document.dispatchEvent(
-            new CustomEvent("defaultColor", {
-                detail: {
-                    color: pickedColor ?? "#000000",
-                },
-            }),
-        );
-    }
-
-    private executeCommandStack(colorChangedEvent: any) {
-        const newColor = colorChangedEvent.detail.color;
-
-        if (isArray(this.selectedElement)) {
-            // One execute per element keeps each recolor as its own undo step,
-            // matching upstream multi-select behavior.
-            this.selectedElement.forEach((element) => {
-                this.commandStack.execute(
-                    "element.colorChange",
-                    this.getColorChangeDescription(element, newColor),
-                );
-            });
-        } else if (this.selectedElement) {
-            this.commandStack.execute(
-                "element.colorChange",
-                this.getColorChangeDescription(this.selectedElement, newColor),
-            );
-        }
-
-        this.dirtyFlagService.makeDirty();
-    }
-
-    private getColorChangeDescription(element: Element, newColor: string) {
-        const oldColor = element.businessObject.pickedColor;
-        if (isHexWithAlpha(oldColor)) {
-            newColor = rgbaToHex(newColor);
-        }
-
-        return {
-            businessObject: element.businessObject,
-            newColor: newColor,
-            element: element,
-        };
     }
 
     private startConnect(): (
@@ -394,12 +301,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         ];
     }
 
-    private addColorChange(
-        elements: Element | Element[],
-    ): [string, ContextPadEntry<any>] {
-        // Record which element(s) the picker acts on; the document-level
-        // "pickedColor" listener reads this back when the host reports a color.
-        this.selectedElement = elements;
+    private addColorChange(): [string, ContextPadEntry<any>] {
         return [
             "colorChange",
             {
@@ -407,11 +309,8 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
                 className: "icon-domain-story-color-picker",
                 title: this.translate("Change color"),
                 action: {
-                    click: function () {
-                        document.dispatchEvent(
-                            new CustomEvent("openColorPicker"),
-                        );
-                    },
+                    click: (_event: any, target: Element | Element[]) =>
+                        this.colorPickerCoordinator.request(target),
                 },
             },
         ];

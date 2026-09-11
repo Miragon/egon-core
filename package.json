@@ -3,7 +3,7 @@
     "version": "0.0.1",
     "type": "module",
     "license": "GPL-3.0-or-later",
-    "packageManager": "yarn@4.12.0",
+    "packageManager": "yarn@4.18.0",
     "main": "./dist/index.js",
     "module": "./dist/index.js",
     "types": "./dist/index.d.ts",
