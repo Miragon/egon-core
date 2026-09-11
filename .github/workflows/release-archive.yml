@@ -1,4 +1,4 @@
-name: Release archive validation
+name: Release archive
 
 on:
     release:
@@ -10,80 +10,53 @@ on:
                 required: true
                 default: main
                 type: string
+            upload:
+                description: Upload to an existing matching published release
+                required: true
+                default: false
+                type: boolean
 
 permissions:
-    contents: read
+    contents: write
 
 concurrency:
     group: release-archive-${{ github.event.release.tag_name || inputs.ref }}
     cancel-in-progress: false
 
 jobs:
-    test-package:
+    build-validate-upload:
+        name: Build, validate, and optionally upload
         runs-on: ubuntu-latest
         env:
             REQUESTED_REF: ${{ github.event.release.tag_name || inputs.ref }}
+            SHOULD_UPLOAD: ${{ github.event_name == 'release' || inputs.upload }}
         steps:
+            # This checkout supplies only the workflow helper. The helper resolves
+            # REQUESTED_REF to a commit and builds its downloaded source archive.
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
             - name: Set up Node 24
               uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
               with:
                   node-version: 24
 
-            - name: Resolve source ref
-              id: source
+            - name: Build and validate release archive
               env:
-                  API_TOKEN: ${{ github.token }}
+                  GITHUB_TOKEN: ${{ github.token }}
               run: |
-                  encoded_ref="$(jq -rn --arg ref "$REQUESTED_REF" '$ref | @uri')"
-                  commit="$(curl --fail --silent --show-error \
-                    --header "Authorization: Bearer $API_TOKEN" \
-                    --header "X-GitHub-Api-Version: 2022-11-28" \
-                    "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/commits/$encoded_ref" \
-                    | jq -er '.sha')"
-                  echo "commit=$commit" >> "$GITHUB_OUTPUT"
+                  arguments=(--ref "$REQUESTED_REF")
+                  if [[ "$SHOULD_UPLOAD" == "true" ]]; then
+                    arguments+=(--upload)
+                  fi
+                  node scripts/release-archive.mjs "${arguments[@]}"
 
-            - name: Download GitHub source archive
-              env:
-                  API_TOKEN: ${{ github.token }}
-                  COMMIT: ${{ steps.source.outputs.commit }}
-              run: |
-                  source_root="$RUNNER_TEMP/egon-core-source"
-                  mkdir -p "$source_root"
-                  curl --fail --location --retry 3 \
-                    --header "Authorization: Bearer $API_TOKEN" \
-                    --header "X-GitHub-Api-Version: 2022-11-28" \
-                    "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/tarball/$COMMIT" \
-                    | tar -xz --strip-components=1 -C "$source_root"
-
-            - name: Install source archive dependencies
-              run: |
-                  corepack enable
-                  yarn install --immutable
-              working-directory: ${{ runner.temp }}/egon-core-source
-
-            - name: Install Chromium
-              run: yarn playwright install --with-deps chromium
-              working-directory: ${{ runner.temp }}/egon-core-source
-
-            - name: Pack source archive
-              env:
-                  COMMIT: ${{ steps.source.outputs.commit }}
-              run: |
-                  package_archive="$RUNNER_TEMP/egon-core-$COMMIT.tgz"
-                  yarn pack --out "$package_archive"
-                  echo "PACKAGE_ARCHIVE=$package_archive" >> "$GITHUB_ENV"
-              working-directory: ${{ runner.temp }}/egon-core-source
-
-            - name: Validate installed package archive
-              run: yarn test:package --archive "$PACKAGE_ARCHIVE"
-              working-directory: ${{ runner.temp }}/egon-core-source
-
-            - name: Upload failure traces and reports
+            - name: Upload failure diagnostics
               if: failure()
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
-                  name: release-archive-playwright-${{ steps.source.outputs.commit }}
+                  name: release-archive-failure-${{ github.run_id }}
                   path: |
+                      ${{ runner.temp }}/egon-core-*.tgz
                       ${{ runner.temp }}/egon-core-source/playwright-report/package
                       ${{ runner.temp }}/egon-core-source/test-results/package
                   if-no-files-found: ignore

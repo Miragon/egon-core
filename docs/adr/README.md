@@ -34,3 +34,4 @@ and the rules (when to write one, how superseding works).
 | [0026](0026-client-scoped-color-picker-requests-and-passive-previews.md) | Client-scoped picker requests + passive previews    | accepted                                                                    |
 | [0027](0027-refresh-shared-icon-artwork-on-add.md)                       | Refresh shared icon artwork on add                  | accepted                                                                    |
 | [0028](0028-isolated-package-consumer-validation.md)                     | Shared journeys through isolated package consumer   | accepted                                                                    |
+| [0029](0029-release-please-and-github-package-archives.md)               | Release Please + GitHub package archives            | accepted                                                                    |
