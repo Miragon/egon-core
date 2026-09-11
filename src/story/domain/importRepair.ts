@@ -6,6 +6,7 @@ import {
     isActor,
     isAnnotation,
     isConnection,
+    isWorkObject,
 } from "./elementPredicates";
 import { nextAvailableActivityNumber } from "./activityNumbering";
 
@@ -120,17 +121,37 @@ export function renameLegacyWorkObjectTypes(
 }
 
 /**
- * Replaces spaces in the icon-name suffix with hyphens. Early Egon.io allowed
- * whitespace in icon names; the dictionary is keyed without it, so an
- * un-normalized type finds no icon. Mutates in place — see
+ * Resolves historical space-to-hyphen icon references against the icons that
+ * will actually be available after import.
+ *
+ * Icon names are otherwise verbatim data (ADR 0008): a spaced name may be a
+ * deliberate, exact dictionary key and must win even when its hyphenated form
+ * also exists. Only when the exact suffix is absent do we try the legacy
+ * replacement, and only when that replacement names a real icon. Other element
+ * families and unresolved references stay untouched. Mutates in place — see
  * {@link renameLegacyWorkObjectTypes}.
  */
 export function normalizeIconNameWhitespace(
     elements: BusinessObject[],
+    availableIconNames: ReadonlySet<string>,
 ): BusinessObject[] {
     for (const element of elements) {
-        if (element.type) {
-            element.type = element.type.replace(/ /g, "-");
+        if (!isActor(element) && !isWorkObject(element)) {
+            continue;
+        }
+
+        const typePrefix = isActor(element)
+            ? ElementTypes.ACTOR
+            : ElementTypes.WORKOBJECT;
+        const iconName = element.type.slice(typePrefix.length);
+
+        if (availableIconNames.has(iconName)) {
+            continue;
+        }
+
+        const legacyName = iconName.replace(/ /g, "-");
+        if (availableIconNames.has(legacyName)) {
+            element.type = typePrefix + legacyName;
         }
     }
     return elements;

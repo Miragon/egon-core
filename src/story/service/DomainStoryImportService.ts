@@ -82,9 +82,21 @@ export class DomainStoryImportService {
     prepare(story: unknown): PreparedImport {
         const parsed = typeof story === "string" ? JSON.parse(story) : story;
         const { iconSetConfiguration, domainStory } = parseExportFile(parsed);
+        const availableIconNames = new Set(
+            this.iconDictionaryService.getFullDictionary().keysArray(),
+        );
+        if (iconSetConfiguration) {
+            Object.keys(iconSetConfiguration.actors).forEach((name) =>
+                availableIconNames.add(name),
+            );
+            Object.keys(iconSetConfiguration.workObjects).forEach((name) =>
+                availableIconNames.add(name),
+            );
+        }
 
         this.importRepairService.removeWhitespacesFromIcons(
             domainStory.businessObjects,
+            availableIconNames,
         );
         this.importRepairService.removeUnnecessaryBpmnProperties(
             domainStory.businessObjects,

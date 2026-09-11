@@ -179,24 +179,107 @@ describe("renameLegacyWorkObjectTypes", () => {
 describe("normalizeIconNameWhitespace", () => {
     it.each([
         {
-            from: "domainStory:workObject My Icon",
-            to: "domainStory:workObject-My-Icon",
+            label: "an exact spaced actor name",
+            from: `${ElementTypes.ACTOR}My Icon`,
+            available: ["My Icon"],
+            to: `${ElementTypes.ACTOR}My Icon`,
         },
-        { from: "domainStory:actorMy Icon", to: "domainStory:actorMy-Icon" },
-        { from: "domainStory:actorA  B", to: "domainStory:actorA--B" },
-        { from: "domainStory:actorPerson", to: "domainStory:actorPerson" },
-    ])("rewrites $from to $to", ({ from, to }) => {
+        {
+            label: "the exact name when its hyphenated competitor also exists",
+            from: `${ElementTypes.ACTOR}My Icon`,
+            available: ["My Icon", "My-Icon"],
+            to: `${ElementTypes.ACTOR}My Icon`,
+        },
+        {
+            label: "a legacy actor reference with a matching fallback",
+            from: `${ElementTypes.ACTOR}My Icon`,
+            available: ["My-Icon"],
+            to: `${ElementTypes.ACTOR}My-Icon`,
+        },
+        {
+            label: "a legacy work-object reference with a matching fallback",
+            from: `${ElementTypes.WORKOBJECT}My Icon`,
+            available: ["My-Icon"],
+            to: `${ElementTypes.WORKOBJECT}My-Icon`,
+        },
+        {
+            label: "an unresolved spaced name",
+            from: `${ElementTypes.ACTOR}Missing Icon`,
+            available: [],
+            to: `${ElementTypes.ACTOR}Missing Icon`,
+        },
+        {
+            label: "leading spaces when the literal replacement exists",
+            from: `${ElementTypes.ACTOR} Leading Icon`,
+            available: ["-Leading-Icon"],
+            to: `${ElementTypes.ACTOR}-Leading-Icon`,
+        },
+        {
+            label: "repeated spaces when the literal replacement exists",
+            from: `${ElementTypes.ACTOR}A  B`,
+            available: ["A--B"],
+            to: `${ElementTypes.ACTOR}A--B`,
+        },
+        {
+            label: "dots in a successfully repaired name",
+            from: `${ElementTypes.WORKOBJECT}Case File.v2`,
+            available: ["Case-File.v2"],
+            to: `${ElementTypes.WORKOBJECT}Case-File.v2`,
+        },
+        {
+            label: "non-space whitespace",
+            from: `${ElementTypes.ACTOR}A\tB`,
+            available: ["A-B"],
+            to: `${ElementTypes.ACTOR}A\tB`,
+        },
+        {
+            label: "an already-current name",
+            from: `${ElementTypes.ACTOR}Person`,
+            available: ["Person"],
+            to: `${ElementTypes.ACTOR}Person`,
+        },
+    ])("preserves or repairs $label", ({ from, available, to }) => {
         const element = shape("a", from as ElementTypes);
 
-        normalizeIconNameWhitespace([element]);
+        normalizeIconNameWhitespace([element], new Set(available));
 
         expect(element.type).toBe(to);
+    });
+
+    it.each([
+        `${ElementTypes.ACTIVITY} with spaces`,
+        `${ElementTypes.GROUP} with spaces`,
+        `${ElementTypes.TEXTANNOTATION} with spaces`,
+    ])("does not rewrite a non-icon element type %s", (type) => {
+        const element = shape("a", type as ElementTypes);
+
+        normalizeIconNameWhitespace([element], new Set(["with-spaces"]));
+
+        expect(element.type).toBe(type);
     });
 
     it("does not throw on an element without a type", () => {
         const untyped = { id: "a" } as unknown as BusinessObject;
 
-        expect(() => normalizeIconNameWhitespace([untyped])).not.toThrow();
+        expect(() =>
+            normalizeIconNameWhitespace([untyped], new Set()),
+        ).not.toThrow();
+    });
+
+    it("returns the same array and preserves element identity", () => {
+        const element = shape(
+            "a",
+            `${ElementTypes.ACTOR}My Icon` as ElementTypes,
+        );
+        const elements = [element];
+
+        const result = normalizeIconNameWhitespace(
+            elements,
+            new Set(["My-Icon"]),
+        );
+
+        expect(result).toBe(elements);
+        expect(result[0]).toBe(element);
     });
 });
 
