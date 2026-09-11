@@ -1,4 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
+import {
+    UNICODE_ICON_CONTENT,
+    UNICODE_ICON_SVG,
+} from "../../../__tests__/fixtures/unicodeIcons";
 import { IconCssInjector } from "../IconCssInjector";
 
 const SCOPE_ID = "scope-a";
@@ -87,16 +91,35 @@ describe("IconCssInjector", () => {
         );
     });
 
-    it("UTF-8 encodes text artwork instead of throwing through btoa", () => {
+    it("UTF-8 encodes Unicode metadata, text, and safe attributes exactly", () => {
         const styleElement = createStyleElement();
 
         injectorFor(styleElement).addIconStyle(
             "icon-domain-story-text",
-            "<svg><text>Grüße</text></svg>",
+            UNICODE_ICON_SVG,
         );
 
-        expect(encodedSvg(rulesOf(styleElement)[0]!)).toBe(
-            "<svg><text>Grüße</text></svg>",
+        const decoded = encodedSvg(rulesOf(styleElement)[0]!);
+        expect(decoded).toBe(
+            UNICODE_ICON_SVG.replace(' width="64"', "").replace(
+                ' height="64"',
+                "",
+            ),
+        );
+        expect(decoded).toContain(
+            `<title>${UNICODE_ICON_CONTENT.title}</title>`,
+        );
+        expect(decoded).toContain(
+            `<desc>${UNICODE_ICON_CONTENT.description}</desc>`,
+        );
+        expect(decoded).toContain(UNICODE_ICON_CONTENT.text);
+        expect(decoded).toContain(UNICODE_ICON_CONTENT.tspan);
+        expect(decoded).toContain(UNICODE_ICON_CONTENT.textPath);
+        expect(decoded).toContain(
+            `aria-label="${UNICODE_ICON_CONTENT.ariaLabel}"`,
+        );
+        expect(decoded).toContain(
+            `data-label="${UNICODE_ICON_CONTENT.dataLabel}"`,
         );
     });
 
