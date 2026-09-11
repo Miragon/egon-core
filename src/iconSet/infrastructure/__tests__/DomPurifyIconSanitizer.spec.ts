@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+    decodeUtf8Base64,
+    UNICODE_ICON_CONTENT,
+    UNICODE_ICON_GEOMETRY,
+    unicodeIconSource,
+    type SvgRepresentation,
+} from "../../../__tests__/fixtures/unicodeIcons";
+import {
     DomPurifyIconSanitizer,
     INERT_ICON_SVG,
 } from "../DomPurifyIconSanitizer";
@@ -15,11 +22,37 @@ function parse(svg: string): SVGSVGElement {
 }
 
 function decodeSvgDataUrl(dataUrl: string): string {
-    return new TextDecoder().decode(
-        Uint8Array.from(atob(dataUrl.split(",")[1]), (character) =>
-            character.charCodeAt(0),
-        ),
+    return decodeUtf8Base64(dataUrl.split(",")[1]);
+}
+
+function expectUnicodeIcon(svg: string): SVGSVGElement {
+    const root = parse(svg);
+    expect(root.querySelector("title")?.textContent).toBe(
+        UNICODE_ICON_CONTENT.title,
     );
+    expect(root.querySelector("desc")?.textContent).toBe(
+        UNICODE_ICON_CONTENT.description,
+    );
+    expect(root.querySelector("text")?.childNodes[0]?.textContent).toBe(
+        UNICODE_ICON_CONTENT.text,
+    );
+    expect(root.querySelector("tspan")?.textContent).toBe(
+        UNICODE_ICON_CONTENT.tspan,
+    );
+    expect(root.querySelector("textPath")?.textContent).toBe(
+        UNICODE_ICON_CONTENT.textPath,
+    );
+    expect(root.getAttribute("aria-label")).toBe(
+        UNICODE_ICON_CONTENT.ariaLabel,
+    );
+    expect(root.getAttribute("data-label")).toBe(
+        UNICODE_ICON_CONTENT.dataLabel,
+    );
+    expect(root.getAttribute("viewBox")).toBe(UNICODE_ICON_GEOMETRY.viewBox);
+    expect(
+        root.querySelector('[data-geometry="solid"]')?.getAttribute("d"),
+    ).toBe(UNICODE_ICON_GEOMETRY.rect);
+    return root;
 }
 
 describe("DomPurifyIconSanitizer", () => {
@@ -110,6 +143,62 @@ describe("DomPurifyIconSanitizer", () => {
         );
         expect(percentEncoded).toMatch(/^data:image\/svg\+xml;base64,/);
         expect(decodeSvgDataUrl(percentEncoded)).not.toMatch(/onload|script/);
+    });
+
+    it.each<SvgRepresentation>(["raw", "base64", "percent"])(
+        "preserves Unicode while normalizing %s SVG repeatedly",
+        (representation) => {
+            const safe = sanitizer.sanitize(unicodeIconSource(representation));
+            const svg = safe.startsWith("data:")
+                ? decodeSvgDataUrl(safe)
+                : safe;
+
+            expectUnicodeIcon(svg);
+            expect(sanitizer.sanitize(safe)).toBe(safe);
+        },
+    );
+
+    it.each<SvgRepresentation>(["raw", "base64", "percent"])(
+        "recolors %s SVG without changing its Unicode or geometry",
+        (representation) => {
+            const rendered = sanitizer.prepareForRendering(
+                unicodeIconSource(representation),
+                "#7a21c4",
+            );
+            const renderedRoot = parse(rendered);
+            let artworkRoot = renderedRoot;
+
+            if (representation !== "raw") {
+                const href = renderedRoot
+                    .querySelector("image")
+                    ?.getAttribute("href");
+                expect(href).toMatch(/^data:image\/svg\+xml;base64,/);
+                artworkRoot = expectUnicodeIcon(decodeSvgDataUrl(href!));
+            } else {
+                expectUnicodeIcon(rendered);
+            }
+
+            expect(
+                artworkRoot
+                    .querySelector('[data-geometry="solid"]')
+                    ?.getAttribute("fill"),
+            ).toBe("#7a21c4");
+        },
+    );
+
+    it("rejects Base64 whose decoded SVG bytes are malformed UTF-8", () => {
+        const invalidUtf8 = Uint8Array.of(
+            ...new TextEncoder().encode(`<svg xmlns="${SVG_NS}"><text>`),
+            0xc3,
+            0x28,
+            ...new TextEncoder().encode("</text></svg>"),
+        );
+        let binary = "";
+        for (const byte of invalidUtf8) binary += String.fromCharCode(byte);
+
+        expect(
+            sanitizer.sanitize(`data:image/svg+xml;base64,${btoa(binary)}`),
+        ).toBe(INERT_ICON_SVG);
     });
 
     it("retains supported raster data and rejects malformed or disguised payloads", () => {
