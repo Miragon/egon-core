@@ -219,7 +219,6 @@ const INFRASTRUCTURE_PREDICATE_IMPORT_ALLOWLIST: readonly string[] = [
     "src/modeler/infrastructure/copy-paste/DomainStoryPasteRestore.ts",
     "src/modeler/infrastructure/labeling/DomainStoryLabelEditingPreview.ts",
     "src/modeler/infrastructure/labeling/DomainStoryLabelEditingProvider.ts",
-    "src/modeler/infrastructure/labeling/utils.ts",
     "src/modeler/infrastructure/popup/DomainStoryActivityNumbering.ts",
     "src/modeler/infrastructure/popup/DomainStoryPopupService.ts",
     "src/modeler/infrastructure/renderer/DomainStoryRenderer.ts",
