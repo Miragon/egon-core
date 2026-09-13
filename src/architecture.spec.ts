@@ -171,6 +171,7 @@ const FROZEN_INDEX_SPECIFIERS: readonly string[] = [
     "./modeler/domain/model/Viewport",
     "./modeler/domain/ports/IconPort",
     "./modeler/domain/ports/ModelerPort",
+    "./modeler/service/ColorPickerProvider",
     "./modeler/service/EgonClient",
     "./modeler/service/EgonClientConfig",
     "./story/domain/DomainStoryDocument",

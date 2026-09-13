@@ -1,13 +1,8 @@
 import type { ModuleDeclaration } from "didi";
 
 import { EgonClientConfig } from "./EgonClientConfig";
-import {
-    ColorPickerClosedData,
-    ColorPickerRequestData,
-    IconPort,
-    ImportRepairData,
-    ModelerPort,
-} from "../domain/ports";
+import { IconPort, ImportRepairData, ModelerPort } from "../domain/ports";
+import type { ColorPickerProvider } from "./ColorPickerProvider";
 
 import type {
     DomainStoryDocument,
@@ -47,8 +42,6 @@ export type EgonEventMap = {
      * returns, so a host can warn that saving now would make the loss permanent.
      */
     "import.repaired": (repair: ImportRepairData) => void;
-    "colorPicker.requested": (request: ColorPickerRequestData) => void;
-    "colorPicker.closed": (closed: ColorPickerClosedData) => void;
 };
 
 export type EgonEventName = keyof EgonEventMap;
@@ -60,6 +53,10 @@ export type EgonEventName = keyof EgonEventMap;
 export interface EgonClientPorts {
     modelerPort: ModelerPort;
     iconPort: IconPort;
+}
+
+interface ColorPickerControllerPort {
+    destroy(): void;
 }
 
 /**
@@ -82,6 +79,7 @@ export class EgonClient {
         private readonly modelerPort: ModelerPort,
         private readonly iconPort: IconPort,
         viewport?: ViewportData,
+        private readonly colorPickerController?: ColorPickerControllerPort,
     ) {
         // Apply the initial viewport if provided
         if (viewport) {
@@ -101,33 +99,58 @@ export class EgonClient {
         additionalModules: ModuleDeclaration[] = [],
         ports?: EgonClientPorts,
     ): Promise<EgonClient> {
+        let modelerPort: ModelerPort;
+        let iconPort: IconPort;
+
         if (ports) {
-            return new EgonClient(
-                ports.modelerPort,
-                ports.iconPort,
-                config.viewport,
+            modelerPort = ports.modelerPort;
+            iconPort = ports.iconPort;
+        } else {
+            // dynamic ESM import (works in browser and node ESM)
+            const { DiagramJsModelerAdapter } =
+                await import("../infrastructure/DiagramJsModelerAdapter");
+            const { DiagramJsIconAdapter } =
+                await import("../infrastructure/DiagramJsIconAdapter");
+
+            const modelerAdapter = new DiagramJsModelerAdapter(
+                config.container,
+                config.width ?? "100%",
+                config.height ?? "100%",
+                additionalModules,
+                config.textRenderer,
+                config.colorPicker !== false,
+            );
+
+            modelerPort = modelerAdapter;
+            iconPort = new DiagramJsIconAdapter(
+                modelerAdapter.getSessionOwner(),
             );
         }
 
-        // dynamic ESM import (works in browser and node ESM)
-        const { DiagramJsModelerAdapter } =
-            await import("../infrastructure/DiagramJsModelerAdapter");
-        const { DiagramJsIconAdapter } =
-            await import("../infrastructure/DiagramJsIconAdapter");
+        let colorPickerController: ColorPickerControllerPort | undefined;
+        if (config.colorPicker !== false) {
+            let provider: ColorPickerProvider;
+            if (config.colorPicker) {
+                provider = config.colorPicker;
+            } else {
+                const { createDefaultColorPickerProvider } =
+                    await import("../infrastructure/color-picker/DefaultColorPickerProvider");
+                provider = createDefaultColorPickerProvider(config.container);
+            }
+            const { ColorPickerController } =
+                await import("../infrastructure/color-picker/ColorPickerController");
+            colorPickerController = new ColorPickerController(
+                modelerPort,
+                provider,
+            );
+        }
 
-        const modelerAdapter = new DiagramJsModelerAdapter(
-            config.container,
-            config.width ?? "100%",
-            config.height ?? "100%",
-            additionalModules,
-            config.textRenderer,
+        return new EgonClient(
+            modelerPort,
+            iconPort,
+            config.viewport,
+            colorPickerController,
         );
-
-        const iconAdapter = new DiagramJsIconAdapter(
-            modelerAdapter.getSessionOwner(),
-        );
-
-        return new EgonClient(modelerAdapter, iconAdapter, config.viewport);
     }
 
     // --- Document Operations ---
@@ -203,16 +226,6 @@ export class EgonClient {
                     callback as EgonEventMap["replay.changed"],
                 );
                 break;
-            case "colorPicker.requested":
-                this.modelerPort.onColorPickerRequested(
-                    callback as EgonEventMap["colorPicker.requested"],
-                );
-                break;
-            case "colorPicker.closed":
-                this.modelerPort.onColorPickerClosed(
-                    callback as EgonEventMap["colorPicker.closed"],
-                );
-                break;
             default:
                 throw new TypeError(`Unknown Egon event: ${String(event)}`);
         }
@@ -255,16 +268,6 @@ export class EgonClient {
                     callback as EgonEventMap["replay.changed"],
                 );
                 break;
-            case "colorPicker.requested":
-                this.modelerPort.offColorPickerRequested(
-                    callback as EgonEventMap["colorPicker.requested"],
-                );
-                break;
-            case "colorPicker.closed":
-                this.modelerPort.offColorPickerClosed(
-                    callback as EgonEventMap["colorPicker.closed"],
-                );
-                break;
             default:
                 throw new TypeError(`Unknown Egon event: ${String(event)}`);
         }
@@ -302,26 +305,6 @@ export class EgonClient {
      */
     fitToScreen(): void {
         this.modelerPort.fitToScreen();
-    }
-
-    // --- Host-owned Color Picker ---
-
-    previewPickedColor(requestId: string, color: string): boolean {
-        return (
-            !this.destroyed &&
-            this.modelerPort.previewPickedColor(requestId, color)
-        );
-    }
-
-    confirmPickedColor(requestId: string, color: string): boolean {
-        return (
-            !this.destroyed &&
-            this.modelerPort.confirmPickedColor(requestId, color)
-        );
-    }
-
-    cancelColorPicker(requestId: string): boolean {
-        return !this.destroyed && this.modelerPort.cancelColorPicker(requestId);
     }
 
     // --- Icon Management ---
@@ -429,6 +412,7 @@ export class EgonClient {
     destroy(): void {
         if (this.destroyed) return;
         this.destroyed = true;
+        this.colorPickerController?.destroy();
         this.iconPort.destroy();
         this.modelerPort.destroy();
     }

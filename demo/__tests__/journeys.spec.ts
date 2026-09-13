@@ -3,6 +3,7 @@ import {
     activityIds,
     activityNumber,
     canvas,
+    clickDiagramElement,
     connectThroughContextPad,
     createShape,
     diagramElement,
@@ -119,6 +120,63 @@ test("edit labels and choose an autocomplete suggestion", async ({ page }) => {
     await expect(diagramElement(page, seeded)).toContainText("Invoice");
     await expect(diagramElement(page, activity)).toContainText("creates");
     await expect(diagramElement(page, target)).toContainText("Invoice");
+});
+
+test("recolor with the built-in picker and undo/redo beside diagram-js UI", async ({
+    page,
+}) => {
+    const actor = await createShape(page, "Create Person", {
+        x: 220,
+        y: 180,
+    });
+    // Move selection ownership away from the actor first. Clicking the sole
+    // just-created shape toggles diagram-js's retained create selection off.
+    await createShape(page, "Create Document", { x: 500, y: 180 });
+    await clickDiagramElement(page, actor);
+    const origin = page.getByTitle("Change color");
+    await expect(origin).toBeVisible();
+    await origin.click();
+
+    const picker = page.getByRole("dialog", { name: "Change color" });
+    await expect(picker).toBeVisible();
+    await expect(picker.getByRole("slider")).toHaveCount(3);
+    await expect(picker).toContainText(
+        "Custom non-SVG artwork retains its original colors.",
+    );
+    const input = picker.getByLabel("Hex color");
+    await expect(input).toBeFocused();
+    await input.fill("#36a8");
+    await picker.getByRole("button", { name: "Apply" }).click();
+    await expect(picker).toHaveCount(0);
+    await expect(origin).toBeFocused();
+
+    const colored = await exportStory(page);
+    expect(
+        colored.domainStory.businessObjects.find(
+            (element) => element.id === actor,
+        ),
+    ).toMatchObject({ pickedColor: "#36a8" });
+
+    await canvas(page)
+        .locator(".djs-container > svg")
+        .click({ position: { x: 800, y: 500 } });
+    await page.keyboard.press(`${primaryModifier}+z`);
+    const undone = await exportStory(page);
+    expect(
+        undone.domainStory.businessObjects.find(
+            (element) => element.id === actor,
+        ),
+    ).not.toHaveProperty("pickedColor");
+    await canvas(page)
+        .locator(".djs-container > svg")
+        .click({ position: { x: 800, y: 500 } });
+    await page.keyboard.press(`${primaryModifier}+Shift+z`);
+    const redone = await exportStory(page);
+    expect(
+        redone.domainStory.businessObjects.find(
+            (element) => element.id === actor,
+        ),
+    ).toMatchObject({ pickedColor: "#36a8" });
 });
 
 test("export, reset, import and report malformed JSON", async ({ page }) => {

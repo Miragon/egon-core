@@ -67,11 +67,14 @@ describe("ColorPickerCoordinator", () => {
         const actor = element("Actor_1", ElementTypes.ACTOR, "#12345680");
         const subject = setup([actor]);
 
-        open(subject, actor);
+        expect(subject.coordinator.request(actor, { x: 120, y: 80 })).toBe(
+            true,
+        );
 
         expect(subject.requested[0]).toMatchObject({
             elementIds: ["Actor_1"],
             color: "rgba(18,52,86,0.5)",
+            anchor: { x: 120, y: 80 },
         });
     });
 

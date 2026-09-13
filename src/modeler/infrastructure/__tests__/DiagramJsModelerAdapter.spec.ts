@@ -325,6 +325,7 @@ describe("DiagramJsModelerAdapter", () => {
                 requestId: "request-1",
                 elementIds: ["Actor_1"],
                 color: "#000000",
+                anchor: { x: 0, y: 0 },
             });
             expect(closed).toHaveBeenCalledWith({ requestId: "request-1" });
         });
@@ -344,14 +345,10 @@ describe("DiagramJsModelerAdapter", () => {
             expect(requested).not.toHaveBeenCalled();
         });
 
-        it("routes preview, confirmation, and cancellation to the coordinator", () => {
-            services.mockColorPickerCoordinator.preview.mockReturnValue(true);
+        it("routes confirmation and cancellation to the coordinator", () => {
             services.mockColorPickerCoordinator.confirm.mockReturnValue(true);
             services.mockColorPickerCoordinator.cancel.mockReturnValue(true);
 
-            expect(adapter.previewPickedColor("request-1", "#111111")).toBe(
-                true,
-            );
             expect(adapter.confirmPickedColor("request-1", "#222222")).toBe(
                 true,
             );
@@ -361,15 +358,12 @@ describe("DiagramJsModelerAdapter", () => {
         it("returns false without reaching the coordinator after destroy", () => {
             adapter.destroy();
 
-            expect(adapter.previewPickedColor("request-1", "#111111")).toBe(
-                false,
-            );
             expect(adapter.confirmPickedColor("request-1", "#222222")).toBe(
                 false,
             );
             expect(adapter.cancelColorPicker("request-1")).toBe(false);
             expect(
-                services.mockColorPickerCoordinator.preview,
+                services.mockColorPickerCoordinator.confirm,
             ).not.toHaveBeenCalled();
         });
     });

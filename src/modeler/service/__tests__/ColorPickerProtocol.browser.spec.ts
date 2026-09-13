@@ -15,6 +15,11 @@ import {
 } from "../../../__tests__/helpers/createTestDiagram";
 import { ElementTypes } from "../../../story/domain/elementTypes";
 import type { DomainStoryDocument } from "../../../story/domain/DomainStoryDocument";
+import type {
+    ColorPickerHandle,
+    ColorPickerProvider,
+    ColorPickerRequest,
+} from "../ColorPickerProvider";
 
 function groupStory(title = "picker story"): DomainStoryDocument {
     return {
@@ -80,27 +85,36 @@ function probe(): {
     };
 }
 
-function openPicker(diagram: TestDiagram, services: ReturnType<typeof probe>) {
-    const current = services.current();
-    const group = current.elementRegistry.get("Group_same_id") as Element;
-    let request: { requestId: string; color: string } | undefined;
-    const requested = (next: { requestId: string; color: string }) => {
-        request = next;
-    };
-    diagram.client.on("colorPicker.requested", requested);
-    current.selection.select(group);
-    const entry = current.contextPad.getEntries(group)["colorChange"];
-    (entry.action as any).click({}, group);
-    diagram.client.off("colorPicker.requested", requested);
-    if (!request) throw new Error("color picker request was not emitted");
-    return { group, request };
+interface PendingPicker {
+    readonly request: ColorPickerRequest;
+    readonly dispose: ReturnType<typeof vi.fn>;
+    resolve(result: string | null): void;
 }
 
-function renderedStroke(diagram: TestDiagram): string {
-    const rect = diagram.container.querySelector<SVGRectElement>(
-        '[data-element-id="Group_same_id"] .djs-visual rect',
-    )!;
-    return getComputedStyle(rect).stroke;
+function providerHarness(): {
+    provider: ColorPickerProvider;
+    pending: PendingPicker[];
+} {
+    const pending: PendingPicker[] = [];
+    const provider: ColorPickerProvider = (request) => {
+        let resolve!: (result: string | null) => void;
+        const result = new Promise<string | null>((done) => {
+            resolve = done;
+        });
+        const dispose = vi.fn();
+        const handle: ColorPickerHandle = { result, dispose };
+        pending.push({ request, resolve, dispose });
+        return handle;
+    };
+    return { provider, pending };
+}
+
+function openPicker(services: ReturnType<typeof probe>) {
+    const current = services.current();
+    const group = current.elementRegistry.get("Group_same_id") as Element;
+    current.selection.select(group);
+    const entry = current.contextPad.getEntries(group)["colorChange"];
+    (entry.action as any).click({ clientX: 420, clientY: 180 }, group);
 }
 
 function exportedColor(diagram: TestDiagram): string | undefined {
@@ -108,73 +122,75 @@ function exportedColor(diagram: TestDiagram): string | undefined {
         .pickedColor;
 }
 
-describe("client-scoped color picker protocol", () => {
+async function settled(): Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
+}
+
+describe("client-scoped color picker providers", () => {
     const diagrams: TestDiagram[] = [];
+    const hosts: HTMLElement[] = [];
 
     afterEach(() => {
         diagrams.splice(0).forEach((diagram) => diagram.cleanup());
+        hosts.splice(0).forEach((host) => host.remove());
         vi.restoreAllMocks();
     });
 
-    it("previews repeatedly without persistence/history and cancel restores appearance", async () => {
+    it("passes copied request data and cancellation leaves persistence/history unchanged", async () => {
         const services = probe();
-        const diagram = await createTestDiagram({}, [services.module]);
+        const picker = providerHarness();
+        const diagram = await createTestDiagram(
+            { colorPicker: picker.provider },
+            [services.module],
+        );
         diagrams.push(diagram);
         diagram.client.import(groupStory());
         const storyChanged = vi.fn();
         diagram.client.on("story.changed", storyChanged);
-        const { request } = openPicker(diagram, services);
+        openPicker(services);
 
-        expect(
-            diagram.client.previewPickedColor(request.requestId, "#ff0000"),
-        ).toBe(true);
-        expect(renderedStroke(diagram)).toBe("rgb(255, 0, 0)");
-        expect(
-            diagram.client.previewPickedColor(request.requestId, "#00ff00"),
-        ).toBe(true);
-        expect(renderedStroke(diagram)).toBe("rgb(0, 255, 0)");
-        expect(exportedColor(diagram)).toBeUndefined();
-        expect(services.current().commandStack.canUndo()).toBe(false);
+        const pending = picker.pending[0];
+        expect(pending.request).toMatchObject({
+            color: "#000000",
+            elementIds: ["Group_same_id"],
+            anchor: { x: 420, y: 180 },
+        });
+        expect(pending.request.signal.aborted).toBe(false);
+        pending.resolve(null);
+        await settled();
 
-        expect(diagram.client.cancelColorPicker(request.requestId)).toBe(true);
-        expect(renderedStroke(diagram)).toBe("rgb(0, 0, 0)");
+        expect(pending.request.signal.aborted).toBe(true);
+        expect(pending.dispose).toHaveBeenCalledTimes(1);
         expect(exportedColor(diagram)).toBeUndefined();
         expect(services.current().commandStack.canUndo()).toBe(false);
         await new Promise((resolve) => setTimeout(resolve, 250));
         expect(storyChanged).not.toHaveBeenCalled();
     });
 
-    it("isolates matching element ids, previews, exports, and undo stacks", async () => {
+    it("isolates concurrent providers with matching ids and preserves undo", async () => {
         const firstProbe = probe();
         const secondProbe = probe();
-        const first = await createTestDiagram({}, [firstProbe.module]);
-        const second = await createTestDiagram({}, [secondProbe.module]);
+        const firstPicker = providerHarness();
+        const secondPicker = providerHarness();
+        const first = await createTestDiagram(
+            { colorPicker: firstPicker.provider },
+            [firstProbe.module],
+        );
+        const second = await createTestDiagram(
+            { colorPicker: secondPicker.provider },
+            [secondProbe.module],
+        );
         diagrams.push(first, second);
         first.client.import(groupStory("first"));
         second.client.import(groupStory("second"));
-        const firstRequest = openPicker(first, firstProbe).request;
-        const secondRequest = openPicker(second, secondProbe).request;
+        openPicker(firstProbe);
+        openPicker(secondProbe);
 
-        expect(
-            first.client.previewPickedColor(firstRequest.requestId, "#ff0000"),
-        ).toBe(true);
-        expect(
-            second.client.previewPickedColor(
-                secondRequest.requestId,
-                "#0000ff",
-            ),
-        ).toBe(true);
-        expect(renderedStroke(first)).toBe("rgb(255, 0, 0)");
-        expect(renderedStroke(second)).toBe("rgb(0, 0, 255)");
-        expect(exportedColor(first)).toBeUndefined();
-        expect(exportedColor(second)).toBeUndefined();
+        firstPicker.pending[0].resolve("#ff0000");
+        secondPicker.pending[0].resolve(null);
+        await settled();
 
-        expect(
-            first.client.confirmPickedColor(firstRequest.requestId, "#ff0000"),
-        ).toBe(true);
-        expect(second.client.cancelColorPicker(secondRequest.requestId)).toBe(
-            true,
-        );
         expect(exportedColor(first)).toBe("#ff0000");
         expect(exportedColor(second)).toBeUndefined();
         expect(firstProbe.current().commandStack.canUndo()).toBe(true);
@@ -185,34 +201,72 @@ describe("client-scoped color picker protocol", () => {
         expect(exportedColor(second)).toBeUndefined();
     });
 
-    it("preserves requests across failed import, closes on promotion, and rejects after destroy", async () => {
+    it("isolates concurrent providers when clients share a host", async () => {
+        const host = document.createElement("div");
+        host.style.width = "800px";
+        host.style.height = "600px";
+        document.body.appendChild(host);
+        hosts.push(host);
+        const firstProbe = probe();
+        const secondProbe = probe();
+        const firstPicker = providerHarness();
+        const secondPicker = providerHarness();
+        const first = await createTestDiagram(
+            { colorPicker: firstPicker.provider },
+            [firstProbe.module],
+            host,
+        );
+        const second = await createTestDiagram(
+            { colorPicker: secondPicker.provider },
+            [secondProbe.module],
+            host,
+        );
+        diagrams.push(first, second);
+        first.client.import(groupStory("first shared"));
+        second.client.import(groupStory("second shared"));
+        openPicker(firstProbe);
+        openPicker(secondProbe);
+
+        firstPicker.pending[0].resolve("#11223344");
+        secondPicker.pending[0].resolve("rgba(5, 6, 7, .5)");
+        await settled();
+
+        expect(exportedColor(first)).toBe("#11223344");
+        expect(exportedColor(second)).toBe("rgba(5, 6, 7, .5)");
+        expect(firstPicker.pending[0].dispose).toHaveBeenCalledTimes(1);
+        expect(secondPicker.pending[0].dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it("retains a request across failed import and disposes on promotion and destroy", async () => {
         const services = probe();
-        const diagram = await createTestDiagram({}, [services.module]);
+        const picker = providerHarness();
+        const diagram = await createTestDiagram(
+            { colorPicker: picker.provider },
+            [services.module],
+        );
         diagrams.push(diagram);
         diagram.client.import(groupStory());
-        const closed = vi.fn();
-        diagram.client.on("colorPicker.closed", closed);
-        const { request } = openPicker(diagram, services);
+        openPicker(services);
+        const first = picker.pending[0];
 
         expect(() =>
             diagram.client.import({} as DomainStoryDocument),
         ).toThrow();
-        expect(
-            diagram.client.previewPickedColor(request.requestId, "#ff0000"),
-        ).toBe(true);
-        expect(closed).not.toHaveBeenCalled();
+        expect(first.request.signal.aborted).toBe(false);
+        expect(first.dispose).not.toHaveBeenCalled();
 
         diagram.client.import(groupStory("replacement"));
-        expect(closed).toHaveBeenCalledWith({ requestId: request.requestId });
-        expect(
-            diagram.client.previewPickedColor(request.requestId, "#00ff00"),
-        ).toBe(false);
+        expect(first.request.signal.aborted).toBe(true);
+        expect(first.dispose).toHaveBeenCalledTimes(1);
 
+        openPicker(services);
+        const second = picker.pending[1];
         diagram.client.destroy();
-        expect(
-            diagram.client.confirmPickedColor(request.requestId, "#00ff00"),
-        ).toBe(false);
-        expect(diagram.client.cancelColorPicker(request.requestId)).toBe(false);
-        expect(closed).toHaveBeenCalledTimes(1);
+        expect(second.request.signal.aborted).toBe(true);
+        expect(second.dispose).toHaveBeenCalledTimes(1);
+
+        second.resolve("#00ff00");
+        await settled();
+        expect(second.dispose).toHaveBeenCalledTimes(1);
     });
 });

@@ -33,6 +33,7 @@ export class EditorSessionOwner {
         private readonly height: string,
         private readonly additionalModules: ModuleDeclaration[] = [],
         private readonly textRenderer?: DomainStoryTextRendererConfig,
+        private readonly colorPickerEnabled = true,
     ) {
         this.active = this.createSession();
     }
@@ -161,6 +162,9 @@ export class EditorSessionOwner {
                 ...(this.textRenderer
                     ? { textRenderer: this.textRenderer }
                     : {}),
+                domainStoryColorPicker: {
+                    enabled: this.colorPickerEnabled,
+                },
                 modules: [EgonPlugin, ...this.additionalModules],
             });
             const canvas = diagram.get<Canvas>("canvas");

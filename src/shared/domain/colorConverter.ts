@@ -38,10 +38,19 @@ export function rgbaToHex(rgba: string) {
     return `#${red}${green}${blue}${alpha}`;
 }
 
-const isValidHex = (hex: string) =>
+export const isValidHex = (hex: string) =>
     /^#(?:[A-Fa-f0-9]{3}|[A-Fa-f0-9]{4}|[A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$/.test(
         hex,
     );
+
+/** Public-provider result grammar: short/full hex or comma RGB/RGBA. */
+export function isSupportedColor(color: unknown): color is string {
+    if (typeof color !== "string" || color.trim() !== color) return false;
+    if (isValidHex(color)) return true;
+
+    const converted = rgbaToHex(color);
+    return converted !== color && isValidHex(converted);
+}
 const getChunksFromString = (st: string, chunkSize: number) =>
     st.match(new RegExp(`.{${chunkSize}}`, "g")) ?? [];
 const convertHexUnitTo256 = (hexStr: string) =>

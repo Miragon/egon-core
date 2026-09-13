@@ -58,3 +58,116 @@
 .icon-domain-story-changeDirection::before {
     mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" d="M0 0h24v24H0V0z"/><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg>');
 }
+
+/* Built-in color picker. It mounts at document level to avoid canvas clipping. */
+.egon-color-picker-mount {
+    position: fixed;
+    z-index: 1100;
+}
+
+.egon-color-picker {
+    box-sizing: border-box;
+    width: 232px;
+    padding: 16px;
+    border: 1px solid #b7b7b7;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 8px 28px rgb(0 0 0 / 22%);
+    color: #222;
+    font:
+        14px/1.35 Arial,
+        sans-serif;
+}
+
+.egon-color-picker .react-colorful {
+    width: 200px;
+    height: 180px;
+}
+
+.egon-color-picker__field {
+    display: grid;
+    gap: 5px;
+    margin-top: 12px;
+    font-weight: 600;
+}
+
+.egon-color-picker__input-row {
+    display: grid;
+    grid-template-columns: 32px 1fr;
+    gap: 8px;
+}
+
+.egon-color-picker__swatch {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #999;
+    border-radius: 4px;
+    background-color: #fff;
+    background-image: conic-gradient(#ddd 25%, #fff 0 50%, #ddd 0 75%, #fff 0);
+    background-size: 10px 10px;
+}
+
+.egon-color-picker__swatch::after {
+    position: absolute;
+    inset: 0;
+    background: var(--egon-picker-color);
+    content: "";
+}
+
+.egon-color-picker input {
+    box-sizing: border-box;
+    min-width: 0;
+    height: 32px;
+    padding: 5px 8px;
+    border: 1px solid #888;
+    border-radius: 4px;
+    font: inherit;
+}
+
+.egon-color-picker input[aria-invalid="true"] {
+    border-color: #b42318;
+}
+
+.egon-color-picker__hint {
+    margin: 10px 0;
+    color: #555;
+    font-size: 12px;
+}
+
+.egon-color-picker__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.egon-color-picker__actions button {
+    padding: 6px 12px;
+    border: 1px solid #777;
+    border-radius: 4px;
+    background: #fff;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+}
+
+.egon-color-picker__actions .egon-color-picker__apply {
+    border-color: #2463a6;
+    background: #2463a6;
+    color: #fff;
+}
+
+.egon-color-picker__actions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.egon-color-picker :focus-visible {
+    outline: 2px solid #2463a6;
+    outline-offset: 2px;
+}
+
+.djs-context-pad .entry.icon-domain-story-color-picker {
+    padding: 0;
+    border: 0;
+    font: inherit;
+}
