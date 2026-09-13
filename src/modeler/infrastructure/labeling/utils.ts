@@ -1,29 +1,10 @@
 import { Element } from "diagram-js/lib/model/Types";
 
-import {
-    isActivity,
-    isActor,
-    isAnnotation,
-    isGroup,
-    isWorkObject,
-} from "../../../story/domain/elementPredicates";
 import EventBus from "diagram-js/lib/core/EventBus";
-
-function getLabelAttr(semantic: any) {
-    if (
-        isActor(semantic) ||
-        isWorkObject(semantic) ||
-        isActivity(semantic) ||
-        isGroup(semantic)
-    ) {
-        return "name";
-    }
-    if (isAnnotation(semantic)) {
-        return "text";
-    } else {
-        return "";
-    }
-}
+import {
+    canAutocompleteLabel,
+    semanticLabelField,
+} from "../../../story/domain/labelPolicy";
 
 export function getLabel(element: Element) {
     let semantic;
@@ -32,7 +13,7 @@ export function getLabel(element: Element) {
     } else {
         semantic = element;
     }
-    const attr = getLabelAttr(semantic);
+    const attr = semanticLabelField(semantic);
     if (attr && semantic) {
         return semantic[attr] || "";
     }
@@ -45,7 +26,7 @@ export function setLabel(element: Element, text: string) {
     } else {
         semantic = element;
     }
-    const attr = getLabelAttr(semantic);
+    const attr = semanticLabelField(semantic);
 
     if (attr) {
         semantic[attr] = text;
@@ -103,7 +84,7 @@ export function createAutocompleteForEdit(
     recycledEditingBox.__egonAutocompleteTeardown?.();
     delete recycledEditingBox.__egonAutocompleteTeardown;
 
-    if (!businessElement || !isWorkObject(businessElement)) {
+    if (!canAutocompleteLabel(businessElement)) {
         return;
     }
 
@@ -121,8 +102,7 @@ export function createAutocompleteForEdit(
         if (
             !workObjectNames ||
             workObjectNames.length === 0 ||
-            !businessElement ||
-            !isWorkObject(businessElement)
+            !canAutocompleteLabel(businessElement)
         ) {
             return;
         }
@@ -175,7 +155,7 @@ export function createAutocompleteForEdit(
     }
 
     const keydownFunction = function (e: KeyboardEvent) {
-        if (!businessElement || !isWorkObject(businessElement)) {
+        if (!canAutocompleteLabel(businessElement)) {
             return;
         }
 

@@ -5,6 +5,8 @@ import EventBus from "diagram-js/lib/core/EventBus";
 import {
     approximateArialSize11TextWidthInPixel,
     createAutocompleteForEdit,
+    getLabel,
+    setLabel,
 } from "../utils";
 import { ElementTypes } from "../../../../story/domain/elementTypes";
 
@@ -170,6 +172,75 @@ describe("approximateArialSize11TextWidthInPixel", () => {
         const rendererOffset =
             approximateArialSize11TextWidthInPixel(name) / 2 + 20;
         expect(rendererOffset).toBeCloseTo((name.length * 5.1) / 2 + 20);
+    });
+});
+
+describe("label field translation", () => {
+    it("reads a label from a canvas element's business object", () => {
+        expect(
+            getLabel({
+                type: "diagram:shape",
+                businessObject: {
+                    type: ElementTypes.ACTOR + "Person",
+                    name: "Buyer",
+                },
+            } as unknown as Element),
+        ).toBe("Buyer");
+    });
+
+    it("falls back to the element itself as the semantic object", () => {
+        expect(
+            getLabel({
+                type: ElementTypes.TEXTANNOTATION,
+                text: "Remember this",
+            } as unknown as Element),
+        ).toBe("Remember this");
+    });
+
+    it("preserves the empty-value fallback for a supported field", () => {
+        expect(
+            getLabel({
+                type: ElementTypes.GROUP,
+                name: undefined,
+            } as unknown as Element),
+        ).toBe("");
+    });
+
+    it("returns undefined for unsupported semantics", () => {
+        expect(
+            getLabel({
+                type: ElementTypes.CONNECTION,
+                name: "not a label",
+            } as unknown as Element),
+        ).toBeUndefined();
+    });
+
+    it("writes the selected semantic field through a business object", () => {
+        const element = {
+            businessObject: {
+                type: ElementTypes.TEXTANNOTATION,
+                text: "old",
+            },
+        } as unknown as Element;
+
+        expect(setLabel(element, "new")).toBe(element);
+        expect(element.businessObject.text).toBe("new");
+    });
+
+    it("does not write any field for unsupported semantics", () => {
+        const semantic = {
+            type: ElementTypes.CONNECTION,
+            name: "unchanged",
+            text: "also unchanged",
+        };
+        const element = { businessObject: semantic } as unknown as Element;
+
+        expect(setLabel(element, "new")).toBe(element);
+        expect(semantic).toEqual({
+            type: ElementTypes.CONNECTION,
+            name: "unchanged",
+            text: "also unchanged",
+        });
     });
 });
 

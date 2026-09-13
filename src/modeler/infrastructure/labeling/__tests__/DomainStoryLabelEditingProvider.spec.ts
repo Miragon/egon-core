@@ -31,10 +31,20 @@ function setup() {
     const updateLabel = vi.fn();
 
     const modeling = { updateLabel } as any;
-    const domainStoryTextRenderer = {} as any;
+    const domainStoryTextRenderer = {
+        getDefaultStyle: () => ({
+            fontSize: 11,
+            lineHeight: 1.2,
+            fontFamily: "Arial",
+            fontWeight: "normal",
+        }),
+    } as any;
     const labelDictionaryService = {} as any;
     const eventBus = { on: vi.fn() } as any;
-    const canvas = { getAbsoluteBBox: () => BBOX } as any;
+    const canvas = {
+        getAbsoluteBBox: vi.fn(() => BBOX),
+        zoom: () => 1,
+    } as any;
     const directEditing = {
         registerProvider: vi.fn(),
         activate: vi.fn(),
@@ -54,7 +64,7 @@ function setup() {
         commandStack,
     );
 
-    return { provider, updateLabel, eventBus, directEditing };
+    return { provider, updateLabel, eventBus, directEditing, canvas };
 }
 
 /**
@@ -135,6 +145,54 @@ describe("DomainStoryLabelEditingProvider.update", () => {
         provider.update(makeElement(), "name", "old text", EDIT_BOX_BOUNDS);
 
         expect(updateLabel.mock.calls[0][2]).toBeUndefined();
+    });
+});
+
+describe("DomainStoryLabelEditingProvider.activate", () => {
+    it("uses the business object as the semantic label source", () => {
+        const { provider } = setup();
+
+        expect(
+            provider.activate({
+                ...makeElement(),
+                type: "diagram:shape",
+                businessObject: {
+                    type: ElementTypes.WORKOBJECT + "Document",
+                    name: "Invoice",
+                },
+            } as Shape),
+        ).toMatchObject({ text: "Invoice" });
+    });
+
+    it("blocks the canvas background even if it carries supported semantics", () => {
+        const { provider, canvas } = setup();
+
+        expect(
+            provider.activate({
+                ...makeElement(),
+                id: "__implicitroot_1",
+                businessObject: {
+                    type: ElementTypes.ACTOR + "Person",
+                    name: "Background actor",
+                },
+            } as Shape),
+        ).toBeUndefined();
+        expect(canvas.getAbsoluteBBox).not.toHaveBeenCalled();
+    });
+
+    it("blocks unsupported semantic types before opening an editor", () => {
+        const { provider, canvas } = setup();
+
+        expect(
+            provider.activate({
+                ...makeElement(),
+                businessObject: {
+                    type: ElementTypes.CONNECTION,
+                    name: "unsupported",
+                },
+            } as Shape),
+        ).toBeUndefined();
+        expect(canvas.getAbsoluteBBox).not.toHaveBeenCalled();
     });
 });
 

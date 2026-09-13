@@ -173,6 +173,7 @@ describe("activity direction persistence (browser)", () => {
         expected: {
             source: string;
             target: string;
+            number: number | null;
             waypoints: Waypoint[];
         },
     ): Promise<void> {
@@ -236,6 +237,7 @@ describe("activity direction persistence (browser)", () => {
             const reversedActivity = {
                 source: "work_object_direction",
                 target: "actor_direction",
+                number: null,
                 waypoints: reversed,
             };
             expect(activityExport(reversedDocument)).toMatchObject(
@@ -247,6 +249,7 @@ describe("activity direction persistence (browser)", () => {
             expect(activityExport(booted.client.export())).toMatchObject({
                 source: "actor_direction",
                 target: "work_object_direction",
+                number: 1,
                 waypoints,
             });
 
@@ -254,6 +257,7 @@ describe("activity direction persistence (browser)", () => {
             expect(activityExport(booted.client.export())).toMatchObject({
                 source: "work_object_direction",
                 target: "actor_direction",
+                number: null,
                 waypoints: reversed,
             });
 
@@ -263,6 +267,7 @@ describe("activity direction persistence (browser)", () => {
             const finalActivity = {
                 source: "actor_direction",
                 target: "work_object_direction",
+                number: 1,
                 waypoints,
             };
             expect(activityExport(finalDocument)).toMatchObject(finalActivity);
