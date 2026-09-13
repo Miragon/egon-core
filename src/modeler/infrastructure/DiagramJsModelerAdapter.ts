@@ -27,6 +27,25 @@ import {
     ViewportData,
 } from "../domain";
 import { ColorPickerCoordinator } from "./color-picker/ColorPickerCoordinator";
+import { LabelDictionaryService } from "../../labelDictionary/service";
+import type {
+    LabelDictionary,
+    LabelRenameBatch,
+} from "../../labelDictionary/domain/LabelDictionary";
+import type {
+    CancellationSignal,
+    PngExportRequest,
+    PngExportResult,
+    SvgExportOptions,
+    SvgExportResult,
+} from "../domain/export/VisualExport";
+import type {
+    ReplayStartOptions,
+    ReplayState,
+} from "../../story/domain/replay";
+import { exportStaticSvg } from "./export/StaticSvgExporter";
+import { rasterizePng } from "./export/PngRasterizer";
+import { ReplayController } from "./replay/ReplayController";
 
 /** Project diagram-js' richer viewbox onto the stable public port shape. */
 function projectViewport(viewbox: ViewportData): ViewportData {
@@ -46,6 +65,9 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     private readonly sessionOwner: EditorSessionOwner;
     private importInProgress = false;
     private destroyed = false;
+    private replayController: ReplayController;
+    private readonly replayCallbacks = new Set<(state: ReplayState) => void>();
+    private readonly pendingExports = new Set<ExportCancellation>();
 
     // Two maps, not one union-keyed map: `EgonEventMap` makes a zero-arg
     // callback assignable to both events, so `on("story.changed", f)` followed
@@ -74,6 +96,10 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         (closed: ColorPickerClosedData) => void,
         (event: any) => void
     >();
+    private readonly labelCallbacks = new Map<
+        (labels: LabelDictionary) => void,
+        { wrapped: (event: any) => void; last: string }
+    >();
 
     constructor(
         container: HTMLElement,
@@ -88,6 +114,9 @@ export class DiagramJsModelerAdapter implements ModelerPort {
             height,
             additionalModules,
             textRenderer,
+        );
+        this.replayController = this.createReplayController(
+            this.sessionOwner.getActiveDiagram(),
         );
     }
 
@@ -117,6 +146,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
 
             const previous = this.sessionOwner.promote(candidate);
             committed = true;
+            this.abortPendingExports();
             // The old request remains valid throughout candidate staging. Only
             // a successful promotion expires it, while its old-bus callbacks
             // are still attached and can synchronously dismiss the host UI.
@@ -133,6 +163,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
             } catch (error) {
                 reportPostCommitError(error);
             }
+            this.replaceReplayController(candidate.diagram);
 
             // Candidate-local events prepared its palette/banner while hidden.
             // Repeat only the public notifications after listeners have moved.
@@ -166,6 +197,101 @@ export class DiagramJsModelerAdapter implements ModelerPort {
             "domainStoryExportService",
         );
         return JSON.parse(exportService.export());
+    }
+
+    async exportSVG(options: SvgExportOptions = {}): Promise<SvgExportResult> {
+        const { document, session } = this.captureExportSession();
+        try {
+            return exportStaticSvg(session.canvas, document, options);
+        } finally {
+            this.sessionOwner.dispose(session);
+        }
+    }
+
+    exportPNG(options: PngExportRequest = {}): Promise<PngExportResult> {
+        const cancellation = new ExportCancellation(options.cancellation);
+        if (cancellation.aborted) {
+            cancellation.dispose();
+            const error = new Error("The operation was aborted");
+            error.name = "AbortError";
+            return Promise.reject(error);
+        }
+
+        // Everything through SVG preparation is synchronous: later edits can
+        // only affect the live session, never this captured candidate.
+        let capture: ReturnType<
+            DiagramJsModelerAdapter["captureExportSession"]
+        >;
+        try {
+            capture = this.captureExportSession();
+        } catch (error) {
+            cancellation.dispose();
+            return Promise.reject(error);
+        }
+        const { document, session } = capture;
+        this.pendingExports.add(cancellation);
+        let svg: SvgExportResult;
+        try {
+            svg = exportStaticSvg(session.canvas, document, {
+                padding: options.padding,
+                background: options.background ?? "white",
+                includeTitle: options.includeTitle,
+                includeDescription: options.includeDescription,
+                embedDocument: false,
+            });
+        } catch (error) {
+            this.pendingExports.delete(cancellation);
+            cancellation.dispose();
+            this.sessionOwner.dispose(session);
+            return Promise.reject(error);
+        }
+
+        return rasterizePng(svg, options.scale, cancellation).finally(() => {
+            this.pendingExports.delete(cancellation);
+            cancellation.dispose();
+            this.sessionOwner.dispose(session);
+        });
+    }
+
+    getLabelDictionary(): LabelDictionary {
+        const dictionary = this.getDiagram()
+            .get<LabelDictionaryService>("domainStoryLabelDictionaryService")
+            .getDictionary();
+        return detachLabels(dictionary);
+    }
+
+    renameLabels(changes: LabelRenameBatch): readonly string[] {
+        return this.getDiagram()
+            .get<LabelDictionaryService>("domainStoryLabelDictionaryService")
+            .renameLabels(changes);
+    }
+
+    getReplayState(): ReplayState {
+        return this.replayController.getState();
+    }
+
+    startReplay(options?: ReplayStartOptions): ReplayState {
+        return this.replayController.start(options);
+    }
+
+    stopReplay(): ReplayState {
+        return this.replayController.stop();
+    }
+
+    nextReplayStep(): ReplayState {
+        return this.replayController.next();
+    }
+
+    previousReplayStep(): ReplayState {
+        return this.replayController.previous();
+    }
+
+    seekReplayStep(index: number): ReplayState {
+        return this.replayController.seek(index);
+    }
+
+    setReplayShowGroups(value: boolean): ReplayState {
+        return this.replayController.setShowGroups(value);
     }
 
     getViewport(): ViewportData {
@@ -270,6 +396,53 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         }
     }
 
+    onLabelsChanged(callback: (labels: LabelDictionary) => void): void {
+        if (this.labelCallbacks.has(callback)) return;
+
+        const registration: {
+            last: string;
+            wrapped: (event: any) => void;
+        } = {
+            last: JSON.stringify(this.getLabelDictionary()),
+            wrapped: () => {},
+        };
+        registration.wrapped = (event: any) => {
+            const labels = this.getLabelDictionary();
+            const next = JSON.stringify(labels);
+            const force = event?.type === "dst.import.committed";
+            if (!force && next === registration.last) return;
+            registration.last = next;
+            try {
+                callback(labels);
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        };
+        this.labelCallbacks.set(callback, registration);
+        (this.getEventBus().on as any)(
+            ["commandStack.changed", "dst.import.committed"],
+            registration.wrapped,
+        );
+    }
+
+    offLabelsChanged(callback: (labels: LabelDictionary) => void): void {
+        const registration = this.labelCallbacks.get(callback);
+        if (!registration) return;
+        (this.getEventBus().off as any)(
+            ["commandStack.changed", "dst.import.committed"],
+            registration.wrapped,
+        );
+        this.labelCallbacks.delete(callback);
+    }
+
+    onReplayChanged(callback: (state: ReplayState) => void): void {
+        this.replayCallbacks.add(callback);
+    }
+
+    offReplayChanged(callback: (state: ReplayState) => void): void {
+        this.replayCallbacks.delete(callback);
+    }
+
     onColorPickerRequested(
         callback: (request: ColorPickerRequestData) => void,
     ): void {
@@ -351,7 +524,10 @@ export class DiagramJsModelerAdapter implements ModelerPort {
      * container and so survives `diagram.destroy()`.
      */
     destroy(): void {
+        if (this.destroyed) return;
         this.destroyed = true;
+        this.abortPendingExports();
+        this.replayController.destroy();
         this.unsubscribeAll();
         this.sessionOwner.destroy();
     }
@@ -397,6 +573,15 @@ export class DiagramJsModelerAdapter implements ModelerPort {
             (this.getEventBus().off as any)("dst.colorPicker.closed", wrapped);
         });
         this.colorPickerClosedCallbacks.clear();
+
+        this.labelCallbacks.forEach(({ wrapped }) => {
+            (this.getEventBus().off as any)(
+                ["commandStack.changed", "dst.import.committed"],
+                wrapped,
+            );
+        });
+        this.labelCallbacks.clear();
+        this.replayCallbacks.clear();
     }
 
     private getCanvas(): Canvas {
@@ -430,6 +615,17 @@ export class DiagramJsModelerAdapter implements ModelerPort {
             (previous.off as any)("dst.colorPicker.closed", wrapped);
             (current.on as any)("dst.colorPicker.closed", wrapped);
         });
+        this.labelCallbacks.forEach((registration) => {
+            (previous.off as any)(
+                ["commandStack.changed", "dst.import.committed"],
+                registration.wrapped,
+            );
+            registration.last = JSON.stringify(this.getLabelDictionary());
+            (current.on as any)(
+                ["commandStack.changed", "dst.import.committed"],
+                registration.wrapped,
+            );
+        });
     }
 
     private getColorPickerCoordinator(
@@ -461,6 +657,11 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         } catch (error) {
             reportPostCommitError(error);
         }
+        try {
+            session.eventBus.fire("dst.import.committed", {});
+        } catch (error) {
+            reportPostCommitError(error);
+        }
         if (removedConnections.length > 0) {
             try {
                 session.eventBus.fire("dst.import.repaired", {
@@ -470,5 +671,105 @@ export class DiagramJsModelerAdapter implements ModelerPort {
                 reportPostCommitError(error);
             }
         }
+    }
+
+    private captureExportSession(): {
+        document: DomainStoryDocument;
+        session: EditorSession;
+    } {
+        if (this.destroyed) throw new Error("EgonClient has been destroyed");
+        const document = this.export();
+        const active = this.sessionOwner.getActiveSession();
+        const session = this.sessionOwner.createCandidate();
+        try {
+            this.copyCustomIconPool(active, session);
+            const importService = session.diagram.get<DomainStoryImportService>(
+                "domainStoryImportService",
+            );
+            importService.materialize(importService.prepare(document));
+            return { document, session };
+        } catch (error) {
+            this.sessionOwner.dispose(session);
+            throw error;
+        }
+    }
+
+    private abortPendingExports(): void {
+        this.pendingExports.forEach((cancellation) => cancellation.abort());
+    }
+
+    private createReplayController(
+        diagram: Diagram,
+        showGroups = false,
+    ): ReplayController {
+        return new ReplayController(
+            diagram,
+            (state) => this.publishReplayChanged(state),
+            showGroups,
+        );
+    }
+
+    private replaceReplayController(diagram: Diagram): void {
+        const previousState = this.replayController.getState();
+        this.replayController.destroy();
+        this.replayController = this.createReplayController(
+            diagram,
+            previousState.showGroups,
+        );
+        if (previousState.active) {
+            this.publishReplayChanged(this.replayController.getState());
+        }
+    }
+
+    private publishReplayChanged(state: ReplayState): void {
+        this.replayCallbacks.forEach((callback) => {
+            try {
+                callback({ ...state });
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        });
+    }
+}
+
+function detachLabels(labels: LabelDictionary): LabelDictionary {
+    return {
+        activities: labels.activities.map((entry) => ({ ...entry })),
+        workObjects: labels.workObjects.map((entry) => ({ ...entry })),
+    };
+}
+
+class ExportCancellation implements CancellationSignal {
+    private cancelled = false;
+    private readonly callbacks = new Set<() => void>();
+    private readonly removeExternal?: () => void;
+
+    constructor(external?: CancellationSignal) {
+        if (external) {
+            this.removeExternal = external.onCancel(() => this.abort());
+            if (external.aborted) this.abort();
+        }
+    }
+
+    get aborted(): boolean {
+        return this.cancelled;
+    }
+
+    onCancel(callback: () => void): () => void {
+        if (this.cancelled) callback();
+        else this.callbacks.add(callback);
+        return () => this.callbacks.delete(callback);
+    }
+
+    abort(): void {
+        if (this.cancelled) return;
+        this.cancelled = true;
+        [...this.callbacks].forEach((callback) => callback());
+        this.callbacks.clear();
+    }
+
+    dispose(): void {
+        this.removeExternal?.();
+        this.callbacks.clear();
     }
 }

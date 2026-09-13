@@ -428,6 +428,52 @@ describe("IconDictionaryService CSS class generation", () => {
         });
     });
 
+    describe("explicit selection order", () => {
+        it("applies an exact permutation without changing artwork", () => {
+            const service = new IconDictionaryService(
+                new RecordingStyleSheetPort(),
+                passThroughIconSanitizer,
+            );
+            service.updateIconRegistries(
+                iconSet({ First: "<svg>1</svg>", Second: "<svg>2</svg>" }, {}),
+            );
+
+            expect(service.setIconOrder("actor", ["Second", "First"])).toBe(
+                true,
+            );
+            expect(service.getActorsDictionary().keysArray()).toEqual([
+                "Second",
+                "First",
+            ]);
+            expect(service.getActorsDictionary().get("First")).toBe(
+                "<svg>1</svg>",
+            );
+            expect(service.setIconOrder("actor", ["Second", "First"])).toBe(
+                false,
+            );
+        });
+
+        it.each([
+            ["duplicates", ["First", "First"]],
+            ["missing", ["First"]],
+            ["extra", ["First", "Second", "Third"]],
+        ])("rejects %s before mutation", (_name, order) => {
+            const service = new IconDictionaryService(
+                new RecordingStyleSheetPort(),
+                passThroughIconSanitizer,
+            );
+            service.updateIconRegistries(
+                iconSet({ First: "1", Second: "2" }, {}),
+            );
+
+            expect(() => service.setIconOrder("actor", order)).toThrow();
+            expect(service.getActorsDictionary().keysArray()).toEqual([
+                "First",
+                "Second",
+            ]);
+        });
+    });
+
     describe("type validation", () => {
         it.each(["register", "unregister"])(
             "throws before mutating dictionaries on unsupported %s",

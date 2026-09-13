@@ -12,10 +12,25 @@ import {
 import type {
     DomainStoryDocument,
     IconCategory,
+    IconConfiguration,
     IconSet,
     IconSetData,
     ViewportData,
 } from "../domain";
+import type {
+    PngExportOptions,
+    PngExportResult,
+    SvgExportOptions,
+    SvgExportResult,
+} from "../domain/export/VisualExport";
+import type {
+    LabelDictionary,
+    LabelRenameBatch,
+} from "../../labelDictionary/domain/LabelDictionary";
+import type {
+    ReplayStartOptions,
+    ReplayState,
+} from "../../story/domain/replay";
 
 /**
  * User-friendly event types exposed by EgonClient.
@@ -24,6 +39,8 @@ export type EgonEventMap = {
     "story.changed": () => void;
     "viewport.changed": (viewport: ViewportData) => void;
     "icons.changed": (icons: IconSet) => void;
+    "labels.changed": (labels: LabelDictionary) => void;
+    "replay.changed": (state: ReplayState) => void;
     /**
      * The story just imported was damaged and had to be repaired to load —
      * dangling activity edges were dropped. Fires during `import()`, before it
@@ -134,6 +151,18 @@ export class EgonClient {
         return this.modelerPort.export();
     }
 
+    exportSVG(options?: SvgExportOptions): Promise<SvgExportResult> {
+        return this.modelerPort.exportSVG(options);
+    }
+
+    exportPNG(options: PngExportOptions = {}): Promise<PngExportResult> {
+        const { signal, ...request } = options;
+        return this.modelerPort.exportPNG({
+            ...request,
+            ...(signal ? { cancellation: adaptAbortSignal(signal) } : {}),
+        });
+    }
+
     // --- Event Subscription ---
 
     /**
@@ -162,6 +191,16 @@ export class EgonClient {
             case "icons.changed":
                 this.iconPort.onIconsChanged(
                     callback as EgonEventMap["icons.changed"],
+                );
+                break;
+            case "labels.changed":
+                this.modelerPort.onLabelsChanged(
+                    callback as EgonEventMap["labels.changed"],
+                );
+                break;
+            case "replay.changed":
+                this.modelerPort.onReplayChanged(
+                    callback as EgonEventMap["replay.changed"],
                 );
                 break;
             case "colorPicker.requested":
@@ -204,6 +243,16 @@ export class EgonClient {
             case "icons.changed":
                 this.iconPort.offIconsChanged(
                     callback as EgonEventMap["icons.changed"],
+                );
+                break;
+            case "labels.changed":
+                this.modelerPort.offLabelsChanged(
+                    callback as EgonEventMap["labels.changed"],
+                );
+                break;
+            case "replay.changed":
+                this.modelerPort.offReplayChanged(
+                    callback as EgonEventMap["replay.changed"],
                 );
                 break;
             case "colorPicker.requested":
@@ -320,6 +369,54 @@ export class EgonClient {
         return this.iconPort.hasIcon(category, name);
     }
 
+    getIconConfiguration(): IconConfiguration {
+        return this.iconPort.getIconConfiguration();
+    }
+
+    setIconOrder(category: IconCategory, names: readonly string[]): void {
+        this.iconPort.setIconOrder(category, names);
+    }
+
+    // --- Label Dictionary ---
+
+    getLabelDictionary(): LabelDictionary {
+        return this.modelerPort.getLabelDictionary();
+    }
+
+    renameLabels(changes: LabelRenameBatch): readonly string[] {
+        return this.modelerPort.renameLabels(changes);
+    }
+
+    // --- Headless Replay ---
+
+    getReplayState(): ReplayState {
+        return this.modelerPort.getReplayState();
+    }
+
+    startReplay(options?: ReplayStartOptions): ReplayState {
+        return this.modelerPort.startReplay(options);
+    }
+
+    stopReplay(): ReplayState {
+        return this.modelerPort.stopReplay();
+    }
+
+    nextReplayStep(): ReplayState {
+        return this.modelerPort.nextReplayStep();
+    }
+
+    previousReplayStep(): ReplayState {
+        return this.modelerPort.previousReplayStep();
+    }
+
+    seekReplayStep(index: number): ReplayState {
+        return this.modelerPort.seekReplayStep(index);
+    }
+
+    setReplayShowGroups(value: boolean): ReplayState {
+        return this.modelerPort.setReplayShowGroups(value);
+    }
+
     // --- Lifecycle ---
 
     /**
@@ -335,4 +432,16 @@ export class EgonClient {
         this.iconPort.destroy();
         this.modelerPort.destroy();
     }
+}
+
+function adaptAbortSignal(signal: AbortSignal) {
+    return {
+        get aborted() {
+            return signal.aborted;
+        },
+        onCancel(callback: () => void): () => void {
+            signal.addEventListener("abort", callback, { once: true });
+            return () => signal.removeEventListener("abort", callback);
+        },
+    };
 }
