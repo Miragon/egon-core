@@ -37,6 +37,26 @@ function activity(
 }
 
 describe("createReplayStory", () => {
+    it("returns no steps without finite numbered actor-originating activities", () => {
+        expect(createReplayStory([], [])).toEqual({
+            steps: [],
+            groupElementIds: [],
+        });
+
+        const actor = shape("actor", ElementTypes.ACTOR + "Person");
+        const work = shape("work", ElementTypes.WORKOBJECT + "Document");
+        const unnumbered = activity("unnumbered", actor, work);
+        const nonFinite = activity("non-finite", actor, work, Infinity);
+        const fromWorkObject = activity("from-work", work, actor, 1);
+
+        expect(
+            createReplayStory(
+                [actor, work, unnumbered, nonFinite, fromWorkObject],
+                [],
+            ).steps,
+        ).toEqual([]);
+    });
+
     it("sorts roots numerically, groups equal numbers, and accumulates", () => {
         const actor = shape("actor", ElementTypes.ACTOR + "Person");
         const workA = shape("work-a", ElementTypes.WORKOBJECT + "Document");
@@ -106,5 +126,93 @@ describe("createReplayStory", () => {
 
         expect(replay.groupElementIds).toEqual(["group"]);
         expect(replay.steps[0].visibleElementIds).not.toContain("group");
+    });
+
+    it("stops at an actor until that actor's own numbered step", () => {
+        const firstActor = shape("first-actor", ElementTypes.ACTOR + "Person");
+        const secondActor = shape(
+            "second-actor",
+            ElementTypes.ACTOR + "Person",
+        );
+        const work = shape("work", ElementTypes.WORKOBJECT + "Document");
+        const first = activity("first", firstActor, secondActor, 1);
+        const second = activity("second", secondActor, work, 2);
+
+        const replay = createReplayStory(
+            [firstActor, secondActor, work, first, second],
+            [],
+        );
+
+        expect(replay.steps[0].visibleElementIds).toEqual([
+            "first-actor",
+            "first",
+            "second-actor",
+        ]);
+        expect(replay.steps[1].highlightedElementIds).toEqual([
+            "second-actor",
+            "second",
+            "work",
+        ]);
+        expect(replay.steps[1].visibleElementIds).toEqual([
+            "first-actor",
+            "first",
+            "second-actor",
+            "second",
+            "work",
+        ]);
+    });
+
+    it("includes attached annotations on terminal work objects without mutating them", () => {
+        const actor = shape("actor", ElementTypes.ACTOR + "Person");
+        const work = shape("work", ElementTypes.WORKOBJECT + "Document");
+        const note = shape("note", ElementTypes.TEXTANNOTATION);
+        work.outgoing = undefined;
+        work.attachers = [note];
+        const root = activity("root", actor, work, 1);
+        const elements = [actor, work, note, root];
+        const before = structuredClone(elements);
+
+        expect(createReplayStory(elements, []).steps[0]).toEqual({
+            activityNumber: 1,
+            visibleElementIds: ["actor", "root", "work", "note"],
+            highlightedElementIds: ["actor", "root", "work", "note"],
+        });
+        expect(elements).toEqual(before);
+    });
+
+    it("terminates a dangling activity while retaining its identifiable source", () => {
+        const actor = shape("actor", ElementTypes.ACTOR + "Person");
+        const work = shape("work", ElementTypes.WORKOBJECT + "Document");
+        const root = activity("root", actor, work, 1);
+        const dangling = {
+            ...root,
+            target: undefined,
+        } as unknown as ActivityCanvasObject;
+
+        expect(createReplayStory([actor, dangling], []).steps[0]).toEqual({
+            activityNumber: 1,
+            visibleElementIds: ["actor", "root"],
+            highlightedElementIds: ["actor", "root"],
+        });
+    });
+
+    it("includes group annotations but ignores non-groups and unrelated connections", () => {
+        const group = shape("group", ElementTypes.GROUP);
+        const note = shape("note", ElementTypes.TEXTANNOTATION);
+        const work = shape("work", ElementTypes.WORKOBJECT + "Document");
+        group.outgoing = [note, work, undefined].map(
+            (target, index) =>
+                ({
+                    id: `link-${index}`,
+                    type: ElementTypes.CONNECTION,
+                    source: group,
+                    target,
+                }) as unknown as ActivityCanvasObject,
+        );
+
+        expect(createReplayStory([], [work, group])).toEqual({
+            steps: [],
+            groupElementIds: ["group", "link-0", "note"],
+        });
     });
 });
