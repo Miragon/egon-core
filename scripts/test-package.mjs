@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { clearTimeout, setTimeout } from "node:timers";
 import { fileURLToPath, URL } from "node:url";
+import { inspectPackageContract } from "./package-contract.mjs";
 
 const REQUIRED_NODE_MAJOR = 24;
 const READY_TIMEOUT_MS = 120_000;
@@ -71,6 +72,15 @@ try {
         consumerRoot,
         "node_modules",
         "egon-core",
+    );
+    const { emittedFiles } = await inspectPackageContract({
+        installedPackageRoot,
+        sourceDistRoot: join(repositoryRoot, "dist"),
+        expectedVersion: repositoryPackage.version,
+        sourceLicensePath: join(repositoryRoot, "LICENSE"),
+    });
+    console.log(
+        `Validated package identity, license, exports, and ${emittedFiles.length} emitted dist files.`,
     );
     await inspectPackagedStyles(installedPackageRoot);
     await run(

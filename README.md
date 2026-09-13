@@ -20,11 +20,16 @@ yarn install
 
 Node 24 is required by the local demo router. CI reads the same `.nvmrc`.
 
-To install only the published package in another project:
+To install the built `0.1.0` package from its versioned GitHub Release:
 
 ```bash
-yarn add egon-core
+yarn add egon-core@https://github.com/Miragon/egon-core/releases/download/v0.1.0/egon-core-0.1.0.tgz
 ```
+
+Use the URL for the version your host pins. A GitHub Release becomes
+installable after its **Release archive** workflow validates and attaches the
+`.tgz`; the automatically generated source archives are not built packages. See
+[docs/Releasing.md](docs/Releasing.md) for the release and recovery process.
 
 The package ships as ESM. `diagram-js` and its companion packages
 (`diagram-js-direct-editing`, `didi`, `ids`, `min-dash`, `min-dom`, `tiny-svg`)
@@ -147,9 +152,10 @@ Without `--archive`, the runner calls `yarn pack` (and therefore the package's
 `prepack` build). It stages the demo in a temporary project outside this
 repository, installs only the archive plus pinned Vite/TypeScript tooling,
 type-checks and builds that consumer, validates packaged CSS asset references,
-and serves the production build for Playwright. GitHub's **Release archive
-validation** workflow performs the same check against a selected commit's
-downloaded source archive and runs automatically for published releases.
+and serves the production build for Playwright. GitHub's **Release archive**
+workflow performs the same check against a selected commit's downloaded source
+archive. Published releases upload only after validation; manual runs validate
+by default and can recover an upload for an existing matching version release.
 
 ## Architecture
 
