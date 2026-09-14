@@ -58,6 +58,27 @@ export function computeReplaceMenuPosition(
     };
 }
 
+/** Resolve the initiating control to stable browser-viewport coordinates. */
+export function computeColorPickerAnchor(event: any): {
+    x: number;
+    y: number;
+} {
+    const target =
+        event?.delegateTarget ?? event?.currentTarget ?? event?.target ?? null;
+    const control =
+        target instanceof globalThis.Element
+            ? (target.closest('[data-action="colorChange"]') ?? target)
+            : null;
+    if (control instanceof HTMLElement) {
+        const rect = control.getBoundingClientRect();
+        return { x: rect.right, y: rect.top + rect.height / 2 };
+    }
+    return {
+        x: Number(event?.clientX ?? event?.x ?? 0),
+        y: Number(event?.clientY ?? event?.y ?? 0),
+    };
+}
+
 export class DomainStoryContextPadProvider implements ContextPadProvider<Element> {
     static $inject: string[] = [
         "elementFactory",
@@ -76,6 +97,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         "commandStack",
         "eventBus",
         "domainStoryColorPickerCoordinator",
+        "config.domainStoryColorPicker",
     ];
 
     constructor(
@@ -98,6 +120,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         private readonly commandStack: CommandStack,
         eventBus: EventBus,
         private readonly colorPickerCoordinator: ColorPickerCoordinator,
+        private readonly colorPickerConfig: { readonly enabled: boolean },
     ) {
         contextPad.registerProvider(this);
         popupMenu.registerProvider("ds-replace", replaceMenuProvider);
@@ -129,7 +152,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
 
         if (isWorkObject(element)) {
             this.addDelete(entries, [element]);
-            entries.set(...this.addColorChange());
+            this.addColorChange(entries);
             entries.set(...this.addConnectWithActivity());
             entries.set(...this.addTextAnnotation());
             entries = new Map([...entries, ...this.addActors()]);
@@ -137,7 +160,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
             entries.set(...this.addChangeWorkObjectTypeMenu());
         } else if (isActor(element)) {
             this.addDelete(entries, [element]);
-            entries.set(...this.addColorChange());
+            this.addColorChange(entries);
             entries.set(...this.addConnectWithActivity());
             entries.set(...this.addTextAnnotation());
             entries = new Map([...entries, ...this.addWorkObjects()]);
@@ -145,14 +168,14 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         } else if (isGroup(element)) {
             entries.set(...this.addDeleteGroupWithoutChildren());
             entries.set(...this.addTextAnnotation());
-            entries.set(...this.addColorChange());
+            this.addColorChange(entries);
         } else if (isActivity(element)) {
             this.addDelete(entries, [element]);
             entries.set(...this.addChangeDirection());
-            entries.set(...this.addColorChange());
+            this.addColorChange(entries);
         } else if (isAnnotation(element)) {
             this.addDelete(entries, [element]);
-            entries.set(...this.addColorChange());
+            this.addColorChange(entries);
         } else if (isConnection(element)) {
             this.addDelete(entries, [element]);
         }
@@ -163,7 +186,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
     getMultiElementContextPadEntries(elements: Element[]): ContextPadEntries {
         const entries: Map<string, ContextPadEntry> = new Map();
         this.addDelete(entries, elements);
-        entries.set(...this.addColorChange());
+        this.addColorChange(entries);
         return Object.fromEntries(entries);
     }
 
@@ -302,19 +325,21 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         ];
     }
 
-    private addColorChange(): [string, ContextPadEntry<any>] {
-        return [
-            "colorChange",
-            {
-                group: "edit",
-                className: "icon-domain-story-color-picker",
-                title: this.translate("Change color"),
-                action: {
-                    click: (_event: any, target: Element | Element[]) =>
-                        this.colorPickerCoordinator.request(target),
-                },
+    private addColorChange(entries: Map<string, ContextPadEntry>): void {
+        if (!this.colorPickerConfig.enabled) return;
+        entries.set("colorChange", {
+            group: "edit",
+            className: "icon-domain-story-color-picker",
+            html: '<button type="button" class="entry" aria-label="Change color"></button>',
+            title: this.translate("Change color"),
+            action: {
+                click: (event: any, target: Element | Element[]) =>
+                    this.colorPickerCoordinator.request(
+                        target,
+                        computeColorPickerAnchor(event),
+                    ),
             },
-        ];
+        });
     }
 
     private addTextAnnotation(): [string, ContextPadEntry<any>] {

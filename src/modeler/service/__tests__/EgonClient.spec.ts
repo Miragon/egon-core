@@ -60,7 +60,6 @@ function createMockPorts() {
         onColorPickerClosed: vi.fn(),
         offColorPickerRequested: vi.fn(),
         offColorPickerClosed: vi.fn(),
-        previewPickedColor: vi.fn(),
         confirmPickedColor: vi.fn(),
         cancelColorPicker: vi.fn(),
         destroy: vi.fn(),
@@ -100,6 +99,7 @@ describe("EgonClient (Application Service)", () => {
             container,
             width: "100%",
             height: "100%",
+            colorPicker: false,
         };
 
         // Use constructor injection to provide mock ports
@@ -125,6 +125,7 @@ describe("EgonClient (Application Service)", () => {
             const config: EgonClientConfig = {
                 container,
                 viewport: initialViewport,
+                colorPicker: false,
             };
 
             const ports = createMockPorts();
@@ -137,6 +138,65 @@ describe("EgonClient (Application Service)", () => {
             expect(ports.mockModelerPort.setViewport).toHaveBeenCalledWith(
                 initialViewport,
             );
+        });
+    });
+
+    describe("color picker configuration", () => {
+        it("installs the built-in provider when omitted", async () => {
+            const ports = createMockPorts();
+            const configured = await EgonClient.create({ container }, [], {
+                modelerPort: ports.mockModelerPort,
+                iconPort: ports.mockIconPort,
+            });
+
+            expect(
+                ports.mockModelerPort.onColorPickerRequested,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                ports.mockModelerPort.onColorPickerClosed,
+            ).toHaveBeenCalledTimes(1);
+            configured.destroy();
+        });
+
+        it("installs a custom provider through the same controller", async () => {
+            const ports = createMockPorts();
+            const provider = vi.fn(() => ({
+                result: Promise.resolve(null),
+                dispose: vi.fn(),
+            }));
+            const configured = await EgonClient.create(
+                { container, colorPicker: provider },
+                [],
+                {
+                    modelerPort: ports.mockModelerPort,
+                    iconPort: ports.mockIconPort,
+                },
+            );
+
+            expect(
+                ports.mockModelerPort.onColorPickerRequested,
+            ).toHaveBeenCalledTimes(1);
+            configured.destroy();
+        });
+
+        it("does not install a provider controller when disabled", async () => {
+            const ports = createMockPorts();
+            const configured = await EgonClient.create(
+                { container, colorPicker: false },
+                [],
+                {
+                    modelerPort: ports.mockModelerPort,
+                    iconPort: ports.mockIconPort,
+                },
+            );
+
+            expect(
+                ports.mockModelerPort.onColorPickerRequested,
+            ).not.toHaveBeenCalled();
+            expect(
+                ports.mockModelerPort.onColorPickerClosed,
+            ).not.toHaveBeenCalled();
+            configured.destroy();
         });
     });
 
@@ -237,8 +297,6 @@ describe("EgonClient (Application Service)", () => {
         });
 
         it.each([
-            ["colorPicker.requested", "onColorPickerRequested"],
-            ["colorPicker.closed", "onColorPickerClosed"],
             ["labels.changed", "onLabelsChanged"],
             ["replay.changed", "onReplayChanged"],
         ] as const)("routes %s to the modeler port", (event, method) => {
@@ -297,8 +355,6 @@ describe("EgonClient (Application Service)", () => {
         });
 
         it.each([
-            ["colorPicker.requested", "offColorPickerRequested"],
-            ["colorPicker.closed", "offColorPickerClosed"],
             ["labels.changed", "offLabelsChanged"],
             ["replay.changed", "offReplayChanged"],
         ] as const)("routes off %s to the modeler port", (event, method) => {
@@ -357,48 +413,6 @@ describe("EgonClient (Application Service)", () => {
             client.fitToScreen();
 
             expect(mockModelerPort.fitToScreen).toHaveBeenCalledTimes(1);
-        });
-    });
-
-    describe("color picker responses", () => {
-        it.each([
-            ["previewPickedColor", "previewPickedColor"],
-            ["confirmPickedColor", "confirmPickedColor"],
-        ] as const)(
-            "delegates %s and returns its result",
-            (clientMethod, portMethod) => {
-                (mockModelerPort[portMethod] as Mock).mockReturnValue(true);
-
-                expect(client[clientMethod]("request-1", "#ff0000")).toBe(true);
-                expect(mockModelerPort[portMethod]).toHaveBeenCalledWith(
-                    "request-1",
-                    "#ff0000",
-                );
-            },
-        );
-
-        it("delegates cancellation and returns its result", () => {
-            (mockModelerPort.cancelColorPicker as Mock).mockReturnValue(true);
-
-            expect(client.cancelColorPicker("request-1")).toBe(true);
-            expect(mockModelerPort.cancelColorPicker).toHaveBeenCalledWith(
-                "request-1",
-            );
-        });
-
-        it("returns false without touching the port after destruction", () => {
-            client.destroy();
-
-            expect(client.previewPickedColor("request-1", "#ff0000")).toBe(
-                false,
-            );
-            expect(client.confirmPickedColor("request-1", "#ff0000")).toBe(
-                false,
-            );
-            expect(client.cancelColorPicker("request-1")).toBe(false);
-            expect(mockModelerPort.previewPickedColor).not.toHaveBeenCalled();
-            expect(mockModelerPort.confirmPickedColor).not.toHaveBeenCalled();
-            expect(mockModelerPort.cancelColorPicker).not.toHaveBeenCalled();
         });
     });
 

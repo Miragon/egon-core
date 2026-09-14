@@ -1,5 +1,6 @@
 import { ViewportData } from "../domain/model/Viewport";
 import { DomainStoryTextRendererConfig } from "../domain/model/TextRendererConfig";
+import type { ColorPickerProvider } from "./ColorPickerProvider";
 
 /**
  * Configuration options for creating an EgonClient instance.
@@ -15,4 +16,9 @@ export interface EgonClientConfig {
     readonly viewport?: ViewportData;
     /** Label typography overrides; anything omitted keeps the built-in default */
     readonly textRenderer?: DomainStoryTextRendererConfig;
+    /**
+     * Color-picker presentation. Omit for the built-in popover, provide a
+     * client-scoped replacement, or use `false` to remove color actions.
+     */
+    readonly colorPicker?: ColorPickerProvider | false;
 }

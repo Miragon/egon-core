@@ -4,6 +4,14 @@ import { configDefaults, coverageConfigDefaults } from "vitest/config";
 import { playwright } from "@vitest/browser-playwright";
 import dts from "vite-plugin-dts";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { fileURLToPath } from "node:url";
+
+const reactColorfulCompat = fileURLToPath(
+    new URL(
+        "./src/modeler/infrastructure/color-picker/ReactColorfulCompat.ts",
+        import.meta.url,
+    ),
+);
 
 /**
  * Standalone Vite build for the egon-core library.
@@ -14,6 +22,19 @@ import tsconfigPaths from "vite-tsconfig-paths";
  */
 export default defineConfig({
     cacheDir: "node_modules/.vite",
+    resolve: {
+        // react-colorful is bundled, but its React imports target the
+        // React-compatible adapter backed by diagram-js's exact Preact runtime.
+        // The remaining aliases follow Preact's documented integration and
+        // apply equally to builds and Vitest.
+        alias: [
+            { find: "react-dom/test-utils", replacement: "preact/test-utils" },
+            { find: "react-dom/client", replacement: "preact/compat" },
+            { find: "react-dom", replacement: "preact/compat" },
+            { find: "react/jsx-runtime", replacement: "preact/jsx-runtime" },
+            { find: "react", replacement: reactColorfulCompat },
+        ],
+    },
     plugins: [
         tsconfigPaths(),
         dts({
@@ -59,6 +80,7 @@ export default defineConfig({
                     "ids",
                     "min-dash",
                     "min-dom",
+                    "preact",
                     "tiny-svg",
                 ].some((dep) => id === dep || id.startsWith(`${dep}/`)),
             output: {
@@ -79,6 +101,11 @@ export default defineConfig({
     test: {
         globals: true,
         environment: "jsdom",
+        server: {
+            // Transform this dev-only source dependency so the React→Preact
+            // aliases above apply during Vitest just as they do in the build.
+            deps: { inline: ["react-colorful"] },
+        },
         coverage: {
             reportsDirectory: "coverage",
             // Include untested production files as well as loaded modules (Vitest 4).

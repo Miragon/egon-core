@@ -16,7 +16,8 @@
         "noFallthroughCasesInSwitch": true,
         "noPropertyAccessFromIndexSignature": true,
         "esModuleInterop": true,
-        "jsx": "react"
+        "jsx": "react-jsx",
+        "jsxImportSource": "preact"
     },
     "files": [],
     "include": [],

@@ -107,6 +107,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         height: string,
         additionalModules: ModuleDeclaration[] = [],
         textRenderer?: DomainStoryTextRendererConfig,
+        colorPickerEnabled = true,
     ) {
         this.sessionOwner = new EditorSessionOwner(
             container,
@@ -114,6 +115,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
             height,
             additionalModules,
             textRenderer,
+            colorPickerEnabled,
         );
         this.replayController = this.createReplayController(
             this.sessionOwner.getActiveDiagram(),
@@ -453,6 +455,10 @@ export class DiagramJsModelerAdapter implements ModelerPort {
                     requestId: event.requestId,
                     elementIds: [...event.elementIds],
                     color: event.color,
+                    anchor: {
+                        x: Number(event.anchor?.x ?? 0),
+                        y: Number(event.anchor?.y ?? 0),
+                    },
                 });
             } catch (error) {
                 reportPostCommitError(error);
@@ -493,13 +499,6 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         if (!wrapped) return;
         (this.getEventBus().off as any)("dst.colorPicker.closed", wrapped);
         this.colorPickerClosedCallbacks.delete(callback);
-    }
-
-    previewPickedColor(requestId: string, color: string): boolean {
-        return (
-            !this.destroyed &&
-            this.getColorPickerCoordinator().preview(requestId, color)
-        );
     }
 
     confirmPickedColor(requestId: string, color: string): boolean {

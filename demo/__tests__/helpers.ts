@@ -8,6 +8,7 @@ export type ExportedElement = {
     number?: number | null;
     source?: string;
     target?: string;
+    pickedColor?: string;
 };
 
 export type ExportedStory = {

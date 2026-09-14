@@ -2222,7 +2222,9 @@ __metadata:
     min-dom: "npm:5.3.0"
     playwright: "npm:1.63.0"
     portless: "npm:0.15.6"
+    preact: "npm:10.29.7"
     prettier: "npm:3.9.6"
+    react-colorful: "npm:5.8.1"
     release-please: "npm:17.11.2"
     release-please-action-implementation: "npm:release-please@17.6.0"
     sass: "npm:1.104.0"
@@ -3950,7 +3952,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"preact@npm:^10.29.2":
+"preact@npm:10.29.7, preact@npm:^10.29.2":
   version: 10.29.7
   resolution: "preact@npm:10.29.7"
   peerDependencies:
@@ -4017,6 +4019,16 @@ __metadata:
   version: 4.0.1
   resolution: "quick-lru@npm:4.0.1"
   checksum: 10c0/f9b1596fa7595a35c2f9d913ac312fede13d37dc8a747a51557ab36e11ce113bbe88ef4c0154968845559a7709cb6a7e7cbe75f7972182451cd45e7f057a334d
+  languageName: node
+  linkType: hard
+
+"react-colorful@npm:5.8.1":
+  version: 5.8.1
+  resolution: "react-colorful@npm:5.8.1"
+  peerDependencies:
+    react: ">=16.8.0"
+    react-dom: ">=16.8.0"
+  checksum: 10c0/cd1705cdb218f9f43d376f36306968aa304e0d8018dcff198c798c2c56bf4873ea918580a57a0cceaab62ba7621663234ffad35f3d4ebd9198e65f926f9ec8fe
   languageName: node
   linkType: hard
 

@@ -32,12 +32,14 @@ static create(
 
 ### `EgonClientConfig`
 
-| Field       | Type            | Description                             |
-| ----------- | --------------- | --------------------------------------- |
-| `container` | `HTMLElement`   | The element to render the diagram into. |
-| `width`     | `string?`       | Canvas width (default `"100%"`).        |
-| `height`    | `string?`       | Canvas height (default `"100%"`).       |
-| `viewport`  | `ViewportData?` | Initial viewport (scroll + zoom).       |
+| Field          | Type                             | Description                                            |
+| -------------- | -------------------------------- | ------------------------------------------------------ |
+| `container`    | `HTMLElement`                    | The element to render the diagram into.                |
+| `width`        | `string?`                        | Canvas width (default `"100%"`).                       |
+| `height`       | `string?`                        | Canvas height (default `"100%"`).                      |
+| `viewport`     | `ViewportData?`                  | Initial viewport (scroll + zoom).                      |
+| `textRenderer` | `DomainStoryTextRendererConfig?` | Label typography overrides.                            |
+| `colorPicker`  | `ColorPickerProvider \| false`   | Built-in when omitted; custom provider; or no actions. |
 
 `additionalModules` accepts extra diagram-js
 [`ModuleDeclaration`](https://github.com/nikku/didi)s. `ports` is intended for
@@ -133,16 +135,14 @@ on<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void
 off<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void
 ```
 
-| Event                   | Callback signature                          | Fired when …                        |
-| ----------------------- | ------------------------------------------- | ----------------------------------- |
-| `story.changed`         | `() => void`                                | The diagram content changes.        |
-| `viewport.changed`      | `(viewport: ViewportData) => void`          | The user scrolls or zooms.          |
-| `icons.changed`         | `(icons: IconSet) => void`                  | The registered icon set changes.    |
-| `labels.changed`        | `(labels: LabelDictionary) => void`         | The editable label set changes.     |
-| `replay.changed`        | `(state: ReplayState) => void`              | Headless replay state changes.      |
-| `import.repaired`       | `(repair: ImportRepairData) => void`        | A damaged import is repaired.       |
-| `colorPicker.requested` | `(request: ColorPickerRequestData) => void` | A color button is clicked.          |
-| `colorPicker.closed`    | `(closed: ColorPickerClosedData) => void`   | Its request ends or is invalidated. |
+| Event              | Callback signature                   | Fired when …                     |
+| ------------------ | ------------------------------------ | -------------------------------- |
+| `story.changed`    | `() => void`                         | The diagram content changes.     |
+| `viewport.changed` | `(viewport: ViewportData) => void`   | The user scrolls or zooms.       |
+| `icons.changed`    | `(icons: IconSet) => void`           | The registered icon set changes. |
+| `labels.changed`   | `(labels: LabelDictionary) => void`  | The editable label set changes.  |
+| `replay.changed`   | `(state: ReplayState) => void`       | Headless replay state changes.   |
+| `import.repaired`  | `(repair: ImportRepairData) => void` | A damaged import is repaired.    |
 
 Passing any other event name throws `TypeError` with the message
 `Unknown Egon event: <name>`. TypeScript rejects unknown names at compile time;
@@ -156,86 +156,65 @@ client.on("story.changed", () => {
 });
 ```
 
-### Host-owned color picker
+### Color-picker providers
+
+With no `colorPicker` setting, the client opens its built-in anchored popover.
+It has an alpha-capable picker, a labeled hex field, checkerboard swatch, Apply
+and Cancel controls, keyboard-operable sliders, focus restoration, and an
+explanation that custom non-SVG artwork keeps its original colors. Drafting and
+cancellation do not touch exports, dirty state, notifications, or undo history.
+
+Set `colorPicker: false` to omit both single- and multi-selection color actions.
+To replace the UI, provide this framework-independent contract:
 
 ```ts
-previewPickedColor(requestId: string, color: string): boolean
-confirmPickedColor(requestId: string, color: string): boolean
-cancelColorPicker(requestId: string): boolean
-```
+type ColorPickerProvider = (request: ColorPickerRequest) => ColorPickerHandle;
 
-The core creates a request only when the context pad's color button is clicked.
-`colorPicker.requested` synchronously supplies an opaque `requestId`, a copied
-`elementIds` array, and the initial `color`. Preview may be called repeatedly;
-it repaints the selected elements, activity markers, and annotation connectors
-without writing the model, marking the story dirty, emitting `story.changed`,
-or adding undo history. Confirmation persists the final color through one
-`element.colorChange` command per selected element. Cancellation clears every
-preview. Both terminal actions synchronously emit `colorPicker.closed`.
-
-Only the originating live client accepts a response. Unknown, expired,
-other-client, and destroyed-client IDs return `false` without changing state.
-A request also expires when its selection changes, its pad closes, a target is
-removed or replaced, another command (including undo/redo) runs, another picker
-request opens, a successful import replaces the editor session, or the client
-is destroyed. A failed import leaves it active. Reselecting the original
-elements never revives an expired request.
-
-```ts
-const requested = ({ requestId, color }: ColorPickerRequestData) => {
-    picker.open({ requestId, color });
-    picker.onPreview((nextColor) =>
-        client.previewPickedColor(requestId, nextColor),
-    );
-    picker.onConfirm((finalColor) =>
-        client.confirmPickedColor(requestId, finalColor),
-    );
-    picker.onCancel(() => client.cancelColorPicker(requestId));
-};
-const closed = ({ requestId }: ColorPickerClosedData) => {
-    picker.close(requestId);
-};
-
-client.on("colorPicker.requested", requested);
-client.on("colorPicker.closed", closed);
-
-// Component cleanup
-client.off("colorPicker.requested", requested);
-client.off("colorPicker.closed", closed);
-```
-
-For a webview, retain both the originating client and request ID instead of
-broadcasting a global color message:
-
-```ts
-const clients = new Map<string, EgonClient>();
-
-function wirePicker(clientKey: string, client: EgonClient) {
-    clients.set(clientKey, client);
-    client.on("colorPicker.requested", (request) =>
-        webview.postMessage({
-            type: "colorPicker.requested",
-            clientKey,
-            request,
-        }),
-    );
+interface ColorPickerRequest {
+    readonly requestId: string;
+    readonly elementIds: readonly string[];
+    readonly color: string;
+    readonly anchor: { readonly x: number; readonly y: number };
+    readonly signal: AbortSignal;
 }
 
-window.addEventListener("message", ({ data }) => {
-    const client = clients.get(data.clientKey);
-    if (!client) return;
-    if (data.type === "colorPicker.preview")
-        client.previewPickedColor(data.requestId, data.color);
-    if (data.type === "colorPicker.confirm")
-        client.confirmPickedColor(data.requestId, data.color);
-    if (data.type === "colorPicker.cancel")
-        client.cancelColorPicker(data.requestId);
+interface ColorPickerHandle {
+    readonly result: Promise<string | null>;
+    dispose(): void;
+}
+```
+
+The anchor is in browser-viewport coordinates. Resolve `result` with `#RGB`,
+`#RGBA`, `#RRGGBB`, `#RRGGBBAA`, `rgb(r, g, b)`, or `rgba(r, g, b, a)` where
+RGB channels are 0–255 and alpha is 0–1. Whitespace around the whole result,
+named colors, percentages, modern space/slash RGB syntax, and out-of-range
+channels are invalid; invalid results cancel without commands. Resolve `null`
+for ordinary cancellation.
+
+```ts
+const client = await EgonClient.create({
+    container,
+    colorPicker(request) {
+        const picker = hostPicker.open(request.color, request.anchor);
+        return { result: picker.result, dispose: () => picker.close() };
+    },
 });
 ```
 
-Hosts must close their picker as part of their own teardown before calling
-`client.destroy()`; teardown deliberately invokes no host callbacks after it
-begins. A future bundled/default picker must consume this same protocol.
+The signal aborts and `dispose()` runs exactly once when the result settles or
+the request is replaced/invalidated by selection, context-pad closure, deletion,
+replacement, an unrelated command (including undo/redo), successful import, or
+client destruction. A failed import retains it. Late results are ignored even
+if a provider disregards cancellation. Throws, rejected results, invalid
+handles, and cleanup failures are contained and reported through the platform's
+`reportError` (or `console.error` fallback).
+
+For a webview, create one Promise per request, post only serializable request
+fields, resolve it from the matching webview reply, post cancellation when the
+signal aborts, and remove listeners in `dispose()`. Migration from the old API
+requires deleting `colorPicker.requested`/`colorPicker.closed` listeners and all
+`previewPickedColor`/`confirmPickedColor`/`cancelColorPicker` calls; the provider
+returns only the final decision. No document-level compatibility events exist.
 
 ## Viewport
 

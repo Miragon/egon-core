@@ -5,6 +5,7 @@ import {
     mkdtemp,
     mkdir,
     readFile,
+    readdir,
     rm,
     writeFile,
 } from "node:fs/promises";
@@ -12,6 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { clearTimeout, setTimeout } from "node:timers";
 import { fileURLToPath, URL } from "node:url";
+import { createRequire } from "node:module";
 import {
     extractCssAssetReferences,
     inspectPackageContract,
@@ -86,6 +88,7 @@ try {
         `Validated package identity, license, exports, and ${emittedFiles.length} emitted dist files.`,
     );
     await inspectPackagedStyles(installedPackageRoot);
+    await inspectPreactIntegration(consumerRoot, installedPackageRoot);
     await run(
         "yarn",
         ["tsc", "--project", "tsconfig.json", "--noEmit"],
@@ -120,6 +123,64 @@ try {
 } finally {
     await Promise.all(Array.from(activeChildren, (child) => stopChild(child)));
     await rm(temporaryRoot, { recursive: true, force: true });
+}
+
+async function inspectPreactIntegration(consumerRoot, packageRoot) {
+    const distRoot = join(packageRoot, "dist");
+    const javascript = (await readdir(distRoot)).filter((file) =>
+        file.endsWith(".js"),
+    );
+    const dist = (
+        await Promise.all(
+            javascript.map((file) => readFile(join(distRoot, file), "utf8")),
+        )
+    ).join("\n");
+    if (/from\s*["']react(?:\/|["'])/.test(dist)) {
+        throw new Error("Bundled picker still contains a React import.");
+    }
+    if (/from\s*["']preact(?:\/|["'])/.test(dist)) {
+        throw new Error("Bundled picker bypasses diagram-js's Preact runtime.");
+    }
+
+    const consumerRequire = createRequire(join(consumerRoot, "package.json"));
+    const pickerChunk = javascript.find((file) =>
+        file.startsWith("DefaultColorPickerProvider-"),
+    );
+    if (!pickerChunk) {
+        throw new Error(
+            "Installed package has no bundled default picker chunk.",
+        );
+    }
+    const pickerSource = await readFile(join(distRoot, pickerChunk), "utf8");
+    if (!pickerSource.includes("diagram-js/lib/ui")) {
+        throw new Error(
+            "Bundled picker does not share diagram-js's Preact UI runtime.",
+        );
+    }
+    try {
+        consumerRequire.resolve("react");
+        throw new Error("The isolated consumer unexpectedly installed React.");
+    } catch (error) {
+        if (error?.code !== "MODULE_NOT_FOUND") throw error;
+    }
+
+    await access(join(packageRoot, "dist", "THIRD_PARTY_NOTICES.txt"));
+    const hostConfig = await readFile(
+        join(consumerRoot, "vite.config.mts"),
+        "utf8",
+    );
+    if (/\balias\s*:/.test(hostConfig)) {
+        throw new Error("The isolated consumer unexpectedly defines aliases.");
+    }
+    const manifest = JSON.parse(
+        await readFile(join(packageRoot, "package.json"), "utf8"),
+    );
+    if (manifest.dependencies?.preact !== "10.29.7") {
+        throw new Error("Installed package does not pin Preact 10.29.7.");
+    }
+    console.log(
+        "Validated React-free shared Preact runtime and bundled notices.",
+    );
 }
 
 if (interrupted) process.exit(process.exitCode ?? 1);

@@ -20,6 +20,11 @@ interface ActiveColorPickerRequest {
     readonly elementIds: readonly string[];
 }
 
+interface ViewportAnchor {
+    readonly x: number;
+    readonly y: number;
+}
+
 /** Owns the color-picker request active in one diagram-js editor session. */
 export class ColorPickerCoordinator {
     static $inject: string[] = [
@@ -56,7 +61,10 @@ export class ColorPickerCoordinator {
         });
     }
 
-    request(target: Element | Element[]): boolean {
+    request(
+        target: Element | Element[],
+        anchor: ViewportAnchor = { x: 0, y: 0 },
+    ): boolean {
         if (this.destroyed) return false;
 
         const elements = (Array.isArray(target) ? target : [target]).slice();
@@ -82,6 +90,7 @@ export class ColorPickerCoordinator {
             requestId: request.id,
             elementIds: [...request.elementIds],
             color,
+            anchor: { ...anchor },
         });
         return true;
     }

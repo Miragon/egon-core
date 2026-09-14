@@ -31,7 +31,7 @@ installable after its **Release archive** workflow validates and attaches the
 `.tgz`; the automatically generated source archives are not built packages. See
 [docs/Releasing.md](docs/Releasing.md) for the release and recovery process.
 
-The package ships as ESM. `diagram-js` and its companion packages
+The package ships as ESM. `diagram-js`, Preact, and the companion packages
 (`diagram-js-direct-editing`, `didi`, `ids`, `min-dash`, `min-dom`, `tiny-svg`)
 are regular dependencies today; a consuming app should have a bundler that can
 resolve ESM.
@@ -61,39 +61,32 @@ layout, the BPMN icon font, and egon-core's built-in SVG masks. Hosts only need
 to give the canvas container a usable size. See
 [docs/Client.md](docs/Client.md) for the full `EgonClient` API.
 
-## Host integration: color picker
+## Color picker
 
-Recoloring UI is host-owned and communicates with the core through a
-client-scoped request protocol. A host without a picker still shows the pad's
-color button, but clicking it has no visual effect.
+Plain clients include an anchored, keyboard-accessible color picker. A host can
+replace it with a provider or remove both single- and multi-selection color
+actions with `false`.
 
 ```ts
-const requested = ({ requestId, color }) => {
-    picker.open({ color });
-    picker.onPreview((next) => client.previewPickedColor(requestId, next));
-    picker.onConfirm((final) => client.confirmPickedColor(requestId, final));
-    picker.onCancel(() => client.cancelColorPicker(requestId));
-};
-const closed = ({ requestId }) => picker.close(requestId);
+const client = await EgonClient.create({
+    container,
+    colorPicker: (request) => {
+        const picker = hostPicker.open(request.color, request.anchor);
+        return {
+            result: picker.result, // Promise<string | null>
+            dispose: () => picker.close(),
+        };
+    },
+});
 
-client.on("colorPicker.requested", requested);
-client.on("colorPicker.closed", closed);
-
-// During host teardown, close the UI and remove subscriptions before destroy.
-picker.close();
-client.off("colorPicker.requested", requested);
-client.off("colorPicker.closed", closed);
-client.destroy();
+const readOnly = await EgonClient.create({ container, colorPicker: false });
 ```
 
-Preview calls may be repeated. They repaint without changing the exported
-story, dirty state, or undo history. Confirmation applies one existing color
-command per selected element; cancellation restores the persisted appearance.
-Unknown, expired, other-client, and destroyed-client request IDs return `false`.
-The core still dispatches `errorColoringOnlySvg` when a color is applied to an
-element whose custom icon is not SVG (raster icons cannot be recolored). The
-host may surface this as a notification. See [docs/Client.md](docs/Client.md)
-for webview routing and lifecycle details.
+Providers receive copied IDs, the initial color, an opaque request ID, viewport
+anchor coordinates, and an `AbortSignal`; they receive no diagram services or
+mutable elements. Resolve with short/full hex (optional alpha) or RGB/RGBA to
+apply, and `null` to cancel. See [docs/Client.md](docs/Client.md) for lifecycle,
+validation, and migration details.
 
 ## Scripts
 

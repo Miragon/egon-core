@@ -27,14 +27,15 @@ export interface ImportRepairData {
     removedConnectionIds: string[];
 }
 
-/** A host-owned color picker request scoped to one EgonClient instance. */
+/** Internal provider request scoped to one EgonClient instance. */
 export interface ColorPickerRequestData {
     requestId: string;
     elementIds: readonly string[];
     color: string;
+    anchor: { readonly x: number; readonly y: number };
 }
 
-/** Identifies the host-owned picker that should be dismissed. */
+/** Identifies the provider handle that should be retired. */
 export interface ColorPickerClosedData {
     requestId: string;
 }
@@ -126,8 +127,8 @@ export interface ModelerPort {
     offReplayChanged(callback: (state: ReplayState) => void): void;
 
     /**
-     * Color-picker events are synchronous and idempotent per callback. The
-     * picker UI remains host-owned; these methods only bridge its lifecycle.
+     * Internal color-picker events are synchronous and idempotent per callback.
+     * The per-client controller uses them to bridge provider lifecycle.
      */
     onColorPickerRequested(
         callback: (request: ColorPickerRequestData) => void,
@@ -142,7 +143,6 @@ export interface ModelerPort {
         callback: (closed: ColorPickerClosedData) => void,
     ): void;
 
-    previewPickedColor(requestId: string, color: string): boolean;
     confirmPickedColor(requestId: string, color: string): boolean;
     cancelColorPicker(requestId: string): boolean;
 

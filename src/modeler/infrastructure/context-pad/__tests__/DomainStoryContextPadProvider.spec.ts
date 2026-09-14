@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import EventBus from "diagram-js/lib/core/EventBus";
 
 import {
+    computeColorPickerAnchor,
     computeReplaceMenuPosition,
     DomainStoryContextPadProvider,
 } from "../DomainStoryContextPadProvider";
@@ -82,6 +83,34 @@ describe("computeReplaceMenuPosition", () => {
     });
 });
 
+describe("computeColorPickerAnchor", () => {
+    it("anchors to the initiating color control's right-center", () => {
+        const control = document.createElement("button");
+        control.dataset["action"] = "colorChange";
+        control.getBoundingClientRect = rect({
+            left: 100,
+            top: 40,
+            width: 30,
+            height: 20,
+            right: 130,
+        });
+        const child = document.createElement("span");
+        control.appendChild(child);
+
+        expect(computeColorPickerAnchor({ target: child })).toEqual({
+            x: 130,
+            y: 50,
+        });
+    });
+
+    it("falls back to cursor coordinates when no DOM control initiated it", () => {
+        expect(computeColorPickerAnchor({ clientX: 12, clientY: 34 })).toEqual({
+            x: 12,
+            y: 34,
+        });
+    });
+});
+
 /**
  * The context-pad half of the client-scoped picker contract (ADR 0026). This
  * provider owns no request or async response state; it only hands the exact pad
@@ -102,7 +131,10 @@ function element(id: string, type: ElementTypes, pickedColor?: string): any {
  * The event bus is the real diagram-js one because ctrl-drop behavior depends
  * on when its listener runs relative to diagram-js' own selection listener.
  */
-function provider(rulesOverride?: { allowed: (...args: any[]) => unknown }) {
+function provider(
+    rulesOverride?: { allowed: (...args: any[]) => unknown },
+    colorPickerEnabled = true,
+) {
     const rules = rulesOverride ?? { allowed: vi.fn(() => true) };
     const commandStack = { execute: vi.fn(), registerHandler: vi.fn() };
     const dirtyFlagService = { makeDirty: vi.fn() };
@@ -153,6 +185,7 @@ function provider(rulesOverride?: { allowed: (...args: any[]) => unknown }) {
         commandStack as any,
         eventBus,
         colorPickerCoordinator as any,
+        { enabled: colorPickerEnabled },
     );
 
     return {
@@ -192,7 +225,10 @@ describe("DomainStoryContextPadProvider color change", () => {
 
         (entries["colorChange"].action as any).click({}, el);
 
-        expect(colorPickerCoordinator.request).toHaveBeenCalledWith(el);
+        expect(colorPickerCoordinator.request).toHaveBeenCalledWith(el, {
+            x: 0,
+            y: 0,
+        });
     });
 
     it("passes the complete multi-selection to the coordinator", () => {
@@ -204,7 +240,10 @@ describe("DomainStoryContextPadProvider color change", () => {
         const entries = instance.getMultiElementContextPadEntries(elements);
         (entries["colorChange"].action as any).click({}, elements);
 
-        expect(colorPickerCoordinator.request).toHaveBeenCalledWith(elements);
+        expect(colorPickerCoordinator.request).toHaveBeenCalledWith(elements, {
+            x: 0,
+            y: 0,
+        });
     });
 
     it("offers a colorChange entry for multi-selections", () => {
@@ -216,6 +255,22 @@ describe("DomainStoryContextPadProvider color change", () => {
         ]);
 
         expect(entries).toHaveProperty("colorChange");
+    });
+
+    it("omits color actions when the client disables its picker", () => {
+        const { instance } = provider(undefined, false);
+
+        expect(
+            instance.getContextPadEntries(
+                element("Actor_1", ElementTypes.ACTOR),
+            ),
+        ).not.toHaveProperty("colorChange");
+        expect(
+            instance.getMultiElementContextPadEntries([
+                element("Actor_1", ElementTypes.ACTOR),
+                element("Annotation_1", ElementTypes.TEXTANNOTATION),
+            ]),
+        ).not.toHaveProperty("colorChange");
     });
 });
 
