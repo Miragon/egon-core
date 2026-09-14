@@ -58,20 +58,6 @@ export class DomainStoryModeling extends Modeling {
         }
     }
 
-    updateNumber(element: Element, newNumber: number, newBounds?: Rect) {
-        if (
-            element.businessObject
-                ? newNumber !== element.businessObject.number
-                : newNumber !== element["number"]
-        ) {
-            this.commandStack.execute("element.updateLabel", {
-                element: element,
-                newNumber: newNumber,
-                newBounds: newBounds,
-            });
-        }
-    }
-
     /**
      * Removes a group but keeps its contents. The deletion lives inside the
      * command's `preExecute`, so lifting the children out and dropping the frame

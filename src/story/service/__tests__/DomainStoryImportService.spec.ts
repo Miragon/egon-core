@@ -15,6 +15,7 @@ import { IconDictionaryService } from "../../../iconSet/service/IconDictionarySe
 import { IconSetImportExportService } from "../../../iconSet/service/IconSetImportExportService";
 import type { IconStyleSheetPort } from "../../../iconSet/domain/ports/IconStyleSheetPort";
 import { DomainStoryPropertiesService } from "../../../modeler/service/DomainStoryPropertiesService";
+import { passThroughIconSanitizer } from "../../../__tests__/helpers/passThroughIconSanitizer";
 
 // The import path under test never renders, so CSS injection is irrelevant here
 // (and with no style element configured the real injector no-ops anyway).
@@ -40,7 +41,16 @@ function makeHarness() {
 
     const elementFactory = {
         create(kind: string, attrs: any) {
-            created.push({ kind, attrs });
+            // Capture the factory inputs by value: import later restores a
+            // valid persisted parent on the business object, but that id must
+            // not have been supplied as an element-factory attribute.
+            created.push({
+                kind,
+                attrs: {
+                    ...attrs,
+                    businessObject: { ...attrs.businessObject },
+                },
+            });
             // Spread rather than pass through: the service re-reads `.type` off
             // the created shape for group parenting and `.id` via the registry,
             // so the fake must behave like a distinct element object.
@@ -71,7 +81,10 @@ function makeHarness() {
         },
     } as unknown as EventBus;
 
-    const iconDictionaryService = new IconDictionaryService(noopStyleSheet);
+    const iconDictionaryService = new IconDictionaryService(
+        noopStyleSheet,
+        passThroughIconSanitizer,
+    );
     const iconSetService = new IconSetImportExportService(
         iconDictionaryService,
     );
@@ -94,8 +107,10 @@ function makeHarness() {
         added,
         fired,
         created,
+        byId,
         bannerCalls,
         propertiesService,
+        iconDictionaryService,
         /** `"shape:id"` / `"connection:id"` in the order the canvas saw them. */
         addedSignature: () => added.map((call) => `${call.kind}:${call.id}`),
     };
@@ -157,7 +172,94 @@ const activity = (id: string, source: string, target: string) => ({
     source,
     target,
     number: 1,
-    waypoints: [{ x: 0, y: 0 }],
+    waypoints: [
+        { x: 0, y: 0 },
+        { x: 100, y: 100 },
+    ],
+});
+
+describe("DomainStoryImportService icon-name preparation", () => {
+    it("uses incoming dictionary keys while preserving exact names and caller data", () => {
+        const harness = makeHarness();
+        const document = JSON.parse(
+            storyFile([
+                actor("shape_exact", {
+                    type: `${ElementTypes.ACTOR}My Icon`,
+                }),
+                workObject("shape_legacy", {
+                    type: `${ElementTypes.WORKOBJECT}Case File.v2`,
+                }),
+            ]),
+        );
+        document.iconSet.actors = {
+            "My Icon": "<svg data-icon='exact'/>",
+            "My-Icon": "<svg data-icon='hyphenated'/>",
+        };
+        document.iconSet.workObjects = {
+            "Case-File.v2": "<svg data-icon='legacy'/>",
+        };
+        const snapshot = structuredClone(document);
+        const selectedBefore = {
+            actors: harness.iconDictionaryService
+                .getActorsDictionary()
+                .toRecord(),
+            workObjects: harness.iconDictionaryService
+                .getWorkObjectsDictionary()
+                .toRecord(),
+        };
+
+        const prepared = harness.service.prepare(document);
+        const types = Object.fromEntries(
+            prepared.shapes.map((shape) => [shape.id, shape.type]),
+        );
+
+        expect(types).toEqual({
+            shape_exact: `${ElementTypes.ACTOR}My Icon`,
+            shape_legacy: `${ElementTypes.WORKOBJECT}Case-File.v2`,
+        });
+        expect(document).toEqual(snapshot);
+        expect(
+            harness.iconDictionaryService.getActorsDictionary().toRecord(),
+        ).toEqual(selectedBefore.actors);
+        expect(
+            harness.iconDictionaryService.getWorkObjectsDictionary().toRecord(),
+        ).toEqual(selectedBefore.workObjects);
+    });
+
+    it("uses retained custom-icon names without changing the active pool", () => {
+        const harness = makeHarness();
+        harness.iconDictionaryService.addIMGToIconDictionary(
+            "<svg data-icon='retained'/>",
+            "Retained-Icon",
+        );
+        const poolBefore = harness.iconDictionaryService
+            .getFullDictionary()
+            .toRecord();
+        const document = JSON.parse(
+            storyFile([
+                actor("shape_retained", {
+                    type: `${ElementTypes.ACTOR}Retained Icon`,
+                }),
+            ]),
+        );
+        document.iconSet = {
+            name: "empty incoming set",
+            actors: {},
+            workObjects: {},
+        };
+
+        const prepared = harness.service.prepare(document);
+
+        expect(prepared.shapes[0].type).toBe(
+            `${ElementTypes.ACTOR}Retained-Icon`,
+        );
+        expect(
+            harness.iconDictionaryService.getFullDictionary().toRecord(),
+        ).toEqual(poolBefore);
+        expect(document.domainStory.businessObjects[0].type).toBe(
+            `${ElementTypes.ACTOR}Retained Icon`,
+        );
+    });
 });
 
 describe("DomainStoryImportService insertion order", () => {
@@ -197,6 +299,50 @@ describe("DomainStoryImportService insertion order", () => {
             { kind: "shape", id: "shape_group", parent: undefined },
             { kind: "shape", id: "shape_actor", parent: "shape_group" },
         ]);
+        expect(harness.byId.get("shape_actor").businessObject.parent).toBe(
+            "shape_group",
+        );
+    });
+
+    it("loads nested groups before their parents' children, even when input puts children first", () => {
+        const harness = makeHarness();
+
+        harness.service.import(
+            storyFile([
+                group("shape_inner", { parent: "shape_outer" }),
+                actor("shape_actor", { parent: "shape_inner" }),
+                group("shape_outer"),
+                workObject("shape_work", { parent: "shape_outer" }),
+                {
+                    id: "shape_note",
+                    type: ElementTypes.TEXTANNOTATION,
+                    text: "note",
+                    x: 0,
+                    y: 0,
+                    parent: "shape_inner",
+                },
+            ]),
+        );
+
+        expect(harness.added).toEqual([
+            { kind: "shape", id: "shape_outer", parent: undefined },
+            { kind: "shape", id: "shape_inner", parent: "shape_outer" },
+            { kind: "shape", id: "shape_actor", parent: "shape_inner" },
+            { kind: "shape", id: "shape_work", parent: "shape_outer" },
+            { kind: "shape", id: "shape_note", parent: "shape_inner" },
+        ]);
+        expect(harness.byId.get("shape_inner").businessObject.parent).toBe(
+            "shape_outer",
+        );
+        expect(harness.byId.get("shape_actor").businessObject.parent).toBe(
+            "shape_inner",
+        );
+        expect(harness.byId.get("shape_work").businessObject.parent).toBe(
+            "shape_outer",
+        );
+        expect(harness.byId.get("shape_note").businessObject.parent).toBe(
+            "shape_inner",
+        );
     });
 
     it("resolves connection endpoints through the element registry", () => {
@@ -266,12 +412,14 @@ describe("DomainStoryImportService version gating", () => {
 });
 
 describe("DomainStoryImportService canvas lifecycle", () => {
-    it("clears the diagram before adding anything", () => {
+    it("materializes without destructively clearing its session", () => {
         const harness = makeHarness();
 
         harness.service.import(storyFile([actor("shape_actor")]));
 
-        expect(harness.fired[0].event).toBe("diagram.clear");
+        expect(
+            harness.fired.some((call) => call.event === "diagram.clear"),
+        ).toBe(false);
         expect(harness.added).toHaveLength(1);
     });
 
@@ -281,7 +429,7 @@ describe("DomainStoryImportService canvas lifecycle", () => {
         { what: "an unrecognized payload", story: '{"foo":1}' },
         { what: "a non-story array", story: '"not a story"' },
         { what: "invalid JSON", story: "{" },
-    ])("throws on $what before firing diagram.clear", ({ story }) => {
+    ])("throws on $what before firing editor events", ({ story }) => {
         const harness = makeHarness();
 
         expect(() => harness.service.import(story)).toThrow();
@@ -289,7 +437,7 @@ describe("DomainStoryImportService canvas lifecycle", () => {
         expect(harness.added).toEqual([]);
     });
 
-    it("strips parent/children from every business object and stores the metadata", () => {
+    it("restores valid parent ids after factory creation, omits children, and stores metadata", () => {
         const harness = makeHarness();
         const scope = {
             granularity: "coarse-grained",
@@ -313,13 +461,71 @@ describe("DomainStoryImportService canvas lifecycle", () => {
         );
 
         for (const call of harness.created) {
+            expect("parent" in call.attrs).toBe(false);
+            expect("children" in call.attrs).toBe(false);
             expect("parent" in call.attrs.businessObject).toBe(false);
             expect("children" in call.attrs.businessObject).toBe(false);
         }
+        expect(harness.byId.get("shape_actor").businessObject.parent).toBe(
+            "shape_group",
+        );
+        expect(harness.byId.get("shape_group").businessObject.children).toBe(
+            undefined,
+        );
         expect(harness.propertiesService.getTitle()).toBe("T");
         expect(harness.propertiesService.getDescription()).toBe("D");
         expect(harness.propertiesService.getScope()).toEqual(scope);
         expect(harness.propertiesService.getVersion()).toBe("4.0.0");
+    });
+});
+
+describe("DomainStoryImportService invalid group membership", () => {
+    it("keeps ungrouped shapes at the root and clears missing or non-group parent references", () => {
+        const harness = makeHarness();
+
+        harness.service.import(
+            storyFile([
+                actor("shape_plain"),
+                actor("shape_missing", { parent: "shape_gone" }),
+                actor("shape_non_group", { parent: "shape_plain" }),
+            ]),
+        );
+
+        expect(harness.added).toEqual([
+            { kind: "shape", id: "shape_plain", parent: undefined },
+            { kind: "shape", id: "shape_missing", parent: undefined },
+            { kind: "shape", id: "shape_non_group", parent: undefined },
+        ]);
+        for (const id of ["shape_plain", "shape_missing", "shape_non_group"]) {
+            expect(harness.byId.get(id).businessObject.parent).toBeUndefined();
+        }
+    });
+
+    it("adds cyclic groups at the root with their unresolved parent ids cleared", () => {
+        const harness = makeHarness();
+
+        harness.service.import(
+            storyFile([
+                group("shape_first", { parent: "shape_second" }),
+                group("shape_second", { parent: "shape_first" }),
+                actor("shape_child", { parent: "shape_first" }),
+            ]),
+        );
+
+        expect(harness.added).toEqual([
+            { kind: "shape", id: "shape_first", parent: undefined },
+            { kind: "shape", id: "shape_second", parent: undefined },
+            { kind: "shape", id: "shape_child", parent: "shape_first" },
+        ]);
+        expect(
+            harness.byId.get("shape_first").businessObject.parent,
+        ).toBeUndefined();
+        expect(
+            harness.byId.get("shape_second").businessObject.parent,
+        ).toBeUndefined();
+        expect(harness.byId.get("shape_child").businessObject.parent).toBe(
+            "shape_first",
+        );
     });
 });
 

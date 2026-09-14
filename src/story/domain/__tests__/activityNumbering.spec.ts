@@ -2,10 +2,37 @@ import { describe, expect, it } from "vitest";
 import {
     activitiesFromActors,
     nextAvailableActivityNumber,
+    numberingOnDirectionChange,
     renumberOnNumberEdit,
     restoredNumberAssignments,
 } from "../activityNumbering";
 import { ElementTypes } from "../elementTypes";
+
+describe("numberingOnDirectionChange", () => {
+    it("clears the number when the current source is an actor", () => {
+        expect(numberingOnDirectionChange({ type: ElementTypes.ACTOR })).toBe(
+            "clear",
+        );
+    });
+
+    it("recognizes icon-suffixed actor types by prefix", () => {
+        expect(
+            numberingOnDirectionChange({
+                type: ElementTypes.ACTOR + "SalesPerson",
+            }),
+        ).toBe("clear");
+    });
+
+    it.each([
+        { type: ElementTypes.WORKOBJECT + "Document" },
+        { type: ElementTypes.ACTIVITY },
+        {},
+        null,
+        undefined,
+    ])("generates a number for the non-actor source $type", (source) => {
+        expect(numberingOnDirectionChange(source)).toBe("generate");
+    });
+});
 
 describe("nextAvailableActivityNumber", () => {
     it.each([

@@ -12,6 +12,7 @@ import DomainStoryReplaceMenuProvider from "../replace";
 import DomainStoryPopup from "../popup";
 import DomainStoryDirtyFlagService from "../../service";
 import DomainStoryIconDictionaryService from "../../../iconSet/service";
+import DomainStoryColorPicker from "../color-picker";
 
 import { DomainStoryContextPadProvider } from "./DomainStoryContextPadProvider";
 import { DomainStoryContextPad } from "./DomainStoryContextPad";
@@ -26,6 +27,7 @@ export default {
         DomainStoryPopup,
         DomainStoryDirtyFlagService,
         DomainStoryIconDictionaryService,
+        DomainStoryColorPicker,
         RulesModule,
         ConnectModule,
         CreateModule,

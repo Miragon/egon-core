@@ -9,6 +9,8 @@
  * diagram-js adapter.
  */
 
+import { ElementTypes } from "./elementTypes";
+
 /** The colour every element is drawn in when the user picked none. */
 export const DEFAULT_COLOR = "#000000";
 
@@ -37,4 +39,9 @@ export function isDefaultColor(color?: string | null): boolean {
         return true;
     }
     return DEFAULT_COLOR_LITERALS.includes(color.trim().toLowerCase());
+}
+
+/** Annotation recoloring includes its incoming dashed connector. */
+export function colorIncludesIncomingConnection(type: string): boolean {
+    return type === ElementTypes.TEXTANNOTATION;
 }

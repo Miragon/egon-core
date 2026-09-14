@@ -22,6 +22,8 @@ export interface TestModelerOptions {
     additionalModules?: ModuleDeclaration[];
     /** Label typography overrides, as `EgonClientConfig.textRenderer` supplies them. */
     textRenderer?: DomainStoryTextRendererConfig;
+    /** Existing host to share between modelers. Owned by the caller when set. */
+    container?: HTMLElement;
 }
 
 /** A booted modeler plus the injector services canvas specs drive directly. */
@@ -51,8 +53,8 @@ export interface TestModeler {
  *
  * Built **on `DiagramJsModelerAdapter`**, not a hand-rolled `new Diagram(...)`:
  * the adapter owns the production bootstrap — the `canvas: { container, width,
- * height }` nesting (whose absence was a real bug, #59), the per-instance
- * `[data-egon-icons-css]` node and the DI config that hands it to the icon
+ * height }` nesting (whose absence was a real bug, #59), the per-session
+ * `[data-egon-icons-css]` node and scoped canvas attribute handed to the icon
  * stylesheet adapter, and realizing the implicit canvas root (which
  * `isBackground` depends on). A
  * harness that boots differently would test a fiction. Icons load through the
@@ -68,10 +70,13 @@ export interface TestModeler {
 export function createTestModeler(
     options: TestModelerOptions = {},
 ): TestModeler {
-    const container = document.createElement("div");
-    container.style.width = "800px";
-    container.style.height = "600px";
-    document.body.appendChild(container);
+    const ownsContainer = !options.container;
+    const container = options.container ?? document.createElement("div");
+    if (ownsContainer) {
+        container.style.width = "800px";
+        container.style.height = "600px";
+        document.body.appendChild(container);
+    }
 
     const adapter = new DiagramJsModelerAdapter(
         container,
@@ -110,7 +115,7 @@ export function createTestModeler(
             // Icon port before modeler port, mirroring EgonClient.destroy().
             iconAdapter.destroy();
             adapter.destroy();
-            container.remove();
+            if (ownsContainer) container.remove();
         },
     };
 }

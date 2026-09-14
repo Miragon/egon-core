@@ -1,3 +1,4 @@
+@import "diagram-js/assets/diagram-js.css";
 @import "bpmn-font/dist/css/bpmn.css";
 @import "diagram-js-minimap/assets/diagram-js-minimap.css";
 
@@ -26,6 +27,23 @@
     mask-size: contain;
     mask-repeat: no-repeat;
     mask-position: center;
+}
+
+/* Instance-scoped markers added by headless replay presentation. */
+.djs-element.egon-replay-hidden {
+    display: none;
+}
+
+.djs-element.egon-replay-current .djs-visual > path {
+    stroke-width: 4px !important;
+}
+
+.djs-element.egon-replay-current .djs-label {
+    font-weight: bold !important;
+}
+
+.djs-element.egon-replay-current .djs-labelNumber {
+    fill: white !important;
 }
 
 /* Build In Icons */

@@ -3,6 +3,8 @@ import { IconSet } from "../../story/domain/iconSet";
 import { ElementTypes } from "../../story/domain/elementTypes";
 import { sanitizeForCss } from "../../shared/domain/sanitizer";
 import { IconStyleSheetPort } from "../domain/ports/IconStyleSheetPort";
+import { IconSanitizerPort } from "../domain/ports/IconSanitizerPort";
+import type { IconCategory } from "../domain/IconTypes";
 
 export const ICON_CSS_CLASS_PREFIX = "icon-domain-story-";
 
@@ -10,7 +12,10 @@ export const ICON_CSS_CLASS_PREFIX = "icon-domain-story-";
  * The dictionaries hold icons (as SVG) and icon names as key-value pairs:
  */
 export class IconDictionaryService {
-    static $inject: string[] = ["domainStoryIconStyleSheet"];
+    static $inject: string[] = [
+        "domainStoryIconStyleSheet",
+        "domainStoryIconSanitizer",
+    ];
 
     // these dictionaries make up the current icon set:
     private selectedActorsDictionary = new Dictionary<string>();
@@ -29,20 +34,49 @@ export class IconDictionaryService {
     // Required (no default): a defaulted port would let a caller silently smuggle
     // DOM coupling back into this service. The stylesheet is injected from
     // outside so the service stays free of DOM/CSSOM detail.
-    constructor(private readonly iconStyleSheet: IconStyleSheetPort) {}
+    constructor(
+        private readonly iconStyleSheet: IconStyleSheetPort,
+        private readonly iconSanitizer: IconSanitizerPort,
+    ) {}
 
     registerIconForType(type: ElementTypes, name: string, src: string): void {
         if (name.includes(type)) {
             throw new Error("Name should not include type!");
         }
 
-        let collection = new Dictionary<string>();
-        if (type === ElementTypes.ACTOR) {
-            collection = this.selectedActorsDictionary;
-        } else if (type === ElementTypes.WORKOBJECT) {
-            collection = this.selectedWorkObjectsDictionary;
+        this.getSelectedDictionary(type).set(
+            name,
+            this.iconSanitizer.sanitize(src),
+        );
+    }
+
+    /**
+     * Add or replace one icon while preserving Dictionary's general
+     * first-write-wins contract.
+     *
+     * Artwork is shared by name: if the other category already selects the
+     * same name, refresh its source too, but do not add that membership when it
+     * was absent. Validation and sanitization finish before the first mutation
+     * so a rejected update leaves every dictionary untouched.
+     */
+    upsertIconForType(type: ElementTypes, name: string, src: string): string {
+        const selected = this.getSelectedDictionary(type);
+        if (name.includes(type)) {
+            throw new Error("Name should not include type!");
         }
-        collection.set(name, src);
+        const sanitized = this.iconSanitizer.sanitize(src);
+        const otherSelected =
+            type === ElementTypes.ACTOR
+                ? this.selectedWorkObjectsDictionary
+                : this.selectedActorsDictionary;
+
+        this.replaceEntry(this.customIcons, name, sanitized);
+        this.replaceEntry(selected, name, sanitized);
+        if (otherSelected.has(name)) {
+            this.replaceEntry(otherSelected, name, sanitized);
+        }
+
+        return sanitized;
     }
 
     unregisterIconForType(type: ElementTypes, name: string): void {
@@ -50,39 +84,37 @@ export class IconDictionaryService {
             throw new Error("Name should not include type!");
         }
 
-        let collection = new Dictionary<string>();
-        if (type === ElementTypes.ACTOR) {
-            collection = this.selectedActorsDictionary;
-        } else if (type === ElementTypes.WORKOBJECT) {
-            collection = this.selectedWorkObjectsDictionary;
-        }
-        collection.delete(name);
+        this.getSelectedDictionary(type).delete(name);
     }
 
     updateIconRegistries(config: IconSet): void {
-        const newIcons = new Dictionary<string>();
-        this.extractCustomIconsFromDictionary(config.actors, newIcons);
-        this.extractCustomIconsFromDictionary(config.workObjects, newIcons);
+        const sanitizedConfig = this.sanitizeIconSet(config);
+        const currentIcons = new Dictionary<string>();
+        // Dictionary is first-write-wins, so actors deliberately take
+        // precedence when one imported set uses the same name in both halves.
+        currentIcons.appendDict(sanitizedConfig.actors);
+        currentIcons.appendDict(sanitizedConfig.workObjects);
 
-        // Add new icons to the global dictionary
-        newIcons.keysArray().forEach((key) => {
-            const custom = newIcons.get(key);
-            this.addIMGToIconDictionary(custom, key);
+        // Imports refresh names already present in the historical pool. Keep
+        // entries absent from this import, but replace every incoming value
+        // explicitly because Dictionary.set() never overwrites.
+        currentIcons.keysArray().forEach((key) => {
+            this.customIcons.delete(key);
+            this.customIcons.set(key, currentIcons.get(key));
         });
 
         // Generate CSS for ALL custom icons in the current story's config
-        const allCurrentIcons = new Dictionary<string>();
-        allCurrentIcons.appendDict(config.actors);
-        allCurrentIcons.appendDict(config.workObjects);
-        this.addIconsToCss(allCurrentIcons);
+        this.addIconsToCss(currentIcons);
 
         // Import replaces (rather than merges into) the selected icon set:
         // hard-swap the selected dictionaries + name to the imported config.
-        this.setIconSet(config);
+        this.setIconSet(sanitizedConfig);
     }
 
-    addIMGToIconDictionary(input: string, name: string): void {
-        this.customIcons.set(name, input);
+    addIMGToIconDictionary(input: string, name: string): string {
+        const sanitized = this.iconSanitizer.sanitize(input);
+        this.customIcons.set(name, sanitized);
+        return this.customIcons.get(name);
     }
 
     addIconsToCss(icons: Dictionary<string>) {
@@ -92,7 +124,7 @@ export class IconDictionaryService {
         icons.keysArray().forEach((key) => {
             this.iconStyleSheet.addIconStyle(
                 this.getCSSClassOfIcon(key),
-                icons.get(key),
+                this.iconSanitizer.sanitize(icons.get(key)),
             );
         });
     }
@@ -103,6 +135,16 @@ export class IconDictionaryService {
         const fullDictionary = new Dictionary<string>();
         fullDictionary.appendDict(this.customIcons);
         return fullDictionary;
+    }
+
+    /** Seed a new editor session with an isolated copy of the sanitized pool. */
+    restoreCustomIcons(icons: Dictionary<string>): void {
+        const restored = this.sanitizeDictionary(icons);
+        restored.keysArray().forEach((name) => {
+            this.customIcons.delete(name);
+            this.customIcons.set(name, restored.get(name));
+        });
+        this.addIconsToCss(restored);
     }
 
     getIconsAssignedAs(type: ElementTypes): Dictionary<string> {
@@ -147,22 +189,84 @@ export class IconDictionaryService {
         return this.iconSetName;
     }
 
-    setIconSet(iconSet: IconSet): void {
-        this.iconSetName = iconSet.name ?? "";
-        this.selectedActorsDictionary = iconSet.actors;
-        this.selectedWorkObjectsDictionary = iconSet.workObjects;
+    /** Reorders a selected category after validating an exact permutation. */
+    setIconOrder(category: IconCategory, names: readonly string[]): boolean {
+        const type =
+            category === "actor"
+                ? ElementTypes.ACTOR
+                : category === "workObject"
+                  ? ElementTypes.WORKOBJECT
+                  : undefined;
+        if (!type) {
+            throw new TypeError(`Unknown icon category: ${String(category)}`);
+        }
+
+        const current = this.getSelectedDictionary(type);
+        const currentNames = current.keysArray();
+        if (new Set(names).size !== names.length) {
+            throw new Error(`Icon order for ${category} contains duplicates`);
+        }
+        if (
+            names.length !== currentNames.length ||
+            names.some((name) => !current.has(name))
+        ) {
+            throw new Error(
+                `Icon order for ${category} must be an exact permutation of the selected names`,
+            );
+        }
+        if (names.every((name, index) => name === currentNames[index])) {
+            return false;
+        }
+
+        const reordered = new Dictionary<string>();
+        names.forEach((name) => reordered.set(name, current.get(name)));
+        if (type === ElementTypes.ACTOR) {
+            this.selectedActorsDictionary = reordered;
+        } else {
+            this.selectedWorkObjectsDictionary = reordered;
+        }
+        return true;
     }
 
-    private extractCustomIconsFromDictionary(
-        elementDictionary: Dictionary<string>,
-        collector: Dictionary<string>,
-    ) {
-        // Keys are stored verbatim: sanitizing here permanently mutated names
-        // (e.g. "my.icon.v2" → "my.icon"), losing the original on round-trip.
-        elementDictionary.keysArray().forEach((name) => {
-            if (!this.getFullDictionary().has(name)) {
-                collector.set(name, elementDictionary.get(name));
-            }
+    setIconSet(iconSet: IconSet): void {
+        const sanitized = this.sanitizeIconSet(iconSet);
+        this.iconSetName = sanitized.name;
+        this.selectedActorsDictionary = sanitized.actors;
+        this.selectedWorkObjectsDictionary = sanitized.workObjects;
+    }
+
+    private sanitizeIconSet(iconSet: IconSet): IconSet {
+        return {
+            name: iconSet.name ?? "",
+            actors: this.sanitizeDictionary(iconSet.actors),
+            workObjects: this.sanitizeDictionary(iconSet.workObjects),
+        };
+    }
+
+    private sanitizeDictionary(source: Dictionary<string>): Dictionary<string> {
+        const sanitized = new Dictionary<string>();
+        source.keysArray().forEach((name) => {
+            sanitized.set(name, this.iconSanitizer.sanitize(source.get(name)));
         });
+        return sanitized;
+    }
+
+    private replaceEntry(
+        dictionary: Dictionary<string>,
+        name: string,
+        source: string,
+    ): void {
+        dictionary.delete(name);
+        dictionary.set(name, source);
+    }
+
+    private getSelectedDictionary(type: ElementTypes): Dictionary<string> {
+        if (type === ElementTypes.ACTOR) {
+            return this.selectedActorsDictionary;
+        }
+        if (type === ElementTypes.WORKOBJECT) {
+            return this.selectedWorkObjectsDictionary;
+        }
+        throw new Error(`Unsupported icon element type: ${type}`);
     }
 }

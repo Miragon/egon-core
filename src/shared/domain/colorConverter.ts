@@ -2,17 +2,46 @@ export function rgbaToHex(rgba: string) {
     if (isValidHex(rgba)) {
         return rgba;
     }
-    const [r, g, b, a] = rgba.match(/\d+(\.\d+)?/g)!.map((it) => +it);
-    const red = r.toString(16).padStart(2, "0");
-    const green = g.toString(16).padStart(2, "0");
-    const blue = b.toString(16).padStart(2, "0");
-    const alpha = Math.round(a * 255)
+
+    const colorFunction = rgba.match(
+        /^\s*(rgb|rgba)\(\s*(\d+(?:\.\d+)?|\.\d+)\s*,\s*(\d+(?:\.\d+)?|\.\d+)\s*,\s*(\d+(?:\.\d+)?|\.\d+)(?:\s*,\s*(\d+(?:\.\d+)?|\.\d+))?\s*\)\s*$/i,
+    );
+    if (!colorFunction) {
+        return rgba;
+    }
+
+    const [, functionName, redValue, greenValue, blueValue, alphaValue] =
+        colorFunction;
+    if (
+        (functionName.toLowerCase() === "rgb" && alphaValue !== undefined) ||
+        (functionName.toLowerCase() === "rgba" && alphaValue === undefined)
+    ) {
+        return rgba;
+    }
+
+    const channels = [redValue, greenValue, blueValue].map(Number);
+    const alphaFloat = alphaValue === undefined ? 1 : Number(alphaValue);
+    if (
+        channels.some((channel) => channel < 0 || channel > 255) ||
+        alphaFloat < 0 ||
+        alphaFloat > 1
+    ) {
+        return rgba;
+    }
+
+    const [red, green, blue] = channels.map((channel) =>
+        Math.round(channel).toString(16).padStart(2, "0"),
+    );
+    const alpha = Math.round(alphaFloat * 255)
         .toString(16)
         .padStart(2, "0");
     return `#${red}${green}${blue}${alpha}`;
 }
 
-const isValidHex = (hex: string) => /^#([A-Fa-f0-9]{3,4}){1,2}$/.test(hex);
+const isValidHex = (hex: string) =>
+    /^#(?:[A-Fa-f0-9]{3}|[A-Fa-f0-9]{4}|[A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$/.test(
+        hex,
+    );
 const getChunksFromString = (st: string, chunkSize: number) =>
     st.match(new RegExp(`.{${chunkSize}}`, "g")) ?? [];
 const convertHexUnitTo256 = (hexStr: string) =>

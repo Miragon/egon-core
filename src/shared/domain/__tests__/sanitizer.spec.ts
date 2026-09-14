@@ -1,5 +1,58 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeForCss } from "../sanitizer";
+import {
+    sanitizeForCss,
+    sanitizeForDesktop,
+    sanitizeTextForSVGExport,
+    unsanitizeTextForSVGExport,
+} from "../sanitizer";
+
+describe("sanitizeTextForSVGExport", () => {
+    it("replaces repeated angle brackets", () => {
+        expect(sanitizeTextForSVGExport("<<tag>>")).toBe("&lt;&lt;tag&gt;&gt;");
+    });
+
+    it("combines dash and angle-bracket substitutions", () => {
+        expect(sanitizeTextForSVGExport("a--b <c> -- d")).toBe(
+            "a––b &lt;c&gt; –– d",
+        );
+    });
+
+    it("handles an empty string", () => {
+        expect(sanitizeTextForSVGExport("")).toBe("");
+    });
+});
+
+describe("unsanitizeTextForSVGExport", () => {
+    it("reverses the sanitizer's three substitutions", () => {
+        const original = "a--b <c> -- d";
+
+        expect(
+            unsanitizeTextForSVGExport(sanitizeTextForSVGExport(original)),
+        ).toBe(original);
+    });
+
+    it("handles an empty string", () => {
+        expect(unsanitizeTextForSVGExport("")).toBe("");
+    });
+
+    it("documents the lossy literal-entity behavior", () => {
+        expect(unsanitizeTextForSVGExport("literal &lt;x&gt;")).toBe(
+            "literal <x>",
+        );
+    });
+
+    it("documents the lossy literal-en-dash-pair behavior", () => {
+        expect(unsanitizeTextForSVGExport("literal –– pair")).toBe(
+            "literal -- pair",
+        );
+    });
+});
+
+describe("sanitizeForDesktop", () => {
+    it("keeps filename sanitization behavior while retaining dash mapping", () => {
+        expect(sanitizeForDesktop('a--b/<c>:"d"')).toBe("a––bcd");
+    });
+});
 
 /**
  * `sanitizeForCss` turns an arbitrary icon name into a valid CSS class token.

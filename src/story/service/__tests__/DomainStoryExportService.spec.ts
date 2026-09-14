@@ -1,21 +1,28 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DomainStoryExportService } from "../DomainStoryExportService";
 import { DomainStoryPropertiesService } from "../../../modeler/service/DomainStoryPropertiesService";
 import type { ElementRegistryService } from "../../../modeler/service/ElementRegistryService";
 import type { IconSetImportExportService } from "../../../iconSet/service/IconSetImportExportService";
 
 /** A registry stub that yields the given business objects as canvas objects. */
-function makeRegistry(businessObjects: any[]): ElementRegistryService {
+function makeRegistry(
+    businessObjects: any[],
+    usedIcons: { actors: string[]; workObjects: string[] } = {
+        actors: [],
+        workObjects: [],
+    },
+): ElementRegistryService {
     return {
         createObjectListForDSTDownload: () =>
             businessObjects.map((businessObject) => ({ businessObject })),
+        getUsedIcons: () => usedIcons,
     } as unknown as ElementRegistryService;
 }
 
 /** An icon-service stub returning a fixed export configuration. */
 function makeIconService(config: any): IconSetImportExportService {
     return {
-        getCurrentConfigurationForExport: () => config,
+        getConfigurationForStoryExport: () => config,
     } as unknown as IconSetImportExportService;
 }
 
@@ -90,5 +97,38 @@ describe("DomainStoryExportService", () => {
         });
         expect(result.domainStory.businessObjects).toEqual([]);
         expect("scope" in result.domainStory).toBe(false);
+    });
+
+    it("passes live actor and work-object references to the icon export builder", () => {
+        const registry = makeRegistry([], {
+            actors: ["Person"],
+            workObjects: ["Document"],
+        });
+        const getConfigurationForStoryExport = vi.fn((usedIcons: any) => ({
+            name: "retained",
+            actors: { [usedIcons.actors[0]]: "<actor/>" },
+            workObjects: { [usedIcons.workObjects[0]]: "<object/>" },
+        }));
+        const iconService = {
+            getConfigurationForStoryExport,
+        } as unknown as IconSetImportExportService;
+
+        const result = JSON.parse(
+            new DomainStoryExportService(
+                registry,
+                iconService,
+                new DomainStoryPropertiesService(),
+            ).export(),
+        );
+
+        expect(result.iconSet).toEqual({
+            name: "retained",
+            actors: { Person: "<actor/>" },
+            workObjects: { Document: "<object/>" },
+        });
+        expect(getConfigurationForStoryExport).toHaveBeenCalledWith({
+            actors: ["Person"],
+            workObjects: ["Document"],
+        });
     });
 });

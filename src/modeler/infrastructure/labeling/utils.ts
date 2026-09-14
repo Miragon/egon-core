@@ -1,39 +1,10 @@
 import { Element } from "diagram-js/lib/model/Types";
 
-import { ElementTypes } from "../../../story/domain/elementTypes";
-import {
-    isActivity,
-    isActor,
-    isAnnotation,
-    isGroup,
-    isWorkObject,
-} from "../../../story/domain/elementPredicates";
-import { is } from "../../../shared/infrastructure/util";
 import EventBus from "diagram-js/lib/core/EventBus";
-
-function getLabelAttr(semantic: any) {
-    if (
-        isActor(semantic) ||
-        isWorkObject(semantic) ||
-        isActivity(semantic) ||
-        isGroup(semantic)
-    ) {
-        return "name";
-    }
-    if (isAnnotation(semantic)) {
-        return "text";
-    } else {
-        return "";
-    }
-}
-
-function getNumberAttr(semantic: any) {
-    if (is(semantic, ElementTypes.ACTIVITY)) {
-        return "number";
-    } else {
-        return "";
-    }
-}
+import {
+    canAutocompleteLabel,
+    semanticLabelField,
+} from "../../../story/domain/labelPolicy";
 
 export function getLabel(element: Element) {
     let semantic;
@@ -42,17 +13,8 @@ export function getLabel(element: Element) {
     } else {
         semantic = element;
     }
-    const attr = getLabelAttr(semantic);
+    const attr = semanticLabelField(semantic);
     if (attr && semantic) {
-        return semantic[attr] || "";
-    }
-}
-
-export function getNumber(element: Element) {
-    const semantic = element.businessObject,
-        attr = getNumberAttr(semantic);
-
-    if (attr) {
         return semantic[attr] || "";
     }
 }
@@ -64,7 +26,7 @@ export function setLabel(element: Element, text: string) {
     } else {
         semantic = element;
     }
-    const attr = getLabelAttr(semantic);
+    const attr = semanticLabelField(semantic);
 
     if (attr) {
         semantic[attr] = text;
@@ -72,40 +34,9 @@ export function setLabel(element: Element, text: string) {
     return element;
 }
 
-export function setNumber(element: Element, textNumber: string) {
-    const semantic = element.businessObject,
-        attr = getNumberAttr(semantic);
-
-    if (attr) {
-        semantic[attr] = textNumber;
-    }
-
-    return element;
-}
-
-// select at which part of the activity the label should be attached to
-export function selectPartOfActivity(waypoints: any, angleActivity: any) {
-    const lineLength = 49;
-    let selectedActivity = 0;
-
-    for (let i = 0; i < waypoints.length; i++) {
-        if (angleActivity[i] === 0 || angleActivity[i] === 180) {
-            const length = Math.abs(waypoints[i].x - waypoints[i + 1].x);
-            if (length > lineLength) {
-                selectedActivity = i;
-            }
-        }
-    }
-    return selectedActivity;
-}
-
-/**
- * The direct-editing box is a recycled contenteditable <div>, not an <input>,
- * yet upstream reads and writes a `.value` on it to normalise the stale
- * recycled text before filtering. Model that access narrowly so the port keeps
- * the behaviour without pretending the element is a real form control.
- */
-type EditingBoxElement = HTMLElement & { value?: string };
+type EditingBoxElement = HTMLElement & {
+    __egonAutocompleteTeardown?: () => void;
+};
 
 /**
  * Approximate the rendered width (in px) of a label at font-size 11 in Arial.
@@ -149,9 +80,11 @@ export function createAutocompleteForEdit(
     // after a work object would then let Enter rename that work object outside
     // the command stack. Reset before the early return below, which is exactly
     // the path that used to skip it.
-    editingBox.onkeydown = null;
+    const recycledEditingBox = editingBox as EditingBoxElement;
+    recycledEditingBox.__egonAutocompleteTeardown?.();
+    delete recycledEditingBox.__egonAutocompleteTeardown;
 
-    if (!businessElement || !isWorkObject(businessElement)) {
+    if (!canAutocompleteLabel(businessElement)) {
         return;
     }
 
@@ -169,19 +102,20 @@ export function createAutocompleteForEdit(
         if (
             !workObjectNames ||
             workObjectNames.length === 0 ||
-            !businessElement ||
-            !isWorkObject(businessElement)
+            !canAutocompleteLabel(businessElement)
         ) {
             return;
         }
 
-        // the recycled direct-editing element carries an old value that must be
-        // overridden with its current text before we filter against it
-        if (isWorkObject(businessElement)) {
-            this.value = this.innerHTML;
-        }
-
-        const searchterm = this.value?.toUpperCase() ?? "";
+        // DirectEditing uses a contenteditable <div>. Read its rendered text so
+        // label markup remains literal and line breaks keep their browser
+        // representation. jsdom does not implement innerText, hence the
+        // textContent fallback used by the unit-test environment.
+        const searchterm = (
+            this.innerText ??
+            this.textContent ??
+            ""
+        ).toUpperCase();
         currentFocus = -1;
 
         clearOldAutocompleteList();
@@ -202,9 +136,7 @@ export function createAutocompleteForEdit(
             ) {
                 const autocompleteItem = document.createElement("div");
 
-                autocompleteItem.innerHTML = name;
-                autocompleteItem.innerHTML +=
-                    "<input type='hidden' value='" + name + "'>";
+                autocompleteItem.textContent = name;
 
                 autocompleteItem.addEventListener("click", function (e) {
                     e.preventDefault();
@@ -222,8 +154,8 @@ export function createAutocompleteForEdit(
         }
     }
 
-    editingBox.onkeydown = function (e: KeyboardEvent) {
-        if (!businessElement || !isWorkObject(businessElement)) {
+    const keydownFunction = function (e: KeyboardEvent) {
+        if (!canAutocompleteLabel(businessElement)) {
             return;
         }
 
@@ -243,9 +175,15 @@ export function createAutocompleteForEdit(
             // linebreak instead of committing a suggestion
             e.preventDefault();
             if (currentFocus > -1) {
-                businessElement.businessObject.name =
+                // DirectEditing registered its own bubbling keydown listener
+                // before this autocomplete was attached. Run in the capture
+                // phase and put the selected value into the editor first, so
+                // that listener reads it and commits it through
+                // `element.updateLabel`. Writing the business object here used
+                // to race completion, bypass the command stack and make undo
+                // restore the typed prefix rather than the previous label.
+                editingBox.innerText =
                     workObjectNamesFilteredBySearchterm[currentFocus];
-                eventBus.fire("element.changed", { element: businessElement });
 
                 // the input listener is re-added whenever the box reopens, so
                 // drop this one to avoid stacking stale handlers
@@ -253,6 +191,8 @@ export function createAutocompleteForEdit(
             }
         }
     };
+
+    editingBox.addEventListener("keydown", keydownFunction, true);
 
     /**
      * Remove a stale suggestion list, unless the click that triggered the check
@@ -321,9 +261,13 @@ export function createAutocompleteForEdit(
      */
     function teardown() {
         editingBox.removeEventListener("input", inputFunction);
+        editingBox.removeEventListener("keydown", keydownFunction, true);
         document.removeEventListener("click", documentClickListener);
-        editingBox.onkeydown = null;
+        if (recycledEditingBox.__egonAutocompleteTeardown === teardown) {
+            delete recycledEditingBox.__egonAutocompleteTeardown;
+        }
     }
 
+    recycledEditingBox.__egonAutocompleteTeardown = teardown;
     eventBus.once(["directEditing.complete", "directEditing.cancel"], teardown);
 }

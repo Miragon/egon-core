@@ -1,0 +1,63 @@
+name: Release archive
+
+on:
+    release:
+        types: [published]
+    workflow_dispatch:
+        inputs:
+            ref:
+                description: Git ref to validate
+                required: true
+                default: main
+                type: string
+            upload:
+                description: Upload to an existing matching published release
+                required: true
+                default: false
+                type: boolean
+
+permissions:
+    contents: write
+
+concurrency:
+    group: release-archive-${{ github.event.release.tag_name || inputs.ref }}
+    cancel-in-progress: false
+
+jobs:
+    build-validate-upload:
+        name: Build, validate, and optionally upload
+        runs-on: ubuntu-latest
+        env:
+            REQUESTED_REF: ${{ github.event.release.tag_name || inputs.ref }}
+            SHOULD_UPLOAD: ${{ github.event_name == 'release' || inputs.upload }}
+        steps:
+            # This checkout supplies only the workflow helper. The helper resolves
+            # REQUESTED_REF to a commit and builds its downloaded source archive.
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+            - name: Set up Node 24
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+              with:
+                  node-version: 24
+
+            - name: Build and validate release archive
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
+              run: |
+                  arguments=(--ref "$REQUESTED_REF")
+                  if [[ "$SHOULD_UPLOAD" == "true" ]]; then
+                    arguments+=(--upload)
+                  fi
+                  node scripts/release-archive.mjs "${arguments[@]}"
+
+            - name: Upload failure diagnostics
+              if: failure()
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: release-archive-failure-${{ github.run_id }}
+                  path: |
+                      ${{ runner.temp }}/egon-core-*.tgz
+                      ${{ runner.temp }}/egon-core-source/playwright-report/package
+                      ${{ runner.temp }}/egon-core-source/test-results/package
+                  if-no-files-found: ignore
+                  retention-days: 7

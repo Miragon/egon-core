@@ -13,9 +13,10 @@ import { toRuleResult } from "../ruleVerdictAdapter";
  * Pins the verdict→diagram-js mapping, one case per kind. The two that matter
  * most are the last two: `noOpinion` must be `undefined` (defer to lower-priority
  * providers, which `Rules.allowed` then default-allows) and `ignored` must be
- * `null` (consumers such as `GlobalConnect` skip marking entirely). Folding them
- * together would let a global-connect drag start from a label, which is why the
- * verdict union has four members rather than three.
+ * `null` (a consumer skips marking entirely). Folding them together would turn
+ * "not my interaction" into "nobody objected", i.e. an allowance — which is why
+ * the verdict union has four members rather than three. No rule registered today
+ * answers `ignored`, so this file is the only guard the mapping still has.
  */
 
 describe("toRuleResult", () => {

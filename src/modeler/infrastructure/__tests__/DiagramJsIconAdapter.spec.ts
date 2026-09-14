@@ -25,11 +25,16 @@ function createMockDiagramServices() {
     const mockEventBus = createRecordingEventBus();
 
     const mockIconDictionaryService = {
-        addIMGToIconDictionary: vi.fn(),
-        registerIconForType: vi.fn(),
+        upsertIconForType: vi.fn(
+            (_type: ElementTypes, _name: string, svg: string) => svg,
+        ),
         unregisterIconForType: vi.fn(),
         addIconsToCss: vi.fn(),
         getIconSetName: vi.fn(() => ""),
+    };
+
+    const mockElementRegistry = {
+        getAll: vi.fn(() => [] as Record<string, any>[]),
     };
 
     const mockIconSetImportExportService = {
@@ -52,6 +57,8 @@ function createMockDiagramServices() {
                     return mockIconDictionaryService;
                 case "domainStoryIconSetImportExportService":
                     return mockIconSetImportExportService;
+                case "elementRegistry":
+                    return mockElementRegistry;
                 default:
                     return {};
             }
@@ -63,6 +70,7 @@ function createMockDiagramServices() {
         mockEventBus,
         mockIconDictionaryService,
         mockIconSetImportExportService,
+        mockElementRegistry,
     };
 }
 
@@ -146,10 +154,7 @@ describe("DiagramJsIconAdapter", () => {
             adapter.addIcon(category, name, svg);
 
             expect(
-                mocks.mockIconDictionaryService.addIMGToIconDictionary,
-            ).toHaveBeenCalledWith(svg, name);
-            expect(
-                mocks.mockIconDictionaryService.registerIconForType,
+                mocks.mockIconDictionaryService.upsertIconForType,
             ).toHaveBeenCalledWith(ElementTypes.ACTOR, name, svg);
         });
 
@@ -161,10 +166,7 @@ describe("DiagramJsIconAdapter", () => {
             adapter.addIcon(category, name, svg);
 
             expect(
-                mocks.mockIconDictionaryService.addIMGToIconDictionary,
-            ).toHaveBeenCalledWith(svg, name);
-            expect(
-                mocks.mockIconDictionaryService.registerIconForType,
+                mocks.mockIconDictionaryService.upsertIconForType,
             ).toHaveBeenCalledWith(ElementTypes.WORKOBJECT, name, svg);
         });
 
@@ -182,6 +184,111 @@ describe("DiagramJsIconAdapter", () => {
             expect(mocks.mockEventBus.fire).toHaveBeenCalledWith(
                 "dst.config.changed",
                 expect.objectContaining({ iconSet: expect.any(Object) }),
+            );
+        });
+
+        it("publishes sanitized CSS, repaints exact live matches across categories, then notifies configuration", () => {
+            const sanitized = "<svg>sanitized</svg>";
+            mocks.mockIconDictionaryService.upsertIconForType.mockReturnValue(
+                sanitized,
+            );
+            const actor = {
+                id: "actor",
+                type: ElementTypes.ACTOR + "Shared",
+                businessObject: {},
+            };
+            const nestedObject = {
+                id: "nested-object",
+                type: ElementTypes.WORKOBJECT + "Shared",
+                parent: { id: "group" },
+                businessObject: {},
+            };
+            mocks.mockElementRegistry.getAll.mockReturnValue([
+                actor,
+                nestedObject,
+                {
+                    id: "other-name",
+                    type: ElementTypes.ACTOR + "SharedExtra",
+                    businessObject: {},
+                },
+                {
+                    id: "activity",
+                    type: ElementTypes.ACTIVITY,
+                    businessObject: {},
+                },
+                {
+                    id: "actor-label",
+                    type: ElementTypes.ACTOR + "Shared",
+                    labelTarget: actor,
+                    businessObject: {},
+                },
+            ]);
+
+            adapter.addIcon("actor", "Shared", "<svg>unsafe</svg>");
+
+            const cssDictionary =
+                mocks.mockIconDictionaryService.addIconsToCss.mock.calls[0][0];
+            expect(cssDictionary.toRecord()).toEqual({ Shared: sanitized });
+            expect(mocks.mockEventBus.fire).toHaveBeenNthCalledWith(
+                1,
+                "elements.changed",
+                { elements: [actor, nestedObject] },
+            );
+            expect(mocks.mockEventBus.fire).toHaveBeenNthCalledWith(
+                2,
+                "dst.config.changed",
+                expect.objectContaining({ iconSet: expect.any(Object) }),
+            );
+            expect(
+                mocks.mockIconDictionaryService.upsertIconForType.mock
+                    .invocationCallOrder[0],
+            ).toBeLessThan(
+                mocks.mockIconDictionaryService.addIconsToCss.mock
+                    .invocationCallOrder[0],
+            );
+            expect(
+                mocks.mockIconDictionaryService.addIconsToCss.mock
+                    .invocationCallOrder[0],
+            ).toBeLessThan(mocks.mockEventBus.fire.mock.invocationCallOrder[0]);
+        });
+
+        it("skips elements.changed when no live shape uses the name", () => {
+            mocks.mockElementRegistry.getAll.mockReturnValue([
+                {
+                    id: "unrelated",
+                    type: ElementTypes.ACTOR + "Other",
+                    businessObject: {},
+                },
+            ]);
+
+            adapter.addIcon("actor", "Shared", "<svg/>");
+
+            expect(
+                mocks.mockEventBus.fire.mock.calls.map(([event]) => event),
+            ).toEqual(["dst.config.changed"]);
+        });
+
+        it("uses the active diagram after a session promotion", () => {
+            const first = createMockDiagramServices();
+            const promoted = createMockDiagramServices();
+            let active = first.mockDiagram;
+            const owner = {
+                getActiveDiagram: vi.fn(() => active),
+                onPromotion: vi.fn(() => vi.fn()),
+            };
+            const followingAdapter = new DiagramJsIconAdapter(owner as any);
+
+            active = promoted.mockDiagram;
+            followingAdapter.addIcon("actor", "Current", "<svg/>");
+
+            expect(
+                first.mockIconDictionaryService.upsertIconForType,
+            ).not.toHaveBeenCalled();
+            expect(
+                promoted.mockIconDictionaryService.upsertIconForType,
+            ).toHaveBeenCalledWith(ElementTypes.ACTOR, "Current", "<svg/>");
+            expect(promoted.mockElementRegistry.getAll).toHaveBeenCalledTimes(
+                1,
             );
         });
     });
@@ -359,6 +466,35 @@ describe("DiagramJsIconAdapter", () => {
             vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
 
             expect(iconsChanged).not.toHaveBeenCalled();
+        });
+
+        it("makes duplicate subscriptions idempotent through off, resubscribe, and destroy", () => {
+            const iconsChanged = vi.fn();
+            adapter.onIconsChanged(iconsChanged);
+            mocks.mockEventBus.fire("dst.config.changed");
+
+            // A duplicate while the timer is armed must neither replace and
+            // orphan that timer nor attach another listener.
+            adapter.onIconsChanged(iconsChanged);
+            expect(mocks.mockEventBus.listenerCount()).toBe(1);
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(iconsChanged).toHaveBeenCalledTimes(1);
+
+            mocks.mockEventBus.fire("dst.config.changed");
+            adapter.offIconsChanged(iconsChanged);
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(iconsChanged).toHaveBeenCalledTimes(1);
+            expect(mocks.mockEventBus.listenerCount()).toBe(0);
+
+            adapter.onIconsChanged(iconsChanged);
+            mocks.mockEventBus.fire("dst.config.changed");
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(iconsChanged).toHaveBeenCalledTimes(2);
+
+            mocks.mockEventBus.fire("dst.config.changed");
+            adapter.destroy();
+            vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
+            expect(iconsChanged).toHaveBeenCalledTimes(2);
         });
     });
 });

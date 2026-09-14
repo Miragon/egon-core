@@ -6,7 +6,6 @@ import {
     clampGroupBounds,
     isForbiddenAnnotationEdge,
     judgeConnection,
-    judgeConnectionStart,
     judgeCreation,
     judgeReconnect,
     judgeResize,
@@ -255,30 +254,6 @@ describe("modelingRules", () => {
                 reason: "noHoverTarget",
             });
             expect(judgeCreation(ELEMENTS.group, undefined)).toEqual(ALLOWED);
-        });
-    });
-
-    describe("judgeConnectionStart", () => {
-        it("ignores a missing element or a label", () => {
-            expect(judgeConnectionStart(undefined)).toEqual({
-                kind: "ignored",
-                reason: "missingElement",
-            });
-            expect(judgeConnectionStart(null)).toEqual({
-                kind: "ignored",
-                reason: "missingElement",
-            });
-            expect(
-                judgeConnectionStart({ label: { labelTarget: {} } }),
-            ).toEqual({
-                kind: "ignored",
-                reason: "labelOwnedByAnotherElement",
-            });
-        });
-
-        it("denies starting from a real, non-label element", () => {
-            expect(judgeConnectionStart({})).toEqual(DENIED);
-            expect(judgeConnectionStart({ label: undefined })).toEqual(DENIED);
         });
     });
 

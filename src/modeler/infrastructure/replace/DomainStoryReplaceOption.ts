@@ -1,6 +1,7 @@
 import { IconDictionaryService } from "../../../iconSet/service";
 import { ElementTypes } from "../../../story/domain/elementTypes";
 import { Shape } from "diagram-js/lib/model/Types";
+import { isReplacementEligible } from "../../../story/domain/replacementPolicy";
 
 export type ReplaceOption = {
     label: string;
@@ -30,7 +31,7 @@ export class DomainStoryReplaceOption {
         const replaceOption: ReplaceOption[] = [];
 
         actors.keysArray().forEach((actorType) => {
-            if (!name.includes(actorType)) {
+            if (isReplacementEligible(name, ElementTypes.ACTOR, actorType)) {
                 replaceOption.push({
                     label: "Change to " + actorType,
                     actionName: "replace-with-actor-" + actorType.toLowerCase(),
@@ -60,7 +61,13 @@ export class DomainStoryReplaceOption {
         const replaceOption: ReplaceOption[] = [];
 
         workObjects.keysArray().forEach((workObjectType) => {
-            if (!name.includes(workObjectType)) {
+            if (
+                isReplacementEligible(
+                    name,
+                    ElementTypes.WORKOBJECT,
+                    workObjectType,
+                )
+            ) {
                 replaceOption.push({
                     label: "Change to " + workObjectType,
                     actionName:

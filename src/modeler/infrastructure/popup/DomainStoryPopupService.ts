@@ -15,7 +15,11 @@ export class DomainStoryPopupService {
         "domainStoryElementRegistryService",
     ];
 
+    private popupMount: HTMLElement | null = null;
     private popupElement: HTMLElement | null = null;
+    private outsideClickRegistrationTimer: ReturnType<
+        typeof setTimeout
+    > | null = null;
     private currentUpdateCallback:
         | ((
               label: string,
@@ -36,9 +40,15 @@ export class DomainStoryPopupService {
                 this.open(element);
             }
         });
+        this.eventBus.on("diagram.destroy", this.destroy);
     }
 
     open(element: ActivityCanvasObject) {
+        // Closing first is important: close clears the callback belonging to the
+        // old popup, so assigning the new one before this would make reopening
+        // lose its outside-click update.
+        this.close();
+
         const position = this.calculatePosition(element);
 
         const onUpdate = (
@@ -64,63 +74,62 @@ export class DomainStoryPopupService {
             this.close();
         };
 
-        const parentElement = document.getElementById("egon-io-container");
-        if (parentElement) {
-            // Remove any existing popup first
-            this.close();
+        const mount = document.createElement("div");
+        mount.setAttribute("data-numbering-popup-mount", "true");
+        this.canvas.getContainer().appendChild(mount);
+        this.popupMount = mount;
 
-            const tempContainer = document.createElement("div");
-
-            const isActivityFromActor =
-                !!this.elementRegistryService.getActivityFromActorById(
-                    element.businessObject.id,
-                );
-
-            render(
-                html`<${PopupMenu}
-                    x=${position.x}
-                    y=${position.y}
-                    label=${element.businessObject.name}
-                    index=${element.businessObject.number}
-                    isMultiple=${element.businessObject.multipleNumberAllowed}
-                    displayNumber=${isActivityFromActor}
-                    onUpdate=${onUpdate}
-                    onCancel=${onCancel}
-                />`,
-                tempContainer,
+        const isActivityFromActor =
+            !!this.elementRegistryService.getActivityFromActorById(
+                element.businessObject.id,
             );
 
-            // Get the actual popup element (the first child of temp container)
-            this.popupElement = tempContainer.firstElementChild as HTMLElement;
+        render(
+            html`<${PopupMenu}
+                x=${position.x}
+                y=${position.y}
+                label=${element.businessObject.name}
+                index=${element.businessObject.number}
+                isMultiple=${element.businessObject.multipleNumberAllowed}
+                displayNumber=${isActivityFromActor}
+                onUpdate=${onUpdate}
+                onCancel=${onCancel}
+            />`,
+            mount,
+        );
 
-            if (this.popupElement) {
-                this.popupElement.setAttribute("data-numbering-popup", "true");
-                parentElement.appendChild(this.popupElement);
-            }
+        this.popupElement = mount.firstElementChild as HTMLElement | null;
+        this.popupElement?.setAttribute("data-numbering-popup", "true");
 
-            // Add click listener to close on an outside click
-            setTimeout(() => {
-                document.addEventListener(
-                    "click",
-                    this.handleOutsideClick,
-                    true,
-                );
-            }, 0);
-        }
+        // Defer registration so the double-click that opened the popup cannot
+        // immediately submit it as an outside click.
+        this.outsideClickRegistrationTimer = setTimeout(() => {
+            this.outsideClickRegistrationTimer = null;
+            document.addEventListener("click", this.handleOutsideClick, true);
+        }, 0);
     }
 
     private close() {
-        if (this.popupElement) {
-            document.removeEventListener(
-                "click",
-                this.handleOutsideClick,
-                true,
-            );
-            this.popupElement.remove();
-            this.popupElement = null;
-            this.currentUpdateCallback = null;
+        if (this.outsideClickRegistrationTimer !== null) {
+            clearTimeout(this.outsideClickRegistrationTimer);
+            this.outsideClickRegistrationTimer = null;
         }
+
+        document.removeEventListener("click", this.handleOutsideClick, true);
+
+        if (this.popupMount) {
+            render(null, this.popupMount);
+            this.popupMount.remove();
+        }
+
+        this.popupMount = null;
+        this.popupElement = null;
+        this.currentUpdateCallback = null;
     }
+
+    private destroy = () => {
+        this.close();
+    };
 
     /**
      * Translates the popup's form values into one `activity.changed` action and
@@ -149,11 +158,11 @@ export class DomainStoryPopupService {
     private handleOutsideClick = (event: MouseEvent) => {
         if (!this.popupElement) return;
 
-        // Check if the click target is inside the popup or any of its children
-        const target = event.target as HTMLElement;
-        const clickedInsidePopup = target.closest(
-            '[data-numbering-popup="true"]',
-        );
+        // Check against this instance's popup. A click in another modeler's
+        // popup is outside this one and must submit this popup as usual.
+        const target = event.target;
+        const clickedInsidePopup =
+            target instanceof Node && this.popupElement.contains(target);
 
         if (!clickedInsidePopup && this.currentUpdateCallback) {
             // Get current values from the popup inputs

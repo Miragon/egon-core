@@ -3,6 +3,7 @@ import {
     extractDomainStory,
     extractIconSetConfiguration,
     parseExportFile,
+    validateRetainedGeometry,
 } from "../ExportFileParser";
 import { importFixture } from "../../../__tests__/helpers/importFixture";
 
@@ -288,5 +289,133 @@ describe("extractIconSetConfiguration", () => {
     it("returns undefined when no icon-set key is present", () => {
         expect(extractIconSetConfiguration([{ type: "a" }])).toBeUndefined();
         expect(extractIconSetConfiguration({})).toBeUndefined();
+    });
+});
+
+describe("untrusted import validation", () => {
+    const valid = (): any => ({
+        iconSet: { name: "test", actors: {}, workObjects: {} },
+        domainStory: {
+            title: "title",
+            description: "description",
+            version: "4.0.0",
+            businessObjects: [
+                {
+                    id: "shape_1",
+                    type: "domainStory:actorPerson",
+                    name: "actor",
+                    x: 10,
+                    y: 20,
+                },
+                {
+                    id: "shape_2",
+                    type: "domainStory:workObjectDocument",
+                    name: "document",
+                    x: 100,
+                    y: 20,
+                },
+                {
+                    id: "connection_1",
+                    type: "domainStory:activity",
+                    name: "does",
+                    source: "shape_1",
+                    target: "shape_2",
+                    waypoints: [
+                        { x: 20, y: 30 },
+                        { x: 100, y: 30 },
+                    ],
+                },
+            ],
+        },
+    });
+
+    it("rejects duplicate and reserved ids before any repair can hide them", () => {
+        const duplicate = valid();
+        duplicate.domainStory.businessObjects[1].id = "shape_1";
+        expect(() => parseExportFile(duplicate)).toThrow(/shape_1.*duplicate/i);
+
+        const reserved = valid();
+        reserved.domainStory.businessObjects[0].id = "__implicitroot_0";
+        expect(() => parseExportFile(reserved)).toThrow(
+            /__implicitroot_0.*reserved/i,
+        );
+    });
+
+    it("rejects unsupported families and malformed rendering fields with an element id", () => {
+        const family = valid();
+        family.domainStory.businessObjects[0].type = "domainStory:surprise";
+        expect(() => parseExportFile(family)).toThrow(
+            /shape_1.*unsupported element family/i,
+        );
+
+        const coordinate = valid();
+        coordinate.domainStory.businessObjects[0].x = Number.NaN;
+        expect(() => parseExportFile(coordinate)).toThrow(
+            /shape_1.*\.x.*finite number/i,
+        );
+
+        const dimension = valid();
+        dimension.domainStory.businessObjects[0].width = 0;
+        expect(() => parseExportFile(dimension)).toThrow(
+            /shape_1.*\.width.*positive number/i,
+        );
+    });
+
+    it("rejects malformed metadata, scope values, icon dictionaries, and icon sources", () => {
+        const metadata = valid() as any;
+        metadata.domainStory.title = 42;
+        expect(() => parseExportFile(metadata)).toThrow(
+            /domainStory\.title.*string/i,
+        );
+
+        const scope = valid() as any;
+        scope.domainStory.scope = { pointInTime: "eventually" };
+        expect(() => parseExportFile(scope)).toThrow(
+            /scope\.pointInTime.*invalid/i,
+        );
+
+        const dictionary = valid() as any;
+        dictionary.iconSet.actors = [];
+        expect(() => parseExportFile(dictionary)).toThrow(
+            /iconSet\.actors.*object/i,
+        );
+
+        const source = valid() as any;
+        source.iconSet.actors = { Person: 17 };
+        expect(() => parseExportFile(source)).toThrow(
+            /iconSet\.actors.*Person.*string/i,
+        );
+    });
+
+    it("validates retained waypoint geometry but permits malformed dangling edges to be repaired", () => {
+        const malformed = valid() as any;
+        malformed.domainStory.businessObjects[2].waypoints = [{ x: 1, y: 2 }];
+        const parsed = parseExportFile(malformed);
+        expect(() =>
+            validateRetainedGeometry(parsed.domainStory.businessObjects),
+        ).toThrow(/connection_1.*at least two waypoints/i);
+
+        malformed.domainStory.businessObjects[2].target = "missing";
+        const dangling = parseExportFile(malformed);
+        expect(dangling.domainStory.businessObjects).toHaveLength(3);
+    });
+
+    it("drops imported diagram-js bookkeeping while preserving compatible business data", () => {
+        const document = valid() as any;
+        Object.assign(document.domainStory.businessObjects[0], {
+            get: "hostile",
+            set: "hostile",
+            $instanceOf: "hostile",
+            labels: ["hostile"],
+            businessData: { owner: "team" },
+        });
+
+        const element = parseExportFile(document).domainStory
+            .businessObjects[0] as any;
+        expect(element).not.toHaveProperty("get");
+        expect(element).not.toHaveProperty("set");
+        expect(element).not.toHaveProperty("$instanceOf");
+        expect(element).not.toHaveProperty("labels");
+        expect(element.businessData).toEqual({ owner: "team" });
     });
 });

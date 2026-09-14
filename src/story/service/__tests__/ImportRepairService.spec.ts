@@ -45,12 +45,15 @@ describe("ImportRepairService delegation", () => {
         ]);
     });
 
-    it("removeWhitespacesFromIcons hyphenates icon names", () => {
+    it("removeWhitespacesFromIcons conditionally repairs icon names", () => {
         const elements = [
             element({ id: "a", type: `${ElementTypes.ACTOR}My Icon` }),
         ];
 
-        new ImportRepairService().removeWhitespacesFromIcons(elements);
+        new ImportRepairService().removeWhitespacesFromIcons(
+            elements,
+            new Set(["My-Icon"]),
+        );
 
         expect(elements[0].type).toBe(`${ElementTypes.ACTOR}My-Icon`);
     });

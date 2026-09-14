@@ -21,6 +21,7 @@ import DomainStoryCopyPaste from "./copy-paste";
 import DomainStoryKeyboardBindings from "./keyboard";
 import DomainStoryPopupService from "./popup";
 import DomainStoryDirtyFlag from "./dirty-flag";
+import DomainStoryColorPicker from "./color-picker";
 import { StoryExportModule, StoryImportModule } from "../../story/service";
 
 const buildInModules = [
@@ -49,6 +50,7 @@ const domainStoryModules = [
     DomainStoryKeyboardBindings,
     DomainStoryPopupService,
     DomainStoryDirtyFlag,
+    DomainStoryColorPicker,
     StoryExportModule,
     StoryImportModule,
 ];

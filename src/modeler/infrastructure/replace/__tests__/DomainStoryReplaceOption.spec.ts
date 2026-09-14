@@ -51,6 +51,42 @@ describe("DomainStoryReplaceOption", () => {
             expect(person.className).toBe("icon-domain-story-Person");
             expect(person.target["type"]).toBe(ElementTypes.ACTOR + "Person");
         });
+
+        it("filters only an exact actor type when names overlap", () => {
+            const overlappingOption = new DomainStoryReplaceOption(
+                iconServiceWith(["Person", "SalesPerson", "System"]),
+            );
+
+            expect(
+                overlappingOption
+                    .actorReplaceOptions(ElementTypes.ACTOR + "SalesPerson")
+                    .map((entry) => entry.label),
+            ).toEqual(["Change to Person", "Change to System"]);
+        });
+
+        it("does not filter a category-prefix collision", () => {
+            expect(
+                option
+                    .actorReplaceOptions(ElementTypes.WORKOBJECT + "Person")
+                    .map((entry) => entry.label),
+            ).toEqual([
+                "Change to Person",
+                "Change to System",
+                "Change to Group",
+            ]);
+        });
+
+        it("keeps every option for an unregistered current type", () => {
+            expect(
+                option
+                    .actorReplaceOptions(ElementTypes.ACTOR + "Customer")
+                    .map((entry) => entry.label),
+            ).toEqual([
+                "Change to Person",
+                "Change to System",
+                "Change to Group",
+            ]);
+        });
     });
 
     describe("workObjectReplaceOptions", () => {
@@ -83,6 +119,46 @@ describe("DomainStoryReplaceOption", () => {
             expect(document.target["type"]).toBe(
                 ElementTypes.WORKOBJECT + "Document",
             );
+        });
+
+        it("filters only an exact work-object type when names overlap", () => {
+            const overlappingOption = new DomainStoryReplaceOption(
+                iconServiceWith(["Document", "SignedDocument", "Folder"]),
+            );
+
+            expect(
+                overlappingOption
+                    .workObjectReplaceOptions(
+                        ElementTypes.WORKOBJECT + "SignedDocument",
+                    )
+                    .map((entry) => entry.label),
+            ).toEqual(["Change to Document", "Change to Folder"]);
+        });
+
+        it("does not filter a category-prefix collision", () => {
+            expect(
+                option
+                    .workObjectReplaceOptions(ElementTypes.ACTOR + "Document")
+                    .map((entry) => entry.label),
+            ).toEqual([
+                "Change to Document",
+                "Change to Task",
+                "Change to Folder",
+            ]);
+        });
+
+        it("keeps every option for an unregistered current type", () => {
+            expect(
+                option
+                    .workObjectReplaceOptions(
+                        ElementTypes.WORKOBJECT + "Message",
+                    )
+                    .map((entry) => entry.label),
+            ).toEqual([
+                "Change to Document",
+                "Change to Task",
+                "Change to Folder",
+            ]);
         });
     });
 });

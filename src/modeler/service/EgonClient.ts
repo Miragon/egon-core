@@ -1,15 +1,36 @@
 import type { ModuleDeclaration } from "didi";
 
 import { EgonClientConfig } from "./EgonClientConfig";
-import { IconPort, ModelerPort } from "../domain/ports";
+import {
+    ColorPickerClosedData,
+    ColorPickerRequestData,
+    IconPort,
+    ImportRepairData,
+    ModelerPort,
+} from "../domain/ports";
 
 import type {
     DomainStoryDocument,
     IconCategory,
+    IconConfiguration,
     IconSet,
     IconSetData,
     ViewportData,
 } from "../domain";
+import type {
+    PngExportOptions,
+    PngExportResult,
+    SvgExportOptions,
+    SvgExportResult,
+} from "../domain/export/VisualExport";
+import type {
+    LabelDictionary,
+    LabelRenameBatch,
+} from "../../labelDictionary/domain/LabelDictionary";
+import type {
+    ReplayStartOptions,
+    ReplayState,
+} from "../../story/domain/replay";
 
 /**
  * User-friendly event types exposed by EgonClient.
@@ -18,6 +39,16 @@ export type EgonEventMap = {
     "story.changed": () => void;
     "viewport.changed": (viewport: ViewportData) => void;
     "icons.changed": (icons: IconSet) => void;
+    "labels.changed": (labels: LabelDictionary) => void;
+    "replay.changed": (state: ReplayState) => void;
+    /**
+     * The story just imported was damaged and had to be repaired to load —
+     * dangling activity edges were dropped. Fires during `import()`, before it
+     * returns, so a host can warn that saving now would make the loss permanent.
+     */
+    "import.repaired": (repair: ImportRepairData) => void;
+    "colorPicker.requested": (request: ColorPickerRequestData) => void;
+    "colorPicker.closed": (closed: ColorPickerClosedData) => void;
 };
 
 export type EgonEventName = keyof EgonEventMap;
@@ -45,6 +76,8 @@ export interface EgonClientPorts {
  * - Hides infrastructure complexity from consumers
  */
 export class EgonClient {
+    private destroyed = false;
+
     private constructor(
         private readonly modelerPort: ModelerPort,
         private readonly iconPort: IconPort,
@@ -91,7 +124,7 @@ export class EgonClient {
         );
 
         const iconAdapter = new DiagramJsIconAdapter(
-            modelerAdapter.getDiagram(),
+            modelerAdapter.getSessionOwner(),
         );
 
         return new EgonClient(modelerAdapter, iconAdapter, config.viewport);
@@ -102,6 +135,10 @@ export class EgonClient {
     /**
      * Import a domain story document into the diagram.
      * Icons from the document's domain section are automatically loaded.
+     *
+     * Supported historical damage is repaired; structurally invalid input is
+     * rejected atomically. Subscribe to `import.repaired` to learn what had to
+     * be dropped.
      */
     import(document: DomainStoryDocument): void {
         this.modelerPort.import(document);
@@ -114,10 +151,25 @@ export class EgonClient {
         return this.modelerPort.export();
     }
 
+    exportSVG(options?: SvgExportOptions): Promise<SvgExportResult> {
+        return this.modelerPort.exportSVG(options);
+    }
+
+    exportPNG(options: PngExportOptions = {}): Promise<PngExportResult> {
+        const { signal, ...request } = options;
+        return this.modelerPort.exportPNG({
+            ...request,
+            ...(signal ? { cancellation: adaptAbortSignal(signal) } : {}),
+        });
+    }
+
     // --- Event Subscription ---
 
     /**
-     * Subscribe to an event.
+     * Subscribe to an event. Registering the same callback for the same event
+     * more than once is idempotent; one matching {@link off} removes it. The
+     * same callback may still be subscribed independently to different events.
+     * Throws a `TypeError` if a JavaScript caller supplies an unknown event.
      */
     on<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void {
         switch (event) {
@@ -131,16 +183,45 @@ export class EgonClient {
                     callback as EgonEventMap["viewport.changed"],
                 );
                 break;
+            case "import.repaired":
+                this.modelerPort.onImportRepaired(
+                    callback as EgonEventMap["import.repaired"],
+                );
+                break;
             case "icons.changed":
                 this.iconPort.onIconsChanged(
                     callback as EgonEventMap["icons.changed"],
                 );
                 break;
+            case "labels.changed":
+                this.modelerPort.onLabelsChanged(
+                    callback as EgonEventMap["labels.changed"],
+                );
+                break;
+            case "replay.changed":
+                this.modelerPort.onReplayChanged(
+                    callback as EgonEventMap["replay.changed"],
+                );
+                break;
+            case "colorPicker.requested":
+                this.modelerPort.onColorPickerRequested(
+                    callback as EgonEventMap["colorPicker.requested"],
+                );
+                break;
+            case "colorPicker.closed":
+                this.modelerPort.onColorPickerClosed(
+                    callback as EgonEventMap["colorPicker.closed"],
+                );
+                break;
+            default:
+                throw new TypeError(`Unknown Egon event: ${String(event)}`);
         }
     }
 
     /**
-     * Unsubscribe from an event.
+     * Unsubscribe from an event. One call fully removes the matching callback,
+     * including a pending debounced delivery. Removing a callback that is not
+     * registered is harmless. Throws a `TypeError` for an unknown event.
      */
     off<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void {
         switch (event) {
@@ -154,18 +235,46 @@ export class EgonClient {
                     callback as EgonEventMap["viewport.changed"],
                 );
                 break;
+            case "import.repaired":
+                this.modelerPort.offImportRepaired(
+                    callback as EgonEventMap["import.repaired"],
+                );
+                break;
             case "icons.changed":
                 this.iconPort.offIconsChanged(
                     callback as EgonEventMap["icons.changed"],
                 );
                 break;
+            case "labels.changed":
+                this.modelerPort.offLabelsChanged(
+                    callback as EgonEventMap["labels.changed"],
+                );
+                break;
+            case "replay.changed":
+                this.modelerPort.offReplayChanged(
+                    callback as EgonEventMap["replay.changed"],
+                );
+                break;
+            case "colorPicker.requested":
+                this.modelerPort.offColorPickerRequested(
+                    callback as EgonEventMap["colorPicker.requested"],
+                );
+                break;
+            case "colorPicker.closed":
+                this.modelerPort.offColorPickerClosed(
+                    callback as EgonEventMap["colorPicker.closed"],
+                );
+                break;
+            default:
+                throw new TypeError(`Unknown Egon event: ${String(event)}`);
         }
     }
 
     // --- Viewport Operations ---
 
     /**
-     * Get the current viewport.
+     * Get the current viewport as a fresh object containing exactly
+     * `{ x, y, width, height }`.
      */
     getViewport(): ViewportData {
         return this.modelerPort.getViewport();
@@ -195,6 +304,26 @@ export class EgonClient {
         this.modelerPort.fitToScreen();
     }
 
+    // --- Host-owned Color Picker ---
+
+    previewPickedColor(requestId: string, color: string): boolean {
+        return (
+            !this.destroyed &&
+            this.modelerPort.previewPickedColor(requestId, color)
+        );
+    }
+
+    confirmPickedColor(requestId: string, color: string): boolean {
+        return (
+            !this.destroyed &&
+            this.modelerPort.confirmPickedColor(requestId, color)
+        );
+    }
+
+    cancelColorPicker(requestId: string): boolean {
+        return !this.destroyed && this.modelerPort.cancelColorPicker(requestId);
+    }
+
     // --- Icon Management ---
 
     /**
@@ -210,7 +339,10 @@ export class EgonClient {
     }
 
     /**
-     * Add a single icon.
+     * Add a single icon. An existing name is replaced and matching live shapes
+     * repaint immediately. Artwork is shared by name across categories: an
+     * already-selected same-name entry in the other category is refreshed too,
+     * without adding new membership there.
      */
     addIcon(category: IconCategory, name: string, svg: string): void {
         this.iconPort.addIcon(category, name, svg);
@@ -237,6 +369,54 @@ export class EgonClient {
         return this.iconPort.hasIcon(category, name);
     }
 
+    getIconConfiguration(): IconConfiguration {
+        return this.iconPort.getIconConfiguration();
+    }
+
+    setIconOrder(category: IconCategory, names: readonly string[]): void {
+        this.iconPort.setIconOrder(category, names);
+    }
+
+    // --- Label Dictionary ---
+
+    getLabelDictionary(): LabelDictionary {
+        return this.modelerPort.getLabelDictionary();
+    }
+
+    renameLabels(changes: LabelRenameBatch): readonly string[] {
+        return this.modelerPort.renameLabels(changes);
+    }
+
+    // --- Headless Replay ---
+
+    getReplayState(): ReplayState {
+        return this.modelerPort.getReplayState();
+    }
+
+    startReplay(options?: ReplayStartOptions): ReplayState {
+        return this.modelerPort.startReplay(options);
+    }
+
+    stopReplay(): ReplayState {
+        return this.modelerPort.stopReplay();
+    }
+
+    nextReplayStep(): ReplayState {
+        return this.modelerPort.nextReplayStep();
+    }
+
+    previousReplayStep(): ReplayState {
+        return this.modelerPort.previousReplayStep();
+    }
+
+    seekReplayStep(index: number): ReplayState {
+        return this.modelerPort.seekReplayStep(index);
+    }
+
+    setReplayShowGroups(value: boolean): ReplayState {
+        return this.modelerPort.setReplayShowGroups(value);
+    }
+
     // --- Lifecycle ---
 
     /**
@@ -247,7 +427,21 @@ export class EgonClient {
      * query destroyed services.
      */
     destroy(): void {
+        if (this.destroyed) return;
+        this.destroyed = true;
         this.iconPort.destroy();
         this.modelerPort.destroy();
     }
+}
+
+function adaptAbortSignal(signal: AbortSignal) {
+    return {
+        get aborted() {
+            return signal.aborted;
+        },
+        onCancel(callback: () => void): () => void {
+            signal.addEventListener("abort", callback, { once: true });
+            return () => signal.removeEventListener("abort", callback);
+        },
+    };
 }

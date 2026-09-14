@@ -1,5 +1,43 @@
 import { DomainStoryDocument } from "../../../story/domain/DomainStoryDocument";
 import { ViewportData } from "../model/Viewport";
+import type {
+    PngExportRequest,
+    PngExportResult,
+    SvgExportOptions,
+    SvgExportResult,
+} from "../export/VisualExport";
+import type {
+    LabelDictionary,
+    LabelRenameBatch,
+} from "../../../labelDictionary/domain/LabelDictionary";
+import type {
+    ReplayStartOptions,
+    ReplayState,
+} from "../../../story/domain/replay";
+
+/**
+ * What an import had to throw away to produce a loadable story.
+ *
+ * WHY ids rather than the dropped elements: a host's only sensible reaction is
+ * to tell the user the file was lossy and name what is missing. Handing out the
+ * internal business objects would leak the model representation across the
+ * public API and invite hosts to write to it.
+ */
+export interface ImportRepairData {
+    removedConnectionIds: string[];
+}
+
+/** A host-owned color picker request scoped to one EgonClient instance. */
+export interface ColorPickerRequestData {
+    requestId: string;
+    elementIds: readonly string[];
+    color: string;
+}
+
+/** Identifies the host-owned picker that should be dismissed. */
+export interface ColorPickerClosedData {
+    requestId: string;
+}
 
 /**
  * Port interface for diagram modeler operations.
@@ -7,7 +45,7 @@ import { ViewportData } from "../model/Viewport";
  */
 export interface ModelerPort {
     /**
-     * Import a domain story document into the diagram.
+     * Import an untrusted domain story document atomically.
      */
     import(document: DomainStoryDocument): void;
 
@@ -16,8 +54,23 @@ export interface ModelerPort {
      */
     export(): DomainStoryDocument;
 
+    exportSVG(options?: SvgExportOptions): Promise<SvgExportResult>;
+    exportPNG(options?: PngExportRequest): Promise<PngExportResult>;
+
+    getLabelDictionary(): LabelDictionary;
+    renameLabels(changes: LabelRenameBatch): readonly string[];
+
+    getReplayState(): ReplayState;
+    startReplay(options?: ReplayStartOptions): ReplayState;
+    stopReplay(): ReplayState;
+    nextReplayStep(): ReplayState;
+    previousReplayStep(): ReplayState;
+    seekReplayStep(index: number): ReplayState;
+    setReplayShowGroups(value: boolean): ReplayState;
+
     /**
-     * Get the current viewport.
+     * Get the current viewport as a fresh object containing exactly
+     * `{ x, y, width, height }`.
      */
     getViewport(): ViewportData;
 
@@ -43,16 +96,55 @@ export interface ModelerPort {
     fitToScreen(): void;
 
     /**
-     * Subscribe to internal diagram events.
+     * Subscribe to internal diagram events. Each method is idempotent for the
+     * same callback; one call to its matching `off` method fully removes that
+     * event subscription, including a pending debounced delivery.
      */
     onStoryChanged(callback: () => void): void;
+    /**
+     * The viewport callback receives a fresh object containing exactly
+     * `{ x, y, width, height }`.
+     */
     onViewportChanged(callback: (viewport: ViewportData) => void): void;
+
+    /**
+     * Subscribe to "the last import silently dropped something". Fires at most
+     * once per `import()`, and only when there was damage to repair.
+     */
+    onImportRepaired(callback: (repair: ImportRepairData) => void): void;
 
     /**
      * Unsubscribe from events.
      */
     offStoryChanged(callback: () => void): void;
     offViewportChanged(callback: (viewport: ViewportData) => void): void;
+    offImportRepaired(callback: (repair: ImportRepairData) => void): void;
+
+    onLabelsChanged(callback: (labels: LabelDictionary) => void): void;
+    offLabelsChanged(callback: (labels: LabelDictionary) => void): void;
+    onReplayChanged(callback: (state: ReplayState) => void): void;
+    offReplayChanged(callback: (state: ReplayState) => void): void;
+
+    /**
+     * Color-picker events are synchronous and idempotent per callback. The
+     * picker UI remains host-owned; these methods only bridge its lifecycle.
+     */
+    onColorPickerRequested(
+        callback: (request: ColorPickerRequestData) => void,
+    ): void;
+    onColorPickerClosed(
+        callback: (closed: ColorPickerClosedData) => void,
+    ): void;
+    offColorPickerRequested(
+        callback: (request: ColorPickerRequestData) => void,
+    ): void;
+    offColorPickerClosed(
+        callback: (closed: ColorPickerClosedData) => void,
+    ): void;
+
+    previewPickedColor(requestId: string, color: string): boolean;
+    confirmPickedColor(requestId: string, color: string): boolean;
+    cancelColorPicker(requestId: string): boolean;
 
     /**
      * Clean up resources.

@@ -16,9 +16,13 @@ import { ElementTypes } from "./elementTypes";
  *
  * The union has four members because diagram-js distinguishes four answers, and
  * `null` is not `undefined`: `null` means "ignore this interaction entirely"
- * (consumers such as `GlobalConnect` skip their OK/NOT_OK marker), while
- * `undefined` means "no opinion, ask lower-priority providers" and ultimately
- * default-allows. This module never names those wire values — see ADR 0015.
+ * (a consumer skips its OK/NOT_OK marker), while `undefined` means "no opinion,
+ * ask lower-priority providers" and ultimately default-allows. This module never
+ * names those wire values — see ADR 0015.
+ *
+ * No rule this plugin registers currently answers `ignored`; the kind stays
+ * because the wire protocol has it, so `toRuleResult` keeps mapping all four and
+ * a future rule cannot re-collapse `null` onto `undefined` by accident (#84).
  */
 
 /**

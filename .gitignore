@@ -16,3 +16,8 @@ coverage
 
 # vitest browser-mode failure artefacts
 **/__screenshots__
+
+# Playwright e2e reports, traces, screenshots, and other run artifacts
+/playwright-report/
+/test-results/
+/blob-report/

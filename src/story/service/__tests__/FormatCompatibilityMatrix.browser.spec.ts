@@ -82,13 +82,7 @@ const CANONICAL_WORK_OBJECT_ICONS = [
 const SIZED_ELEMENT_ID = "shape_1683";
 
 /** Keys import canonicalizes away and export must never re-stamp. */
-const CANONICALIZED_AWAY = [
-    "$type",
-    "$descriptor",
-    "di",
-    "parent",
-    "children",
-] as const;
+const CANONICALIZED_AWAY = ["$type", "$descriptor", "di", "children"] as const;
 
 interface MatrixRow {
     file: FixtureName;
@@ -189,10 +183,9 @@ function expectCanonical(exported: any, container: HTMLElement) {
         expect(shapeIds.has(edge.target)).toBe(true);
     }
 
-    // One assertion for two canonicalizations: the BPMN moddle leftovers that
-    // 1.3.0+ files carry are stripped, and group membership (which 1.0.0–1.5.0
-    // persist as `parent: "shape_1683"`) is dropped on import and never
-    // re-stamped on export — membership is geometric, matching upstream.
+    // BPMN moddle leftovers that 1.3.0+ files carry are stripped. Group
+    // membership persists through `parent`; only its live inverse `children`
+    // collection is diagram-js-owned and never serialized.
     for (const bo of businessObjects) {
         for (const key of CANONICALIZED_AWAY) {
             expect(bo, `${bo.id} must not carry ${key}`).not.toHaveProperty(

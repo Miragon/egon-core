@@ -1,11 +1,4 @@
-import {
-    forEach,
-    isArray,
-    isUndefined,
-    omit,
-    reduce,
-    StringKeyValueCollection,
-} from "min-dash";
+import { forEach, isArray, isUndefined } from "min-dash";
 import EventBus from "diagram-js/lib/core/EventBus";
 import { DomainStoryPropertyCopy } from "./DomainStoryPropertyCopy";
 import { getBusinessObject } from "../../../shared/infrastructure/util";
@@ -15,8 +8,6 @@ const LOW_PRIORITY = 750;
 
 export class DomainStoryCopyPaste {
     static $inject: string[] = ["domainStoryPropertyCopy", "eventBus"];
-
-    private references: Record<string, any> = {};
 
     constructor(
         private readonly domainStoryPropertyCopy: DomainStoryPropertyCopy,
@@ -41,10 +32,6 @@ export class DomainStoryCopyPaste {
                 }
             },
         );
-
-        eventBus.on("copyPaste.pasteElements", () => {
-            this.references = {};
-        });
 
         eventBus.on("copyPaste.pasteElement", (context: any) => {
             const cache = context.cache,
@@ -78,45 +65,10 @@ export class DomainStoryCopyPaste {
             // pasted element is complete before anything paints it.
             newBusinessObject["type"] = descriptor.type;
 
-            // resolve references e.g. default sequence flow
-            this.resolveReferences(descriptor, cache);
-
             copyProperties(descriptor, newBusinessObject, ["name"]);
 
             removeProperties(descriptor, "oldBusinessObject");
         });
-    }
-
-    private resolveReferences(descriptor: any, cache: any) {
-        const businessObject = getBusinessObject(descriptor);
-
-        // boundary events
-        if (descriptor.host) {
-            // relationship can be resolved immediately
-            getBusinessObject(descriptor).attachedToRef = getBusinessObject(
-                cache[descriptor.host],
-            );
-        }
-
-        this.references = omit(
-            this.references,
-            reduce(
-                this.references as StringKeyValueCollection<any>,
-                function (array: any[], reference: any, key: string) {
-                    const element = reference.element,
-                        property = reference.property;
-
-                    if (key === descriptor.id) {
-                        element[property] = businessObject;
-
-                        array.push(descriptor.id);
-                    }
-
-                    return array;
-                },
-                [],
-            ),
-        );
     }
 }
 

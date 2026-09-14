@@ -10,47 +10,63 @@ import { IconStyleSheetPort } from "../domain/ports/IconStyleSheetPort";
  */
 export interface IconStyleSheetConfig {
     styleElement?: HTMLStyleElement;
+    scopeId?: string;
 }
 
 /**
  * Infrastructure adapter that turns an icon's CSS class + SVG into a live rule
  * on this instance's icon stylesheet. This is the DOM/CSSOM half the icon
  * service must not own: the browser-only `btoa`, the SVG attribute reshaping,
- * and the `insertRule` call live here, behind {@link IconStyleSheetPort}.
+ * and publication through the owned `<style>` node live here, behind
+ * {@link IconStyleSheetPort}.
  *
- * The node is per-EgonClient, created by `DiagramJsModelerAdapter` and injected
- * by reference, so two clients on one page never write into the same sheet.
- *
- * Note this buys *ownership*, not isolation: the rules themselves are
- * document-global wherever the `<style>` sits, so two clients with different
- * SVGs for one icon name still collide. Real isolation needs selector
- * prefixing (`.egon-<id> .icon-x::before`) — that is issue #12, not this one.
+ * The node and selector scope are per editor session, created by
+ * `EditorSessionOwner` and injected by reference. Every rule is anchored to
+ * that session's `.djs-container`, so clients may safely reuse icon class names
+ * even when their stylesheets share one host or document.
  */
 export class IconCssInjector implements IconStyleSheetPort {
     static $inject = ["config.domainStoryIconStyleSheet"];
 
+    private readonly rulesByClass = new Map<string, string>();
+
     constructor(private readonly config?: IconStyleSheetConfig) {}
 
     addIconStyle(cssClassName: string, svgMarkup: string): void {
+        const styleElement = this.config?.styleElement;
+        const scopeId = this.config?.scopeId;
+        if (!styleElement || !scopeId) {
+            return;
+        }
+
         // Remove width and height attributes from SVG tag to ensure consistent scaling
         const scalableSvg = svgMarkup.replace(/<svg[^>]+>/, (match: string) => {
             return match.replace(/ (width|height)="[^"]*"/g, "");
         });
 
-        const base64Src = btoa(scalableSvg);
+        const bytes = new TextEncoder().encode(scalableSvg);
+        let binary = "";
+        for (const byte of bytes) {
+            binary += String.fromCharCode(byte);
+        }
+        const base64Src = btoa(binary);
 
         const iconStyle = `
-            .${cssClassName}::before {
+            [data-egon-icon-scope="${scopeId}"] .${cssClassName}::before {
               mask-image: url('data:image/svg+xml;base64,${base64Src}');
             }
         `;
 
-        const styleSheet = this.config?.styleElement?.sheet;
-        if (styleSheet) {
-            // Silent no-op when the sheet is absent: a host that configured no
-            // element has none, and a detached <style> — which is what the node
-            // becomes after `destroy()` removes it — reports `sheet === null`.
-            styleSheet.insertRule(iconStyle, styleSheet.cssRules.length);
+        if (this.rulesByClass.get(cssClassName) === iconStyle) {
+            return;
         }
+
+        this.rulesByClass.set(cssClassName, iconStyle);
+        // textContent is available while detached, unlike `.sheet`. Keeping the
+        // complete owned rule set on the node makes it live automatically when
+        // a host attaches or reattaches that node.
+        styleElement.textContent = Array.from(this.rulesByClass.values()).join(
+            "\n",
+        );
     }
 }

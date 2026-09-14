@@ -21,11 +21,6 @@ import { DomainStoryModeling } from "../modeling/DomainStoryModeling";
 import { DomainStoryReplaceMenuProvider } from "../replace/DomainStoryReplaceMenuProvider";
 import { DirtyFlagService } from "../../service/DirtyFlagService";
 import { IconDictionaryService } from "../../../iconSet/service";
-import {
-    hexToRGBA,
-    isHexWithAlpha,
-    rgbaToHex,
-} from "../../../shared/domain/colorConverter";
 import { ElementTypes } from "../../../story/domain/elementTypes";
 import {
     isActivity,
@@ -36,6 +31,8 @@ import {
     isWorkObject,
 } from "../../../story/domain/elementPredicates";
 import { DomainStoryNumberingRegistry } from "../popup/DomainStoryNumberingRegistry";
+import { ColorPickerCoordinator } from "../color-picker/ColorPickerCoordinator";
+import { numberingOnDirectionChange } from "../../../story/domain/activityNumbering";
 
 /**
  * Positions the replace ("Change type") popup menu just below the open context
@@ -78,9 +75,8 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         "popupMenu",
         "commandStack",
         "eventBus",
+        "domainStoryColorPickerCoordinator",
     ];
-
-    private selectedElement: Element | Element[] | undefined;
 
     constructor(
         private readonly elementFactory: DomainStoryElementFactory,
@@ -101,6 +97,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         private readonly popupMenu: PopupMenu,
         private readonly commandStack: CommandStack,
         eventBus: EventBus,
+        private readonly colorPickerCoordinator: ColorPickerCoordinator,
     ) {
         contextPad.registerProvider(this);
         popupMenu.registerProvider("ds-replace", replaceMenuProvider);
@@ -125,37 +122,22 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
                 entries["replace"].action.click(event, shape);
             }
         });
-
-        // The host owns the color picker, so its answer arrives as a
-        // document-level event rather than through the event bus. That makes it
-        // this instance's job to let go again on teardown: otherwise a stale
-        // listener keeps executing commands on a destroyed command stack, and
-        // two live modelers both react to one picker event.
-        const onPickedColor = (event: any) => {
-            if (this.selectedElement) {
-                this.executeCommandStack(event);
-            }
-        };
-        document.addEventListener("pickedColor", onPickedColor);
-        eventBus.on("diagram.destroy", () =>
-            document.removeEventListener("pickedColor", onPickedColor),
-        );
     }
 
     getContextPadEntries(element: Element): ContextPadEntries {
         let entries: Map<string, ContextPadEntry> = new Map();
 
         if (isWorkObject(element)) {
-            entries.set(...this.addDelete([element]));
-            entries.set(...this.addColorChange(element));
+            this.addDelete(entries, [element]);
+            entries.set(...this.addColorChange());
             entries.set(...this.addConnectWithActivity());
             entries.set(...this.addTextAnnotation());
             entries = new Map([...entries, ...this.addActors()]);
             entries = new Map([...entries, ...this.addWorkObjects()]);
             entries.set(...this.addChangeWorkObjectTypeMenu());
         } else if (isActor(element)) {
-            entries.set(...this.addDelete([element]));
-            entries.set(...this.addColorChange(element));
+            this.addDelete(entries, [element]);
+            entries.set(...this.addColorChange());
             entries.set(...this.addConnectWithActivity());
             entries.set(...this.addTextAnnotation());
             entries = new Map([...entries, ...this.addWorkObjects()]);
@@ -163,87 +145,26 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         } else if (isGroup(element)) {
             entries.set(...this.addDeleteGroupWithoutChildren());
             entries.set(...this.addTextAnnotation());
-            entries.set(...this.addColorChange(element));
+            entries.set(...this.addColorChange());
         } else if (isActivity(element)) {
-            entries.set(...this.addDelete([element]));
+            this.addDelete(entries, [element]);
             entries.set(...this.addChangeDirection());
-            entries.set(...this.addColorChange(element));
+            entries.set(...this.addColorChange());
         } else if (isAnnotation(element)) {
-            entries.set(...this.addDelete([element]));
-            entries.set(...this.addColorChange(element));
+            this.addDelete(entries, [element]);
+            entries.set(...this.addColorChange());
         } else if (isConnection(element)) {
-            entries.set(...this.addDelete([element]));
+            this.addDelete(entries, [element]);
         }
-
-        this.notifyColorPickerOfCurrentElementColor();
 
         return Object.fromEntries(entries);
     }
 
     getMultiElementContextPadEntries(elements: Element[]): ContextPadEntries {
         const entries: Map<string, ContextPadEntry> = new Map();
-        entries.set(...this.addDelete(elements));
-        entries.set(...this.addColorChange(elements));
+        this.addDelete(entries, elements);
+        entries.set(...this.addColorChange());
         return Object.fromEntries(entries);
-    }
-
-    /**
-     * Pre-seeds the host's color picker with the current selection's color so
-     * it opens on the right swatch. Only a single selected element carries a
-     * meaningful color; a multi-select (array) or a stale/absent selection
-     * (e.g. CONNECTION branches never call addColorChange) falls back to black.
-     */
-    private notifyColorPickerOfCurrentElementColor() {
-        let pickedColor: string | undefined;
-        if (this.selectedElement && !isArray(this.selectedElement)) {
-            pickedColor = this.selectedElement.businessObject.pickedColor;
-        }
-
-        if (isHexWithAlpha(pickedColor)) {
-            pickedColor = hexToRGBA(pickedColor!);
-        }
-        document.dispatchEvent(
-            new CustomEvent("defaultColor", {
-                detail: {
-                    color: pickedColor ?? "#000000",
-                },
-            }),
-        );
-    }
-
-    private executeCommandStack(colorChangedEvent: any) {
-        const newColor = colorChangedEvent.detail.color;
-
-        if (isArray(this.selectedElement)) {
-            // One execute per element keeps each recolor as its own undo step,
-            // matching upstream multi-select behavior.
-            this.selectedElement.forEach((element) => {
-                this.commandStack.execute(
-                    "element.colorChange",
-                    this.getColorChangeDescription(element, newColor),
-                );
-            });
-        } else if (this.selectedElement) {
-            this.commandStack.execute(
-                "element.colorChange",
-                this.getColorChangeDescription(this.selectedElement, newColor),
-            );
-        }
-
-        this.dirtyFlagService.makeDirty();
-    }
-
-    private getColorChangeDescription(element: Element, newColor: string) {
-        const oldColor = element.businessObject.pickedColor;
-        if (isHexWithAlpha(oldColor)) {
-            newColor = rgbaToHex(newColor);
-        }
-
-        return {
-            businessObject: element.businessObject,
-            newColor: newColor,
-            element: element,
-        };
     }
 
     private startConnect(): (
@@ -261,50 +182,64 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
             this.connect.start(event, element, autoActivate);
     }
 
-    private addDelete(elements: Element[]): [string, ContextPadEntry<any>] {
-        // delete element entry, only show if allowed by rules
-        let deleteAllowed = this.rules.allowed("elements.delete", {
-            elements: { element: elements },
-        });
-
-        if (isArray(deleteAllowed)) {
-            // was the element returned as a deletion candidate?
-            deleteAllowed = deleteAllowed[0] === elements;
+    /**
+     * Mutates the entry map instead of returning a tuple, because a denied
+     * delete has to mean "omit this one entry". Returning a tuple left no way to
+     * say that, so the previous code threw — and `getContextPadEntries` has no
+     * catch, so one denying rule would have taken down the whole pad.
+     */
+    private addDelete(
+        entries: Map<string, ContextPadEntry>,
+        elements: Element[],
+    ): void {
+        if (!this.isDeleteAllowed(elements)) {
+            return;
         }
 
-        if (deleteAllowed) {
-            return [
-                "delete",
-                {
-                    group: "edit",
-                    className: "bpmn-icon-trash",
-                    title: this.translate("Remove"),
-                    action: {
-                        click: (_event: any, element: Element) => {
-                            if (isArray(element)) {
-                                const groups = element.filter((el) =>
-                                    isGroup(el),
-                                );
-                                const otherElements = element.filter(
-                                    (el) => !isGroup(el),
-                                );
-                                groups.forEach((group) =>
-                                    this.modeling.removeGroup(group),
-                                );
-                                this.modeling.removeElements(
-                                    otherElements.slice(),
-                                );
-                            } else {
-                                this.modeling.removeElements([element]);
-                            }
-                            this.dirtyFlagService.makeDirty();
-                        },
-                    },
+        entries.set("delete", {
+            group: "edit",
+            className: "bpmn-icon-trash",
+            title: this.translate("Remove"),
+            action: {
+                click: (_event: any, element: ContextPadTarget) => {
+                    if (isArray(element)) {
+                        const groups = element.filter((el) => isGroup(el));
+                        const otherElements = element.filter(
+                            (el) => !isGroup(el),
+                        );
+                        groups.forEach((group) =>
+                            this.modeling.removeGroup(group),
+                        );
+                        this.modeling.removeElements(otherElements.slice());
+                    } else {
+                        this.modeling.removeElements([element]);
+                    }
+                    this.dirtyFlagService.makeDirty();
                 },
-            ];
+            },
+        });
+    }
+
+    /**
+     * Asks the rules whether the selection may be deleted, using the canonical
+     * flat `{ elements }` context so rules written against diagram-js/bpmn-js
+     * conventions apply unchanged (the previous nested `{ elements: { element } }`
+     * shape matched nothing).
+     */
+    private isDeleteAllowed(elements: Element[]): boolean {
+        const allowed = this.rules.allowed("elements.delete", { elements });
+
+        if (isArray(allowed)) {
+            // An array verdict names the deletable subset; offer delete only
+            // when every requested element came back, so the entry never
+            // deletes more than the rule sanctioned.
+            return (
+                allowed.length === elements.length &&
+                elements.every((element) => allowed.includes(element))
+            );
         }
 
-        throw new Error("Delete not allowed");
+        return !!allowed;
     }
 
     private addDeleteGroupWithoutChildren(): [string, ContextPadEntry<any>] {
@@ -367,12 +302,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         ];
     }
 
-    private addColorChange(
-        elements: Element | Element[],
-    ): [string, ContextPadEntry<any>] {
-        // Record which element(s) the picker acts on; the document-level
-        // "pickedColor" listener reads this back when the host reports a color.
-        this.selectedElement = elements;
+    private addColorChange(): [string, ContextPadEntry<any>] {
         return [
             "colorChange",
             {
@@ -380,11 +310,8 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
                 className: "icon-domain-story-color-picker",
                 title: this.translate("Change color"),
                 action: {
-                    click: function () {
-                        document.dispatchEvent(
-                            new CustomEvent("openColorPicker"),
-                        );
-                    },
+                    click: (_event: any, target: Element | Element[]) =>
+                        this.colorPickerCoordinator.request(target),
                 },
             },
         ];
@@ -502,13 +429,11 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
     private changeDirection(element: Connection) {
         const businessObject = element.businessObject;
         const source = element.source;
-        let newNumber: number | null;
-
-        if (isActor(source)) {
-            newNumber = null;
-        } else {
-            newNumber = this.numberingRegistry.generateAutomaticNumber();
-        }
+        const numberingDecision = numberingOnDirectionChange(source);
+        const newNumber =
+            numberingDecision === "clear"
+                ? null
+                : this.numberingRegistry.generateAutomaticNumber();
         const context = {
             businessObject: businessObject,
             newNumber: newNumber,
@@ -552,7 +477,7 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
             className: className,
             title: "Append " + title,
             action: {
-                dragstart: this.startConnect(),
+                dragstart: appendStart,
                 click: appendStart,
             },
         };

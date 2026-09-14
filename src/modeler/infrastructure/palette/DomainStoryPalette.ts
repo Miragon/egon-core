@@ -36,8 +36,11 @@ export class DomainStoryPaletteProvider implements PaletteProvider {
         palette.registerProvider(this);
 
         eventBus.on("dst.config.changed", () => {
+            // _rebuild, not _update: only _rebuild re-queries the providers for
+            // the new icon set, and it carries the guards (_diagramInitialized,
+            // providers present, lazy _init of the container) that _update skips.
             // @ts-expect-error palette is not typed correctly
-            palette._update();
+            palette._rebuild();
         });
     }
 
@@ -78,7 +81,7 @@ export class DomainStoryPaletteProvider implements PaletteProvider {
         workObjectTypes?.keysArray().forEach((name) => {
             const entries = this.addCanvasObjectTypes(
                 name,
-                "actor",
+                "workObject",
                 ElementTypes.WORKOBJECT,
             );
             Object.entries(entries).forEach(([key, value]) => {
@@ -127,17 +130,22 @@ export class DomainStoryPaletteProvider implements PaletteProvider {
         return actions;
     }
 
+    /**
+     * `group` doubles as the key namespace: the same icon may be assigned as both
+     * an actor and a work object, so keying by name alone would let one entry
+     * overwrite the other in the flat `PaletteEntries` record.
+     */
     private addCanvasObjectTypes(
         name: string,
-        className: string,
+        group: string,
         elementType: ElementTypes,
     ): PaletteEntries {
         const icon = this.iconDictionaryService.getCSSClassOfIcon(name);
 
-        const key = `domainStory-${className}${name}`;
+        const key = `domainStory-${group}${name}`;
         const value = this.createAction(
             `${elementType}${name}`,
-            className,
+            group,
             icon ?? "",
             name,
             {},
@@ -172,7 +180,7 @@ export class DomainStoryPaletteProvider implements PaletteProvider {
         return {
             group: group,
             className: className,
-            title: "Create " + title || "Create " + shortType,
+            title: "Create " + (title || shortType),
             action: {
                 dragstart: createListener,
                 click: createListener,

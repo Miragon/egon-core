@@ -1,20 +1,21 @@
-import { selectPartOfActivity } from "./utils";
 import { angleBetween } from "../../../shared/domain/mathExtensions";
-import { Point } from "diagram-js/lib/util/Types";
+import { Waypoint } from "../../../story/domain/waypoint";
+
+type Coordinate = Pick<Waypoint, "x" | "y">;
 
 export function countLines(str: string) {
     return str.split(/\r\n|\r|\n/).length;
 }
 
 // determine the position of the label at the activity
-export function labelPosition(waypoints: Point[], lines = 1) {
+export function labelPosition(waypoints: readonly Coordinate[], lines = 1) {
     const amountWaypoints = waypoints.length;
     let determinedPosition;
     let xPos;
     let yPos;
 
     if (amountWaypoints > 2) {
-        const angleActivity = new Array(amountWaypoints - 1);
+        const angleActivity = new Array<number>(amountWaypoints - 1);
         for (let i = 0; i < amountWaypoints - 1; i++) {
             // calculate the angles of the activities
             angleActivity[i] = angleBetween(waypoints[i], waypoints[i + 1]);
@@ -54,7 +55,7 @@ export function labelPosition(waypoints: Point[], lines = 1) {
 }
 
 // calculate the X position of the label
-export function labelPositionX(startPoint: Point, endPoint: Point) {
+export function labelPositionX(startPoint: Coordinate, endPoint: Coordinate) {
     const angle = angleBetween(startPoint, endPoint);
     let offsetX = 0;
     let scaledAngle = 0;
@@ -80,7 +81,11 @@ export function labelPositionX(startPoint: Point, endPoint: Point) {
 }
 
 // calculate the Y position of the label
-export function labelPositionY(startPoint: Point, endPoint: Point, lines = 1) {
+export function labelPositionY(
+    startPoint: Coordinate,
+    endPoint: Coordinate,
+    lines = 1,
+) {
     const angle = angleBetween(startPoint, endPoint);
     let offsetY = 0;
     let scaledAngle = 0;
@@ -106,4 +111,25 @@ export function labelPositionY(startPoint: Point, endPoint: Point, lines = 1) {
         offsetY = (-scaledAngle / 9) * lines;
     }
     return offsetY + (startPoint.y + endPoint.y) / 2;
+}
+
+// select at which part of the activity the label should be attached to
+export function selectPartOfActivity(
+    waypoints: readonly Coordinate[],
+    angleActivity: readonly number[],
+) {
+    const lineLength = 49;
+    let selectedActivity = 0;
+
+    // Intentional correction to upstream: n waypoints define only n - 1
+    // segments, so the final waypoint has no following point or angle.
+    for (let i = 0; i < waypoints.length - 1; i++) {
+        if (angleActivity[i] === 0 || angleActivity[i] === 180) {
+            const length = Math.abs(waypoints[i].x - waypoints[i + 1].x);
+            if (length > lineLength) {
+                selectedActivity = i;
+            }
+        }
+    }
+    return selectedActivity;
 }

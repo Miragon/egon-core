@@ -83,15 +83,9 @@ describe("computeReplaceMenuPosition", () => {
 });
 
 /**
- * Behavioral tests for the host color-picker contract (issue #46, upstream
- * `e21c72ee`). The core owns no picker UI: it exposes a `colorChange` pad
- * entry and applies whatever color the host reports back via a document-level
- * `pickedColor` event. These tests drive that round-trip directly on a provider
- * instance, asserting the resulting `element.colorChange` command executions.
- *
- * Each test builds its own instance with its own `commandStack` spy; instances
- * from earlier tests are never destroyed, so their listeners fire against their
- * own (now-irrelevant) spies and never touch the spy under assertion.
+ * The context-pad half of the client-scoped picker contract (ADR 0026). This
+ * provider owns no request or async response state; it only hands the exact pad
+ * target to the session coordinator when the user clicks the color entry.
  */
 
 /** A minimal element carrying only what the color-change path reads. */
@@ -101,19 +95,20 @@ function element(id: string, type: ElementTypes, pickedColor?: string): any {
 
 /**
  * Construct a provider with just enough mocks to reach the color-change path,
- * returning the spies the tests assert on. `rules.allowed` → true so the delete
- * entry (a prerequisite sibling of colorChange) is emitted without error.
+ * returning the spies the tests assert on. `rules.allowed` defaults to a spy
+ * answering `true`, so every entry is offered; pass an override to drive the
+ * delete-rule cases.
  *
- * The event bus is the real diagram-js one, because two of the provider's
- * behaviours are about *when* its listeners run relative to diagram-js' own
- * (the ctrl-drop replace menu) and *whether* they still run at all (teardown on
- * `diagram.destroy`) — neither is observable through a stubbed `on`.
+ * The event bus is the real diagram-js one because ctrl-drop behavior depends
+ * on when its listener runs relative to diagram-js' own selection listener.
  */
-function provider() {
+function provider(rulesOverride?: { allowed: (...args: any[]) => unknown }) {
+    const rules = rulesOverride ?? { allowed: vi.fn(() => true) };
     const commandStack = { execute: vi.fn(), registerHandler: vi.fn() };
     const dirtyFlagService = { makeDirty: vi.fn() };
     const connect = { start: vi.fn() };
     const replaceEntryClick = vi.fn();
+    const colorPickerCoordinator = { request: vi.fn() };
     const eventBus = new EventBus();
 
     // Stands in for ContextPad: opened by whoever selects the created shape.
@@ -126,15 +121,21 @@ function provider() {
         }),
     };
 
+    const numberingRegistry = new DomainStoryNumberingRegistry(eventBus, {
+        getActivitiesFromActors: () => [],
+    } as any);
+    const generateAutomaticNumber = vi.spyOn(
+        numberingRegistry,
+        "generateAutomaticNumber",
+    );
+
     const instance = new DomainStoryContextPadProvider(
         {} as any, // elementFactory
         {} as any, // modeling
         {} as any, // replaceMenuProvider
-        // The real registry against an empty canvas, so "does anything write to
-        // the model before the command runs" is actually observable.
-        new DomainStoryNumberingRegistry(eventBus, {
-            getActivitiesFromActors: () => [],
-        } as any),
+        // The real registry against an empty canvas, so number generation stays
+        // pure and "does anything write before the command" is observable.
+        numberingRegistry,
         dirtyFlagService as any,
         // iconDictionaryService: no icons, so the append-actor/work-object
         // entries stay empty and do not obscure the entries under test.
@@ -142,7 +143,7 @@ function provider() {
             getIconsAssignedAs: () => ({ keysArray: () => [] }),
             getCSSClassOfIcon: () => "",
         } as any,
-        { allowed: () => true } as any, // rules
+        rules as any,
         connect as any,
         (text: string) => text, // translate (identity)
         {} as any, // create
@@ -151,15 +152,19 @@ function provider() {
         { registerProvider: () => undefined } as any, // popupMenu
         commandStack as any,
         eventBus,
+        colorPickerCoordinator as any,
     );
 
     return {
         instance,
+        rules,
         commandStack,
         dirtyFlagService,
         connect,
         eventBus,
         replaceEntryClick,
+        colorPickerCoordinator,
+        generateAutomaticNumber,
         openPadOnSelection: () => {
             padOpen = true;
         },
@@ -178,72 +183,28 @@ function primaryModifierDrop(shape: any) {
 }
 
 describe("DomainStoryContextPadProvider color change", () => {
-    it("applies a picked color to a single selected element", () => {
-        const { instance, commandStack, dirtyFlagService } = provider();
-        const el = element("Annotation_1", ElementTypes.TEXTANNOTATION);
+    it("opens a client-scoped request only when the color entry is clicked", () => {
+        const { instance, colorPickerCoordinator } = provider();
+        const el = element("Actor_1", ElementTypes.ACTOR);
 
-        instance.getContextPadEntries(el);
-        document.dispatchEvent(
-            new CustomEvent("pickedColor", { detail: { color: "#ff0000" } }),
-        );
+        const entries = instance.getContextPadEntries(el);
+        expect(colorPickerCoordinator.request).not.toHaveBeenCalled();
 
-        expect(commandStack.execute).toHaveBeenCalledTimes(1);
-        expect(commandStack.execute).toHaveBeenCalledWith(
-            "element.colorChange",
-            {
-                businessObject: el.businessObject,
-                newColor: "#ff0000",
-                element: el,
-            },
-        );
-        expect(dirtyFlagService.makeDirty).toHaveBeenCalledTimes(1);
+        (entries["colorChange"].action as any).click({}, el);
+
+        expect(colorPickerCoordinator.request).toHaveBeenCalledWith(el);
     });
 
-    it("applies a picked color once per element on multi-select", () => {
-        const { instance, commandStack, dirtyFlagService } = provider();
+    it("passes the complete multi-selection to the coordinator", () => {
+        const { instance, colorPickerCoordinator } = provider();
         const el1 = element("Annotation_1", ElementTypes.TEXTANNOTATION);
         const el2 = element("Actor_1", ElementTypes.ACTOR);
+        const elements = [el1, el2];
 
-        instance.getMultiElementContextPadEntries([el1, el2]);
-        document.dispatchEvent(
-            new CustomEvent("pickedColor", { detail: { color: "#00ff00" } }),
-        );
+        const entries = instance.getMultiElementContextPadEntries(elements);
+        (entries["colorChange"].action as any).click({}, elements);
 
-        expect(commandStack.execute).toHaveBeenCalledTimes(2);
-        expect(commandStack.execute).toHaveBeenNthCalledWith(
-            1,
-            "element.colorChange",
-            {
-                businessObject: el1.businessObject,
-                newColor: "#00ff00",
-                element: el1,
-            },
-        );
-        expect(commandStack.execute).toHaveBeenNthCalledWith(
-            2,
-            "element.colorChange",
-            {
-                businessObject: el2.businessObject,
-                newColor: "#00ff00",
-                element: el2,
-            },
-        );
-        // A single dirty flag for the whole multi-select gesture.
-        expect(dirtyFlagService.makeDirty).toHaveBeenCalledTimes(1);
-    });
-
-    it("stops listening for picked colors once the diagram is destroyed", () => {
-        const { instance, commandStack, eventBus } = provider();
-        instance.getContextPadEntries(
-            element("Annotation_1", ElementTypes.TEXTANNOTATION),
-        );
-
-        eventBus.fire("diagram.destroy", {});
-        document.dispatchEvent(
-            new CustomEvent("pickedColor", { detail: { color: "#ff0000" } }),
-        );
-
-        expect(commandStack.execute).not.toHaveBeenCalled();
+        expect(colorPickerCoordinator.request).toHaveBeenCalledWith(elements);
     });
 
     it("offers a colorChange entry for multi-selections", () => {
@@ -255,6 +216,120 @@ describe("DomainStoryContextPadProvider color change", () => {
         ]);
 
         expect(entries).toHaveProperty("colorChange");
+    });
+});
+
+/**
+ * The delete entry is rule-gated (issue #85). A denied delete must *omit* the
+ * entry — the provider used to `throw`, and `getContextPadEntries` has no catch,
+ * so a single denying `elements.delete` rule would have taken down the entire
+ * context pad. The rule is also queried with the canonical flat `{ elements }`
+ * context, so host rules written against bpmn-js conventions actually match.
+ */
+describe("DomainStoryContextPadProvider delete entry", () => {
+    it("omits delete but keeps the rest of the pad when the rule denies", () => {
+        const { instance } = provider({ allowed: () => false });
+
+        const entries = instance.getContextPadEntries(
+            element("Actor_1", ElementTypes.ACTOR),
+        );
+
+        expect(entries).not.toHaveProperty("delete");
+        expect(entries).toHaveProperty("colorChange");
+        expect(entries).toHaveProperty("connect");
+    });
+
+    it("omits delete but keeps the multi-select pad when the rule denies", () => {
+        const { instance } = provider({ allowed: () => false });
+
+        const entries = instance.getMultiElementContextPadEntries([
+            element("Actor_1", ElementTypes.ACTOR),
+            element("Annotation_1", ElementTypes.TEXTANNOTATION),
+        ]);
+
+        expect(entries).not.toHaveProperty("delete");
+        expect(entries).toHaveProperty("colorChange");
+    });
+
+    it("queries the rule with the canonical flat elements context", () => {
+        const { instance, rules } = provider();
+        const el = element("Actor_1", ElementTypes.ACTOR);
+
+        instance.getContextPadEntries(el);
+
+        expect(rules.allowed).toHaveBeenCalledWith("elements.delete", {
+            elements: [el],
+        });
+    });
+
+    it("passes the whole selection for a multi-select", () => {
+        const { instance, rules } = provider();
+        const el1 = element("Actor_1", ElementTypes.ACTOR);
+        const el2 = element("Annotation_1", ElementTypes.TEXTANNOTATION);
+
+        instance.getMultiElementContextPadEntries([el1, el2]);
+
+        expect(rules.allowed).toHaveBeenCalledWith("elements.delete", {
+            elements: [el1, el2],
+        });
+    });
+
+    it("reads an array verdict as the deletable subset", () => {
+        const el = element("Actor_1", ElementTypes.ACTOR);
+
+        expect(
+            provider({ allowed: () => [el] }).instance.getContextPadEntries(el),
+        ).toHaveProperty("delete");
+        expect(
+            provider({ allowed: () => [] }).instance.getContextPadEntries(el),
+        ).not.toHaveProperty("delete");
+    });
+
+    it("requires every multi-selected element in an array verdict", () => {
+        const el1 = element("Actor_1", ElementTypes.ACTOR);
+        const el2 = element("Annotation_1", ElementTypes.TEXTANNOTATION);
+
+        // A partial verdict must not offer an entry that would delete both.
+        expect(
+            provider({
+                allowed: () => [el1],
+            }).instance.getMultiElementContextPadEntries([el1, el2]),
+        ).not.toHaveProperty("delete");
+        expect(
+            provider({
+                allowed: () => [el1, el2],
+            }).instance.getMultiElementContextPadEntries([el1, el2]),
+        ).toHaveProperty("delete");
+    });
+
+    it("keeps the group pad's own delete entry, which is rule-exempt", () => {
+        const { instance } = provider({ allowed: () => false });
+
+        const entries = instance.getContextPadEntries(
+            element("Group_1", ElementTypes.GROUP),
+        );
+
+        expect(entries).toHaveProperty("deleteGroup");
+    });
+});
+
+/**
+ * Legacy global events must no longer provide an unowned response path.
+ */
+describe("DomainStoryContextPadProvider legacy picker events", () => {
+    it("ignores pickedColor, openColorPicker, and defaultColor events", () => {
+        const { instance, commandStack, colorPickerCoordinator } = provider();
+        instance.getContextPadEntries(element("Actor_1", ElementTypes.ACTOR));
+        document.dispatchEvent(
+            new CustomEvent("pickedColor", { detail: { color: "#ff0000" } }),
+        );
+        document.dispatchEvent(new CustomEvent("openColorPicker"));
+        document.dispatchEvent(
+            new CustomEvent("defaultColor", { detail: { color: "#000000" } }),
+        );
+
+        expect(commandStack.execute).not.toHaveBeenCalled();
+        expect(colorPickerCoordinator.request).not.toHaveBeenCalled();
     });
 });
 
@@ -275,8 +350,19 @@ describe("DomainStoryContextPadProvider change direction", () => {
         } as any;
     }
 
+    /** An actor-sourced activity: after the swap it becomes a response. */
+    function actorSourcedActivity() {
+        return {
+            id: "Activity_2",
+            type: ElementTypes.ACTIVITY,
+            businessObject: { id: "Activity_2", number: 7 },
+            source: { type: ElementTypes.ACTOR + "Person" },
+            waypoints: [],
+        } as any;
+    }
+
     it("leaves the number to the command instead of minting it into the model", () => {
-        const { instance, commandStack } = provider();
+        const { instance, commandStack, generateAutomaticNumber } = provider();
         const activity = workObjectSourcedActivity();
         let numberAtExecute: unknown = "not executed";
         commandStack.execute.mockImplementation(() => {
@@ -287,9 +373,37 @@ describe("DomainStoryContextPadProvider change direction", () => {
         (entries["changeDirection"].action as any).click({}, activity);
 
         expect(numberAtExecute).toBeNull();
+        expect(generateAutomaticNumber).toHaveBeenCalledTimes(1);
         expect(commandStack.execute).toHaveBeenCalledWith(
             "activity.directionChange",
-            expect.objectContaining({ newNumber: 1, element: activity }),
+            {
+                businessObject: activity.businessObject,
+                newNumber: 1,
+                element: activity,
+            },
+        );
+    });
+
+    it("clears actor-sourced numbering without calling the registry", () => {
+        const { instance, commandStack, generateAutomaticNumber } = provider();
+        const activity = actorSourcedActivity();
+        let numberAtExecute: unknown = "not executed";
+        commandStack.execute.mockImplementation(() => {
+            numberAtExecute = activity.businessObject.number;
+        });
+
+        const entries = instance.getContextPadEntries(activity);
+        (entries["changeDirection"].action as any).click({}, activity);
+
+        expect(numberAtExecute).toBe(7);
+        expect(generateAutomaticNumber).not.toHaveBeenCalled();
+        expect(commandStack.execute).toHaveBeenCalledWith(
+            "activity.directionChange",
+            {
+                businessObject: activity.businessObject,
+                newNumber: null,
+                element: activity,
+            },
         );
     });
 });

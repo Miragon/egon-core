@@ -43,6 +43,24 @@ export interface ActivityNumberEdit {
     multipleAllowed: boolean;
 }
 
+/** The adapter action required when an activity reverses direction. */
+export type DirectionChangeNumberingDecision = "clear" | "generate";
+
+/**
+ * Decide what happens to an activity's number when its direction is reversed.
+ *
+ * The decision deliberately reads the current source, not the target: an
+ * actor-sourced activity becomes a response after reversal and loses its
+ * number; every other source becomes an actor-sourced story step and receives
+ * an automatically generated number. Prefix classification preserves icon-
+ * suffixed actor types.
+ */
+export function numberingOnDirectionChange(
+    currentSource: { type?: string; [key: string]: unknown } | null | undefined,
+): DirectionChangeNumberingDecision {
+    return isActor(currentSource) ? "clear" : "generate";
+}
+
 /**
  * The smallest positive integer not yet used as an activity number — deleted
  * activities leave gaps, and the story reads best when those gaps are refilled
