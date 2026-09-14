@@ -20,11 +20,16 @@ yarn install
 
 Node 24 is required by the local demo router. CI reads the same `.nvmrc`.
 
-To install only the published package in another project:
+To install the built `0.1.0` package from its versioned GitHub Release:
 
 ```bash
-yarn add egon-core
+yarn add egon-core@https://github.com/Miragon/egon-core/releases/download/v0.1.0/egon-core-0.1.0.tgz
 ```
+
+Use the URL for the version your host pins. A GitHub Release becomes
+installable after its **Release archive** workflow validates and attaches the
+`.tgz`; the automatically generated source archives are not built packages. See
+[docs/Releasing.md](docs/Releasing.md) for the release and recovery process.
 
 The package ships as ESM. `diagram-js` and its companion packages
 (`diagram-js-direct-editing`, `didi`, `ids`, `min-dash`, `min-dom`, `tiny-svg`)
@@ -51,26 +56,44 @@ client.on("story.changed", () => {
 
 Both the runtime (`dist/index.js`) and its type declarations
 (`dist/index.d.ts`) are emitted to `dist/`, and the compiled styles to
-`dist/style.css`. See [docs/Client.md](docs/Client.md) for the full
-`EgonClient` API.
+`dist/style.css`. The exported stylesheet includes diagram-js's required editor
+layout, the BPMN icon font, and egon-core's built-in SVG masks. Hosts only need
+to give the canvas container a usable size. See
+[docs/Client.md](docs/Client.md) for the full `EgonClient` API.
 
 ## Host integration: color picker
 
-Recoloring an element is host-owned: the core dispatches and listens for
-document-level `CustomEvent`s, and the host supplies the actual color picker
-UI. Wire a picker to these events; a host without one still shows the pad's
-color button, but it does nothing.
+Recoloring UI is host-owned and communicates with the core through a
+client-scoped request protocol. A host without a picker still shows the pad's
+color button, but clicking it has no visual effect.
 
-- **Core dispatches `openColorPicker`** when the pad's color button is clicked.
-  The host should open its picker in response.
-- **Core dispatches `defaultColor`** (`detail.color`) whenever a context pad
-  opens, carrying the current selection's color so the host can pre-select the
-  matching swatch.
-- **Core listens for `pickedColor`** (`detail.color`) and applies the color to
-  the selected element(s) — one undo step per element on a multi-select.
-- **Core dispatches `errorColoringOnlySvg`** when a color is applied to an
-  element whose custom icon is not SVG (raster icons cannot be recolored). The
-  host may surface this as a notification.
+```ts
+const requested = ({ requestId, color }) => {
+    picker.open({ color });
+    picker.onPreview((next) => client.previewPickedColor(requestId, next));
+    picker.onConfirm((final) => client.confirmPickedColor(requestId, final));
+    picker.onCancel(() => client.cancelColorPicker(requestId));
+};
+const closed = ({ requestId }) => picker.close(requestId);
+
+client.on("colorPicker.requested", requested);
+client.on("colorPicker.closed", closed);
+
+// During host teardown, close the UI and remove subscriptions before destroy.
+picker.close();
+client.off("colorPicker.requested", requested);
+client.off("colorPicker.closed", closed);
+client.destroy();
+```
+
+Preview calls may be repeated. They repaint without changing the exported
+story, dirty state, or undo history. Confirmation applies one existing color
+command per selected element; cancellation restores the persisted appearance.
+Unknown, expired, other-client, and destroyed-client request IDs return `false`.
+The core still dispatches `errorColoringOnlySvg` when a color is applied to an
+element whose custom icon is not SVG (raster icons cannot be recolored). The
+host may surface this as a notification. See [docs/Client.md](docs/Client.md)
+for webview routing and lifecycle details.
 
 ## Scripts
 
@@ -83,8 +106,9 @@ color button, but it does nothing.
 | `yarn test:watch`      | Run unit tests in watch mode                           |
 | `yarn test:coverage`   | Run unit tests with coverage                           |
 | `yarn test:browser`    | Run browser-tier Vitest integration specs              |
-| `yarn test:e2e`        | Run the four headless Playwright journeys              |
+| `yarn test:e2e`        | Run public Playwright journeys and stylesheet checks   |
 | `yarn test:e2e:headed` | Run the Playwright journeys in a visible browser       |
+| `yarn test:package`    | Pack and test an isolated installed-package consumer   |
 | `yarn typecheck`       | Type-check library, tests, demo, and e2e code          |
 | `yarn lint`            | Lint with ESLint                                       |
 
@@ -115,6 +139,23 @@ yarn playwright install chromium
 yarn test:e2e
 # or: yarn test:e2e:headed
 ```
+
+To exercise those same journeys against the package contents rather than the
+source aliases, run:
+
+```bash
+yarn test:package
+yarn test:package --archive /path/to/egon-core.tgz
+```
+
+Without `--archive`, the runner calls `yarn pack` (and therefore the package's
+`prepack` build). It stages the demo in a temporary project outside this
+repository, installs only the archive plus pinned Vite/TypeScript tooling,
+type-checks and builds that consumer, validates packaged CSS asset references,
+and serves the production build for Playwright. GitHub's **Release archive**
+workflow performs the same check against a selected commit's downloaded source
+archive. Published releases upload only after validation; manual runs validate
+by default and can recover an upload for an existing matching version release.
 
 ## Architecture
 

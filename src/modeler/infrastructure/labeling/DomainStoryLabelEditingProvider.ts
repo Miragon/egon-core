@@ -15,13 +15,10 @@ import { DomainStoryTextRenderer } from "../text-renderer/DomainStoryTextRendere
 import { LabelDictionaryService } from "../../../labelDictionary/service";
 import { ElementTypes } from "../../../story/domain/elementTypes";
 import { DomainStoryUpdateLabelHandler } from "./handler/DomainStoryUpdateLabelHandler";
-import {
-    isActor,
-    isBackground,
-    isWorkObject,
-} from "../../../story/domain/elementPredicates";
-import { is } from "../../../shared/infrastructure/util";
+import { isActor, isWorkObject } from "../../../story/domain/elementPredicates";
+import { getBusinessObject, is } from "../../../shared/infrastructure/util";
 import { createAutocompleteForEdit, getLabel } from "./utils";
+import { canEditLabel } from "../../../story/domain/labelPolicy";
 
 export function focusElement(element: HTMLDivElement) {
     // Opening an Angular Dialog seems to mess with the focus logic somehow.
@@ -127,8 +124,8 @@ export class DomainStoryLabelEditingProvider implements DirectEditingProvider {
      * @return an object with properties bounds (position and size), text and options
      */
     activate(element: Shape): any {
-        // text
-        if (isBackground(element)) {
+        const semanticObject = getBusinessObject(element);
+        if (!canEditLabel(element, semanticObject)) {
             return;
         }
         const text = getLabel(element);

@@ -19,6 +19,8 @@ function makeRenderer(eventBus: any = { on: vi.fn() }, canvas: any = {}) {
         canvas as Canvas,
         {} as any,
         {} as any,
+        {} as any,
+        { get: vi.fn() } as any,
     );
     return renderer;
 }

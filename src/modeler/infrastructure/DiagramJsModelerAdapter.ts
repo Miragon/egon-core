@@ -1,9 +1,8 @@
-import Diagram from "diagram-js";
+import type Diagram from "diagram-js";
 import type { ModuleDeclaration } from "didi";
 import type Canvas from "diagram-js/lib/core/Canvas";
 import type EventBus from "diagram-js/lib/core/EventBus";
 
-import EgonPlugin from "./plugin";
 import {
     DomainStoryImportService,
     DomainStoryExportService,
@@ -12,13 +11,41 @@ import {
     createDebouncedCallback,
     type DebouncedCallback,
 } from "../../shared/infrastructure/debounce";
+import { reportPostCommitError } from "../../shared/infrastructure/reportError";
+import { EditorSession, EditorSessionOwner } from "./EditorSessionOwner";
+import { IconDictionaryService } from "../../iconSet/service";
 
-import { ImportRepairData, ModelerPort } from "../domain/ports";
+import {
+    ColorPickerClosedData,
+    ColorPickerRequestData,
+    ImportRepairData,
+    ModelerPort,
+} from "../domain/ports";
 import {
     DomainStoryDocument,
     DomainStoryTextRendererConfig,
     ViewportData,
 } from "../domain";
+import { ColorPickerCoordinator } from "./color-picker/ColorPickerCoordinator";
+import { LabelDictionaryService } from "../../labelDictionary/service";
+import type {
+    LabelDictionary,
+    LabelRenameBatch,
+} from "../../labelDictionary/domain/LabelDictionary";
+import type {
+    CancellationSignal,
+    PngExportRequest,
+    PngExportResult,
+    SvgExportOptions,
+    SvgExportResult,
+} from "../domain/export/VisualExport";
+import type {
+    ReplayStartOptions,
+    ReplayState,
+} from "../../story/domain/replay";
+import { exportStaticSvg } from "./export/StaticSvgExporter";
+import { rasterizePng } from "./export/PngRasterizer";
+import { ReplayController } from "./replay/ReplayController";
 
 /** Project diagram-js' richer viewbox onto the stable public port shape. */
 function projectViewport(viewbox: ViewportData): ViewportData {
@@ -35,10 +62,12 @@ function projectViewport(viewbox: ViewportData): ViewportData {
  * This adapter isolates all diagram-js framework dependencies.
  */
 export class DiagramJsModelerAdapter implements ModelerPort {
-    private readonly diagram: Diagram;
-    private readonly eventBus: EventBus;
-    private readonly canvas: Canvas;
-    private readonly iconStyleElement: HTMLStyleElement;
+    private readonly sessionOwner: EditorSessionOwner;
+    private importInProgress = false;
+    private destroyed = false;
+    private replayController: ReplayController;
+    private readonly replayCallbacks = new Set<(state: ReplayState) => void>();
+    private readonly pendingExports = new Set<ExportCancellation>();
 
     // Two maps, not one union-keyed map: `EgonEventMap` makes a zero-arg
     // callback assignable to both events, so `on("story.changed", f)` followed
@@ -59,6 +88,18 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         (repair: ImportRepairData) => void,
         (event: any) => void
     > = new Map();
+    private readonly colorPickerRequestedCallbacks = new Map<
+        (request: ColorPickerRequestData) => void,
+        (event: any) => void
+    >();
+    private readonly colorPickerClosedCallbacks = new Map<
+        (closed: ColorPickerClosedData) => void,
+        (event: any) => void
+    >();
+    private readonly labelCallbacks = new Map<
+        (labels: LabelDictionary) => void,
+        { wrapped: (event: any) => void; last: string }
+    >();
 
     constructor(
         container: HTMLElement,
@@ -67,56 +108,202 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         additionalModules: ModuleDeclaration[] = [],
         textRenderer?: DomainStoryTextRendererConfig,
     ) {
-        // Must exist before `new Diagram`: IconCssInjector is constructed during
-        // boot (IconDictionaryService.$inject) and takes the node by reference.
-        this.iconStyleElement = this.createIconStyleElement(container);
-
-        // diagram-js injects `config.canvas` into its Canvas, so container/size
-        // must be nested under `canvas` — passed at the top level they are
-        // silently ignored and the canvas renders into document.body instead of
-        // the host-provided element, breaking multi-instance isolation.
-        // `domainStoryIconStyleSheet` rides the same mechanism to hand this
-        // instance's own <style> node to its own IconCssInjector, and
-        // `textRenderer` to reach `config.textRenderer` in the text renderer.
-        // The key is omitted when the host supplied nothing, so didi hands the
-        // renderer `undefined` and its built-in defaults stand.
-        this.diagram = new Diagram({
-            canvas: { container, width, height },
-            domainStoryIconStyleSheet: { styleElement: this.iconStyleElement },
-            ...(textRenderer ? { textRenderer } : {}),
-            modules: [EgonPlugin, ...additionalModules],
-        });
-
-        this.eventBus = this.diagram.get<EventBus>("eventBus");
-        this.canvas = this.diagram.get<Canvas>("canvas");
-
-        this.initializeRootElement();
+        this.sessionOwner = new EditorSessionOwner(
+            container,
+            width,
+            height,
+            additionalModules,
+            textRenderer,
+        );
+        this.replayController = this.createReplayController(
+            this.sessionOwner.getActiveDiagram(),
+        );
     }
 
     import(document: DomainStoryDocument): void {
-        const importService = this.diagram.get<DomainStoryImportService>(
-            "domainStoryImportService",
-        );
-        importService.import(JSON.stringify(document));
+        if (this.importInProgress) {
+            throw new Error("Cannot start a reentrant import");
+        }
+
+        this.importInProgress = true;
+        let candidate: EditorSession | undefined;
+        let committed = false;
+
+        try {
+            const active = this.sessionOwner.getActiveSession();
+            const importService = active.diagram.get<DomainStoryImportService>(
+                "domainStoryImportService",
+            );
+            const prepared = importService.prepare(document);
+            const viewport = projectViewport(active.canvas.viewbox());
+
+            candidate = this.sessionOwner.createCandidate();
+            this.copyCustomIconPool(active, candidate);
+            candidate.diagram
+                .get<DomainStoryImportService>("domainStoryImportService")
+                .materialize(prepared);
+            candidate.canvas.viewbox(viewport);
+
+            const previous = this.sessionOwner.promote(candidate);
+            committed = true;
+            this.abortPendingExports();
+            // The old request remains valid throughout candidate staging. Only
+            // a successful promotion expires it, while its old-bus callbacks
+            // are still attached and can synchronously dismiss the host UI.
+            try {
+                this.getColorPickerCoordinator(previous).cancelActive();
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+            try {
+                this.transferSubscriptions(
+                    previous.eventBus,
+                    candidate.eventBus,
+                );
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+            this.replaceReplayController(candidate.diagram);
+
+            // Candidate-local events prepared its palette/banner while hidden.
+            // Repeat only the public notifications after listeners have moved.
+            this.publishCommittedImport(candidate, prepared.removedConnections);
+
+            try {
+                this.sessionOwner.dispose(previous);
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        } catch (error) {
+            if (committed) {
+                reportPostCommitError(error);
+                return;
+            }
+            if (candidate && !committed) {
+                try {
+                    this.sessionOwner.dispose(candidate);
+                } catch (cleanupError) {
+                    reportPostCommitError(cleanupError);
+                }
+            }
+            throw error;
+        } finally {
+            this.importInProgress = false;
+        }
     }
 
     export(): DomainStoryDocument {
-        const exportService = this.diagram.get<DomainStoryExportService>(
+        const exportService = this.getDiagram().get<DomainStoryExportService>(
             "domainStoryExportService",
         );
         return JSON.parse(exportService.export());
     }
 
+    async exportSVG(options: SvgExportOptions = {}): Promise<SvgExportResult> {
+        const { document, session } = this.captureExportSession();
+        try {
+            return exportStaticSvg(session.canvas, document, options);
+        } finally {
+            this.sessionOwner.dispose(session);
+        }
+    }
+
+    exportPNG(options: PngExportRequest = {}): Promise<PngExportResult> {
+        const cancellation = new ExportCancellation(options.cancellation);
+        if (cancellation.aborted) {
+            cancellation.dispose();
+            const error = new Error("The operation was aborted");
+            error.name = "AbortError";
+            return Promise.reject(error);
+        }
+
+        // Everything through SVG preparation is synchronous: later edits can
+        // only affect the live session, never this captured candidate.
+        let capture: ReturnType<
+            DiagramJsModelerAdapter["captureExportSession"]
+        >;
+        try {
+            capture = this.captureExportSession();
+        } catch (error) {
+            cancellation.dispose();
+            return Promise.reject(error);
+        }
+        const { document, session } = capture;
+        this.pendingExports.add(cancellation);
+        let svg: SvgExportResult;
+        try {
+            svg = exportStaticSvg(session.canvas, document, {
+                padding: options.padding,
+                background: options.background ?? "white",
+                includeTitle: options.includeTitle,
+                includeDescription: options.includeDescription,
+                embedDocument: false,
+            });
+        } catch (error) {
+            this.pendingExports.delete(cancellation);
+            cancellation.dispose();
+            this.sessionOwner.dispose(session);
+            return Promise.reject(error);
+        }
+
+        return rasterizePng(svg, options.scale, cancellation).finally(() => {
+            this.pendingExports.delete(cancellation);
+            cancellation.dispose();
+            this.sessionOwner.dispose(session);
+        });
+    }
+
+    getLabelDictionary(): LabelDictionary {
+        const dictionary = this.getDiagram()
+            .get<LabelDictionaryService>("domainStoryLabelDictionaryService")
+            .getDictionary();
+        return detachLabels(dictionary);
+    }
+
+    renameLabels(changes: LabelRenameBatch): readonly string[] {
+        return this.getDiagram()
+            .get<LabelDictionaryService>("domainStoryLabelDictionaryService")
+            .renameLabels(changes);
+    }
+
+    getReplayState(): ReplayState {
+        return this.replayController.getState();
+    }
+
+    startReplay(options?: ReplayStartOptions): ReplayState {
+        return this.replayController.start(options);
+    }
+
+    stopReplay(): ReplayState {
+        return this.replayController.stop();
+    }
+
+    nextReplayStep(): ReplayState {
+        return this.replayController.next();
+    }
+
+    previousReplayStep(): ReplayState {
+        return this.replayController.previous();
+    }
+
+    seekReplayStep(index: number): ReplayState {
+        return this.replayController.seek(index);
+    }
+
+    setReplayShowGroups(value: boolean): ReplayState {
+        return this.replayController.setShowGroups(value);
+    }
+
     getViewport(): ViewportData {
-        return projectViewport(this.canvas.viewbox());
+        return projectViewport(this.getCanvas().viewbox());
     }
 
     setViewport(viewport: ViewportData): void {
-        this.canvas.viewbox(viewport);
+        this.getCanvas().viewbox(viewport);
     }
 
     alignToOrigin(): void {
-        this.diagram.get<{ align(): void }>("alignToOrigin").align();
+        this.getDiagram().get<{ align(): void }>("alignToOrigin").align();
     }
 
     fitToScreen(): void {
@@ -124,7 +311,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         // Public equivalent of upstream fitStoryToScreen's
         // canvas._fitViewport({ x: 0, y: 0 }): in diagram-js, zoom
         // "fit-viewport" delegates directly to _fitViewport(center).
-        this.canvas.zoom("fit-viewport", { x: 0, y: 0 });
+        this.getCanvas().zoom("fit-viewport", { x: 0, y: 0 });
     }
 
     onStoryChanged(callback: () => void): void {
@@ -134,20 +321,30 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         // Built once and reused for every event: a debouncer created per event
         // shares no timer with the previous one, so nothing coalesces and each
         // command reaches the host a full window late.
-        const wrapped = createDebouncedCallback(() => callback());
+        const wrapped = createDebouncedCallback(() => {
+            try {
+                callback();
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        });
         this.storyCallbacks.set(callback, wrapped);
-        (this.eventBus.on as any)("commandStack.changed", wrapped);
+        (this.getEventBus().on as any)("commandStack.changed", wrapped);
     }
 
     onViewportChanged(callback: (viewport: ViewportData) => void): void {
         if (this.viewportCallbacks.has(callback)) {
             return;
         }
-        const wrapped = createDebouncedCallback((event: any) =>
-            callback(projectViewport(event.viewbox)),
-        );
+        const wrapped = createDebouncedCallback((event: any) => {
+            try {
+                callback(projectViewport(event.viewbox));
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        });
         this.viewportCallbacks.set(callback, wrapped);
-        (this.eventBus.on as any)("canvas.viewbox.changed", wrapped);
+        (this.getEventBus().on as any)("canvas.viewbox.changed", wrapped);
     }
 
     onImportRepaired(callback: (repair: ImportRepairData) => void): void {
@@ -156,20 +353,25 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         }
         // The internal event carries the dropped business objects; only their
         // ids cross the port, so the model stays on this side of it.
-        const wrapped = (event: any) =>
-            callback({
-                removedConnectionIds: (event.removedConnections ?? []).map(
-                    (connection: { id: string }) => connection.id,
-                ),
-            });
+        const wrapped = (event: any) => {
+            try {
+                callback({
+                    removedConnectionIds: (event.removedConnections ?? []).map(
+                        (connection: { id: string }) => connection.id,
+                    ),
+                });
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        };
         this.importRepairCallbacks.set(callback, wrapped);
-        (this.eventBus.on as any)("dst.import.repaired", wrapped);
+        (this.getEventBus().on as any)("dst.import.repaired", wrapped);
     }
 
     offStoryChanged(callback: () => void): void {
         const wrapped = this.storyCallbacks.get(callback);
         if (wrapped) {
-            (this.eventBus.off as any)("commandStack.changed", wrapped);
+            (this.getEventBus().off as any)("commandStack.changed", wrapped);
             // Cancel too, or unsubscribing drops the only handle to an armed
             // timer and the host is still called ~100 ms after off().
             wrapped.cancel();
@@ -180,7 +382,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     offViewportChanged(callback: (viewport: ViewportData) => void): void {
         const wrapped = this.viewportCallbacks.get(callback);
         if (wrapped) {
-            (this.eventBus.off as any)("canvas.viewbox.changed", wrapped);
+            (this.getEventBus().off as any)("canvas.viewbox.changed", wrapped);
             wrapped.cancel();
             this.viewportCallbacks.delete(callback);
         }
@@ -189,9 +391,129 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     offImportRepaired(callback: (repair: ImportRepairData) => void): void {
         const wrapped = this.importRepairCallbacks.get(callback);
         if (wrapped) {
-            (this.eventBus.off as any)("dst.import.repaired", wrapped);
+            (this.getEventBus().off as any)("dst.import.repaired", wrapped);
             this.importRepairCallbacks.delete(callback);
         }
+    }
+
+    onLabelsChanged(callback: (labels: LabelDictionary) => void): void {
+        if (this.labelCallbacks.has(callback)) return;
+
+        const registration: {
+            last: string;
+            wrapped: (event: any) => void;
+        } = {
+            last: JSON.stringify(this.getLabelDictionary()),
+            wrapped: () => {},
+        };
+        registration.wrapped = (event: any) => {
+            const labels = this.getLabelDictionary();
+            const next = JSON.stringify(labels);
+            const force = event?.type === "dst.import.committed";
+            if (!force && next === registration.last) return;
+            registration.last = next;
+            try {
+                callback(labels);
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        };
+        this.labelCallbacks.set(callback, registration);
+        (this.getEventBus().on as any)(
+            ["commandStack.changed", "dst.import.committed"],
+            registration.wrapped,
+        );
+    }
+
+    offLabelsChanged(callback: (labels: LabelDictionary) => void): void {
+        const registration = this.labelCallbacks.get(callback);
+        if (!registration) return;
+        (this.getEventBus().off as any)(
+            ["commandStack.changed", "dst.import.committed"],
+            registration.wrapped,
+        );
+        this.labelCallbacks.delete(callback);
+    }
+
+    onReplayChanged(callback: (state: ReplayState) => void): void {
+        this.replayCallbacks.add(callback);
+    }
+
+    offReplayChanged(callback: (state: ReplayState) => void): void {
+        this.replayCallbacks.delete(callback);
+    }
+
+    onColorPickerRequested(
+        callback: (request: ColorPickerRequestData) => void,
+    ): void {
+        if (this.colorPickerRequestedCallbacks.has(callback)) return;
+        const wrapped = (event: any) => {
+            try {
+                callback({
+                    requestId: event.requestId,
+                    elementIds: [...event.elementIds],
+                    color: event.color,
+                });
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        };
+        this.colorPickerRequestedCallbacks.set(callback, wrapped);
+        (this.getEventBus().on as any)("dst.colorPicker.requested", wrapped);
+    }
+
+    onColorPickerClosed(
+        callback: (closed: ColorPickerClosedData) => void,
+    ): void {
+        if (this.colorPickerClosedCallbacks.has(callback)) return;
+        const wrapped = (event: any) => {
+            try {
+                callback({ requestId: event.requestId });
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        };
+        this.colorPickerClosedCallbacks.set(callback, wrapped);
+        (this.getEventBus().on as any)("dst.colorPicker.closed", wrapped);
+    }
+
+    offColorPickerRequested(
+        callback: (request: ColorPickerRequestData) => void,
+    ): void {
+        const wrapped = this.colorPickerRequestedCallbacks.get(callback);
+        if (!wrapped) return;
+        (this.getEventBus().off as any)("dst.colorPicker.requested", wrapped);
+        this.colorPickerRequestedCallbacks.delete(callback);
+    }
+
+    offColorPickerClosed(
+        callback: (closed: ColorPickerClosedData) => void,
+    ): void {
+        const wrapped = this.colorPickerClosedCallbacks.get(callback);
+        if (!wrapped) return;
+        (this.getEventBus().off as any)("dst.colorPicker.closed", wrapped);
+        this.colorPickerClosedCallbacks.delete(callback);
+    }
+
+    previewPickedColor(requestId: string, color: string): boolean {
+        return (
+            !this.destroyed &&
+            this.getColorPickerCoordinator().preview(requestId, color)
+        );
+    }
+
+    confirmPickedColor(requestId: string, color: string): boolean {
+        return (
+            !this.destroyed &&
+            this.getColorPickerCoordinator().confirm(requestId, color)
+        );
+    }
+
+    cancelColorPicker(requestId: string): boolean {
+        return (
+            !this.destroyed &&
+            this.getColorPickerCoordinator().cancel(requestId)
+        );
     }
 
     /**
@@ -202,68 +524,252 @@ export class DiagramJsModelerAdapter implements ModelerPort {
      * container and so survives `diagram.destroy()`.
      */
     destroy(): void {
+        if (this.destroyed) return;
+        this.destroyed = true;
+        this.abortPendingExports();
+        this.replayController.destroy();
         this.unsubscribeAll();
-        this.diagram.destroy();
-        this.iconStyleElement.remove();
+        this.sessionOwner.destroy();
     }
 
     /** Expose diagram instance for IconAdapter to access services */
     getDiagram(): Diagram {
-        return this.diagram;
+        return this.sessionOwner.getActiveDiagram();
     }
 
-    /**
-     * Creates this instance's own icon stylesheet node inside the host
-     * container.
-     *
-     * Unconditional — no "already there?" guard: two clients sharing one
-     * container must get two nodes, otherwise the second writes its icon rules
-     * into the first's sheet and destroying either deletes rules the other
-     * depends on. Marked by attribute rather than `id` for the same reason: ids
-     * must be document-unique.
-     */
-    private createIconStyleElement(container: HTMLElement): HTMLStyleElement {
-        const style = document.createElement("style");
-        style.setAttribute("data-egon-icons-css", "");
-        container.appendChild(style);
-        return style;
+    /** Internal active-session provider used by the icon adapter. */
+    getSessionOwner(): EditorSessionOwner {
+        return this.sessionOwner;
     }
 
-    /** Detaches and disarms every host subscription, all three event kinds. */
+    /** Detaches and disarms every host subscription. */
     private unsubscribeAll(): void {
         this.storyCallbacks.forEach((wrapped) => {
-            (this.eventBus.off as any)("commandStack.changed", wrapped);
+            (this.getEventBus().off as any)("commandStack.changed", wrapped);
             wrapped.cancel();
         });
         this.storyCallbacks.clear();
 
         this.viewportCallbacks.forEach((wrapped) => {
-            (this.eventBus.off as any)("canvas.viewbox.changed", wrapped);
+            (this.getEventBus().off as any)("canvas.viewbox.changed", wrapped);
             wrapped.cancel();
         });
         this.viewportCallbacks.clear();
 
         this.importRepairCallbacks.forEach((wrapped) => {
-            (this.eventBus.off as any)("dst.import.repaired", wrapped);
+            (this.getEventBus().off as any)("dst.import.repaired", wrapped);
         });
         this.importRepairCallbacks.clear();
+
+        this.colorPickerRequestedCallbacks.forEach((wrapped) => {
+            (this.getEventBus().off as any)(
+                "dst.colorPicker.requested",
+                wrapped,
+            );
+        });
+        this.colorPickerRequestedCallbacks.clear();
+
+        this.colorPickerClosedCallbacks.forEach((wrapped) => {
+            (this.getEventBus().off as any)("dst.colorPicker.closed", wrapped);
+        });
+        this.colorPickerClosedCallbacks.clear();
+
+        this.labelCallbacks.forEach(({ wrapped }) => {
+            (this.getEventBus().off as any)(
+                ["commandStack.changed", "dst.import.committed"],
+                wrapped,
+            );
+        });
+        this.labelCallbacks.clear();
+        this.replayCallbacks.clear();
     }
 
-    /**
-     * Realizes the canvas root eagerly, so every service that reads it at boot
-     * sees the same element.
-     *
-     * It must be diagram-js' *implicit* root: `isBackground` (story/domain)
-     * identifies the canvas background by the `__implicitroot` id prefix, as
-     * upstream does. A root built via `elementFactory.createRoot()` instead gets
-     * a `root_<n>` id from DomainStoryIdFactory, so `isBackground` answered
-     * false for it — and `DomainStoryUpdater.updateElement` then took its
-     * "group dropped onto a shape" branch for a group created on the bare
-     * canvas, dereferencing `parent.parent` (undefined for a root) and throwing
-     * `TypeError: Cannot read properties of undefined (reading 'children')`.
-     * `getRootElement()` creates and installs the implicit root when none is set.
-     */
-    private initializeRootElement(): void {
-        this.canvas.getRootElement();
+    private getCanvas(): Canvas {
+        return this.sessionOwner.getActiveSession().canvas;
+    }
+
+    private getEventBus(): EventBus {
+        return this.sessionOwner.getActiveSession().eventBus;
+    }
+
+    private transferSubscriptions(previous: EventBus, current: EventBus): void {
+        this.storyCallbacks.forEach((wrapped) => {
+            (previous.off as any)("commandStack.changed", wrapped);
+            wrapped.cancel();
+            (current.on as any)("commandStack.changed", wrapped);
+        });
+        this.viewportCallbacks.forEach((wrapped) => {
+            (previous.off as any)("canvas.viewbox.changed", wrapped);
+            wrapped.cancel();
+            (current.on as any)("canvas.viewbox.changed", wrapped);
+        });
+        this.importRepairCallbacks.forEach((wrapped) => {
+            (previous.off as any)("dst.import.repaired", wrapped);
+            (current.on as any)("dst.import.repaired", wrapped);
+        });
+        this.colorPickerRequestedCallbacks.forEach((wrapped) => {
+            (previous.off as any)("dst.colorPicker.requested", wrapped);
+            (current.on as any)("dst.colorPicker.requested", wrapped);
+        });
+        this.colorPickerClosedCallbacks.forEach((wrapped) => {
+            (previous.off as any)("dst.colorPicker.closed", wrapped);
+            (current.on as any)("dst.colorPicker.closed", wrapped);
+        });
+        this.labelCallbacks.forEach((registration) => {
+            (previous.off as any)(
+                ["commandStack.changed", "dst.import.committed"],
+                registration.wrapped,
+            );
+            registration.last = JSON.stringify(this.getLabelDictionary());
+            (current.on as any)(
+                ["commandStack.changed", "dst.import.committed"],
+                registration.wrapped,
+            );
+        });
+    }
+
+    private getColorPickerCoordinator(
+        session: EditorSession = this.sessionOwner.getActiveSession(),
+    ): ColorPickerCoordinator {
+        return session.diagram.get<ColorPickerCoordinator>(
+            "domainStoryColorPickerCoordinator",
+        );
+    }
+
+    private copyCustomIconPool(
+        previous: EditorSession,
+        candidate: EditorSession,
+    ): void {
+        const source = previous.diagram.get<IconDictionaryService>(
+            "domainStoryIconDictionaryService",
+        );
+        candidate.diagram
+            .get<IconDictionaryService>("domainStoryIconDictionaryService")
+            .restoreCustomIcons(source.getFullDictionary());
+    }
+
+    private publishCommittedImport(
+        session: EditorSession,
+        removedConnections: readonly { id: string }[],
+    ): void {
+        try {
+            session.eventBus.fire("dst.config.changed", {});
+        } catch (error) {
+            reportPostCommitError(error);
+        }
+        try {
+            session.eventBus.fire("dst.import.committed", {});
+        } catch (error) {
+            reportPostCommitError(error);
+        }
+        if (removedConnections.length > 0) {
+            try {
+                session.eventBus.fire("dst.import.repaired", {
+                    removedConnections,
+                });
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        }
+    }
+
+    private captureExportSession(): {
+        document: DomainStoryDocument;
+        session: EditorSession;
+    } {
+        if (this.destroyed) throw new Error("EgonClient has been destroyed");
+        const document = this.export();
+        const active = this.sessionOwner.getActiveSession();
+        const session = this.sessionOwner.createCandidate();
+        try {
+            this.copyCustomIconPool(active, session);
+            const importService = session.diagram.get<DomainStoryImportService>(
+                "domainStoryImportService",
+            );
+            importService.materialize(importService.prepare(document));
+            return { document, session };
+        } catch (error) {
+            this.sessionOwner.dispose(session);
+            throw error;
+        }
+    }
+
+    private abortPendingExports(): void {
+        this.pendingExports.forEach((cancellation) => cancellation.abort());
+    }
+
+    private createReplayController(
+        diagram: Diagram,
+        showGroups = false,
+    ): ReplayController {
+        return new ReplayController(
+            diagram,
+            (state) => this.publishReplayChanged(state),
+            showGroups,
+        );
+    }
+
+    private replaceReplayController(diagram: Diagram): void {
+        const previousState = this.replayController.getState();
+        this.replayController.destroy();
+        this.replayController = this.createReplayController(
+            diagram,
+            previousState.showGroups,
+        );
+        if (previousState.active) {
+            this.publishReplayChanged(this.replayController.getState());
+        }
+    }
+
+    private publishReplayChanged(state: ReplayState): void {
+        this.replayCallbacks.forEach((callback) => {
+            try {
+                callback({ ...state });
+            } catch (error) {
+                reportPostCommitError(error);
+            }
+        });
+    }
+}
+
+function detachLabels(labels: LabelDictionary): LabelDictionary {
+    return {
+        activities: labels.activities.map((entry) => ({ ...entry })),
+        workObjects: labels.workObjects.map((entry) => ({ ...entry })),
+    };
+}
+
+class ExportCancellation implements CancellationSignal {
+    private cancelled = false;
+    private readonly callbacks = new Set<() => void>();
+    private readonly removeExternal?: () => void;
+
+    constructor(external?: CancellationSignal) {
+        if (external) {
+            this.removeExternal = external.onCancel(() => this.abort());
+            if (external.aborted) this.abort();
+        }
+    }
+
+    get aborted(): boolean {
+        return this.cancelled;
+    }
+
+    onCancel(callback: () => void): () => void {
+        if (this.cancelled) callback();
+        else this.callbacks.add(callback);
+        return () => this.callbacks.delete(callback);
+    }
+
+    abort(): void {
+        if (this.cancelled) return;
+        this.cancelled = true;
+        [...this.callbacks].forEach((callback) => callback());
+        this.callbacks.clear();
+    }
+
+    dispose(): void {
+        this.removeExternal?.();
+        this.callbacks.clear();
     }
 }

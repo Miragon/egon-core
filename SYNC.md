@@ -19,19 +19,21 @@ Upstream keeps the modeler embedded in an Angular app; this repo restructured th
 extracted core into a flat DDD feature layout (ADR 0010). File names may differ —
 where names were arbitrary we match upstream so diffs stay reviewable.
 
-| upstream (wps/egon.io)                                       | local                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/app/tools/modeler/diagram-js/features/*`                | `src/modeler/infrastructure/*` (change-icon→`replace`, copyPaste→`copy-paste`, shortcuts→`keyboard`+`editor-actions`, numbering→`popup` (the `number-stash` half was deleted with #74 — upstream's stash has no local counterpart any more), util/TextRenderer→`text-renderer`, rules→`rules` adapter + `rules/ruleVerdictAdapter` (the single verdict→wire mapping, ADR 0015) + the pure grammar/predicates/verdicts extracted to `src/story/domain/{elementPredicates,modelingRules,ruleVerdict}`, numbering math extracted to `src/story/domain/activityNumbering`, and activity label geometry plus segment selection extracted to `src/modeler/domain/labeling/position`, which have no upstream counterpart) |
-| `src/app/domain/entities/*`                                  | `src/story/domain/*` (icon types→`src/iconSet/domain`, label entries→`src/labelDictionary/domain`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `src/app/domain/services` + `src/app/tools/modeler/services` | `src/modeler/service/*` (ModelerService/InitializerService ≈ `EgonClient`/`DiagramJsModelerAdapter`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `src/app/tools/icon-set-config/{domain,services}`            | `src/iconSet/{domain,service,infrastructure}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `src/app/tools/{import,export}/services`                     | `src/story/service/*` (the pure repair rules of `import-repair.service.ts` extracted to `src/story/domain/importRepair.ts`, mirroring the `elementPredicates`/`modelingRules`/`activityNumbering` extractions above; `ImportRepairService` remains as a thin facade keeping upstream's four method names so sync diffs stay reviewable)                                                                                                                                                                                                                                                                                                                                                                            |
-| `src/app/tools/label-dictionary/services`                    | `src/labelDictionary/service/*`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `src/app/utils`                                              | `src/shared/domain/*` (pure helpers), `src/shared/infrastructure/*` (DOM/diagram-js-touching)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| upstream (wps/egon.io)                                       | local                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/tools/modeler/diagram-js/features/*`                | `src/modeler/infrastructure/*` (change-icon→`replace`, copyPaste→`copy-paste`, shortcuts→`keyboard`+`editor-actions`, numbering→`popup` (the `number-stash` half was deleted with #74 — upstream's stash has no local counterpart any more), util/TextRenderer→`text-renderer`, rules→`rules` adapter + `rules/ruleVerdictAdapter` (the single verdict→wire mapping, ADR 0015) + the pure grammar/predicates/verdicts extracted to `src/story/domain/{elementPredicates,modelingRules,ruleVerdict}`, numbering math and direction policy extracted to `src/story/domain/activityNumbering`, replacement eligibility extracted to `src/story/domain/replacementPolicy`, label fields/editing/autocomplete eligibility extracted to `src/story/domain/labelPolicy`, and activity label geometry plus segment selection extracted to `src/modeler/domain/labeling/position`, which have no upstream counterpart) |
+| `src/app/domain/entities/*`                                  | `src/story/domain/*` (icon types→`src/iconSet/domain`, label entries→`src/labelDictionary/domain`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `src/app/domain/services` + `src/app/tools/modeler/services` | `src/modeler/service/*` plus `src/modeler/infrastructure/{DiagramJsModelerAdapter,DiagramJsIconAdapter,EditorSessionOwner}.ts` and `src/modeler/infrastructure/color-picker/*` (ModelerService/InitializerService ≈ `EgonClient` and the active-session adapters/owner; candidate-session staging and the client-scoped picker coordinator/passive preview state have no upstream counterpart)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `src/app/tools/icon-set-config/{domain,services}`            | `src/iconSet/{domain,service,infrastructure}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `src/app/tools/{import,export}/services`                     | `src/story/service/*` plus static-image capture/rasterization in `src/modeler/infrastructure/export/*` (the pure repair rules of `import-repair.service.ts` extracted to `src/story/domain/importRepair.ts`, mirroring the `elementPredicates`/`modelingRules`/`activityNumbering` extractions above; `ImportRepairService` remains as a thin facade keeping upstream's four method names so sync diffs stay reviewable; export dialogs/downloads and animated SVG remain host-only)                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `src/app/tools/label-dictionary/services`                    | `src/labelDictionary/service/*` plus the grouped `labels.renameBatch` adapter in `src/modeler/infrastructure/update-handler/handler/BatchRenameLabelsHandler.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `src/app/tools/replay/{domain,services}`                     | Pure traversal in `src/story/domain/replay.ts` plus instance-scoped marker presentation in `src/modeler/infrastructure/replay/*`; Angular signals, controls, snackbars, and playback timers remain host-only                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `src/app/utils`                                              | `src/shared/domain/*` (pure helpers), `src/shared/infrastructure/*` (DOM/diagram-js-touching)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 Not extracted (host concerns, no local counterpart): dialogs, snackbars,
-properties panel, replay, storage/autosave, drag&drop, download helpers, the
-`builtInIcons` catalogue, and everything under `src/app/workbench`.
+properties panel, replay controls/timers, storage/autosave, drag&drop, download
+helpers, the `builtInIcons` catalogue, and everything under
+`src/app/workbench`.
 
 ## Process
 
@@ -105,17 +107,17 @@ future round. Offer the fixes upstream separately.
     real and still must not be re-imported — it is just fixed by deletion now
     rather than by a fallback.
 
-- **`util.ts` calls Array-less methods on `element.children`.**
-  `reworkGroupElements` did `innerShape.children.remove(shape)`, which throws
-  `TypeError` whenever `innerShape` carries no `children` at all, killing the
-  group-reparenting branch. Fixed locally with `remove` from
-  `diagram-js/lib/util/Collections` (already used by `DomainStoryUpdater`), as
-  issue [#8](https://github.com/Miragon/egon-core/issues/8) anticipated. Note
-  upstream's own "fix" here (wps/egon.io@fa55d12f,
-  `children.set(undefined, shape)`) is equally broken — see the skip list below.
-  Locked by the group cases in `ModelingCommands.browser.spec.ts`. The sibling
-  half of this row, `undoGroupRework`, no longer exists — see the
-  "Remove Group without Child-Elements" entry below.
+- **`util.ts` called Array-less methods on `element.children`.**
+  `reworkGroupElements` did `innerShape.children.remove(shape)`, which threw
+  `TypeError` whenever `innerShape` carried no `children` at all, killing the
+  group-reparenting branch. Issue
+  [#8](https://github.com/Miragon/egon-core/issues/8) originally repaired that
+  call with diagram-js' collection helper. **Superseded by #114:**
+  `reworkGroupElements` is now deleted; transactional zero-distance
+  `modeling.moveShape` commands own adoption and its inverse. Upstream's own
+  "fix" (wps/egon.io@fa55d12f, `children.set(undefined, shape)`) remains broken
+  and must still be skipped. The sibling mechanism `undoGroupRework` also no
+  longer exists — see the "Remove Group without Child-Elements" entry below.
 
     Caveat recorded while fixing #67: the original diagnosis ("`element.children`
     is a **plain Array**, neither method exists") is **not true of diagram-js
@@ -130,7 +132,9 @@ future round. Offer the fixes upstream separately.
 - **Import state is never reset between imports.** Upstream keeps an array used
   as a string-keyed map of group shapes and never clears it, so a second import
   parents new children onto shapes the first import's `diagram.clear` already
-  destroyed. Fixed locally with a `Map` cleared at the top of `import()`; the
+  destroyed. Fixed locally by making the group map local to one candidate
+  materialization; successful imports replace the complete editor session (ADR
+  0024), so neither the map nor destroyed shapes can cross imports. The
   write-only `elements` field was deleted outright.
 - **`DomainStoryRenderer.checkIfPointOverlapsText` persists its overlap nudge into the saved file.**
   `checkIfPointOverlapsText` does `point.y += lineOffset` on a point taken out of
@@ -362,16 +366,20 @@ future round. Offer the fixes upstream separately.
   now has `businessObject.parent` **cleared**, where the updater previously only
   ever set it — a stale `parent: <deletedGroupId>` used to survive into the
   export. And the teardown's internal moves carry a `groupTeardown` hint that
-  suppresses `reworkGroupElements`, whose parent/children rewrites happen outside
-  the command stack and would otherwise survive the undo. Locked by the
-  `shape.removeGroupWithoutChildren` cases in
+  suppresses geometric group adoption during these bookkeeping moves. Locked by
+  the `shape.removeGroupWithoutChildren` cases in
   `UpdateHandlerCommands.browser.spec.ts` (one undo re-adopts; bendpoints
   survive; a group-parented activity survives; no sibling gets swallowed) and by
   the group cases in `ModelingCommands.browser.spec.ts`.
 
-    Still shared with upstream and **out of scope**: `reworkGroupElements` mutates
-    `parent`/`children` outside any command, so group adoption from _moving or
-    creating_ a group remains non-undoable.
+    **Fixed locally by #114:** group adoption after create, move, and resize now
+    uses nested zero-distance `modeling.moveShape` commands. Candidate discovery
+    runs only on initial execution; the recorded moves restore parent indices,
+    persisted parent ids, and SVG ownership on undo/redo. Movement is queued
+    until the outermost `elements.move`/`shape.move` finishes, and internal
+    adoption moves carry a recursion-suppression hint. The inclusive top-left
+    membership predicate moved to framework-free domain code. Upstream still
+    uses the non-transactional helper and must not overwrite this path.
 
 - **Debounced host callbacks outlived `destroy()`, and the debounce did not
   debounce.** _Local-only, no upstream counterpart — upstream's Angular host owns
@@ -464,10 +472,17 @@ future round. Offer the fixes upstream separately.
   `hints.createElementsBehavior === false` marker so an unrelated drag that
   `dragging.init` aborts cannot wipe a stash the paste just filled. Locked by the
   cancel/rejected cases in `DomainStoryPasteRestore.spec.ts`.
-- **The `pickedColor` document listener was never removed.** _Local-only seam —
-  upstream's Angular host owns the color picker._ Removed on `diagram.destroy`,
-  same reasoning as the `<style>` node above ([#12](https://github.com/Miragon/egon-core/issues/12)).
-  Locked by the destroy case in `DomainStoryContextPadProvider.spec.ts`.
+- **The document-global color-picker bridge had no client or request ownership.**
+  _Local-only seam — upstream's Angular host owns the picker directly._ The
+  earlier local mitigation removed the `pickedColor` listener on
+  `diagram.destroy`; it is now superseded by ADR 0026. `openColorPicker`,
+  `defaultColor`, and the `pickedColor` listener are removed outright.
+  `EgonClient` routes an opaque request ID to a session-scoped coordinator;
+  temporary colors live in passive renderer preview state and confirmation uses
+  the existing commands. The future WPS host extraction must retain originating
+  client/request identity rather than recreate the global seam. Locked by
+  `ColorPickerCoordinator.spec.ts`, `ColorPickerProtocol.browser.spec.ts`, and
+  the migrated context-pad tests.
 - **`addDelete` asked the rules a question no rule can answer, then threw.** It
   called `rules.allowed("elements.delete", { elements: { element: elements } })`
   — a nested context no diagram-js/bpmn-js rule matches — and compared an array
@@ -481,21 +496,12 @@ future round. Offer the fixes upstream separately.
   omits the entry instead of throwing. Locked by the delete-entry cases in
   `DomainStoryContextPadProvider.spec.ts`.
 - **`selectedElement` was never cleared, so the host's color reply could recolor
-  a stale element.** _The bug is upstream's; the document-level `pickedColor`
-  seam is local (upstream's Angular host owns the picker)._ Only `addColorChange`
-  writes the field, and the connection branch of `getContextPadEntries` emits a
-  delete entry alone, so the previously selected shape stayed reachable — and an
-  async picker reply arriving after the pad closed recolored it, possibly after
-  deletion, minting an undo entry for a detached element.
-  `notifyColorPickerOfCurrentElementColor` likewise pre-seeded the picker with
-  the stale color, contradicting its own doc comment. Cleared locally on pad
-  re-entry and on `contextPad.close` per
-  [#85](https://github.com/Miragon/egon-core/issues/85) — both hooks are needed,
-  since `contextPad.close` misses direct `getEntries()` queries and the re-entry
-  clear misses "pad closed, picker replies later". Ordering is safe because
-  diagram-js' `ContextPad#open()` closes before it repopulates the providers.
-  Locked by the stale-selection cases in
-  `DomainStoryContextPadProvider.spec.ts`.
+  a stale element.** _The underlying bug is upstream's; its Angular host owns
+  the picker._ Superseded locally by ADR 0026: the context-pad provider retains
+  no target. The coordinator snapshots exact references and validates both live
+  registry identity and current selection membership on every response, while
+  selection/pad/command/deletion/import lifecycle events permanently expire the
+  request. Reusing an ID or reselecting an old target cannot revive it.
 
 - **`domainStoryPalette.js` keys work-object entries as actors, and its title
   fallback is unreachable.** Both live upstream at the recorded baseline

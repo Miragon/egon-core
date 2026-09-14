@@ -53,8 +53,8 @@ export interface TestModeler {
  *
  * Built **on `DiagramJsModelerAdapter`**, not a hand-rolled `new Diagram(...)`:
  * the adapter owns the production bootstrap — the `canvas: { container, width,
- * height }` nesting (whose absence was a real bug, #59), the per-instance
- * `[data-egon-icons-css]` node and the DI config that hands it to the icon
+ * height }` nesting (whose absence was a real bug, #59), the per-session
+ * `[data-egon-icons-css]` node and scoped canvas attribute handed to the icon
  * stylesheet adapter, and realizing the implicit canvas root (which
  * `isBackground` depends on). A
  * harness that boots differently would test a fiction. Icons load through the

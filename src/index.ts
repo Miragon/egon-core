@@ -16,6 +16,8 @@ export type {
     ModelerPort,
     // Payload of the `import.repaired` event (ADR 0017).
     ImportRepairData,
+    ColorPickerRequestData,
+    ColorPickerClosedData,
 } from "./modeler/domain/ports/ModelerPort";
 export type { IconPort } from "./modeler/domain/ports/IconPort";
 
@@ -36,6 +38,13 @@ export {
 } from "./story/domain/scope";
 export type { ViewportData } from "./modeler/domain/model/Viewport";
 export type {
+    PngExportOptions,
+    PngExportResult,
+    SvgExportOptions,
+    SvgExportResult,
+    VisualExportOptions,
+} from "./modeler/domain/export/VisualExport";
+export type {
     DomainStoryTextRendererConfig,
     DomainStoryTextRendererStyle,
 } from "./modeler/domain/model/TextRendererConfig";
@@ -43,8 +52,19 @@ export type {
     IconSet,
     IconSetData,
     IconCategory,
+    IconConfiguration,
+    IconNamesByCategory,
     IconMap,
 } from "./iconSet/domain/IconTypes";
+export type {
+    LabelCategory,
+    LabelDictionary,
+    LabelEntry,
+    LabelRename,
+    LabelRenameBatch,
+    WorkObjectLabelEntry,
+} from "./labelDictionary/domain/LabelDictionary";
+export type { ReplayStartOptions, ReplayState } from "./story/domain/replay";
 
 // The public API is deliberately frozen to EgonClient plus the types above
 // (locked by architecture.spec.ts, rule G / ADR 0010). EgonPlugin and the

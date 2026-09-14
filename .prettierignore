@@ -5,6 +5,7 @@ coverage
 playwright-report
 test-results
 blob-report
+.context
 
 # Dependencies and lockfiles (managed by Yarn, not hand-formatted).
 node_modules

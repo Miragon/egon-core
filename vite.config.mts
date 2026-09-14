@@ -52,6 +52,7 @@ export default defineConfig({
                     "diagram-js",
                     "diagram-js-direct-editing",
                     "didi",
+                    "dompurify",
                     "ids",
                     "min-dash",
                     "min-dom",
@@ -79,7 +80,7 @@ export default defineConfig({
             reportsDirectory: "coverage",
             // The public-consumer harness has its own Playwright verification. Do
             // not count unrelated demo/config/launcher files as uncovered in
-            // the unit-only report (ADR 0021).
+            // the unit-only report (ADR 0028).
             exclude: [
                 ...coverageConfigDefaults.exclude,
                 "demo/**",

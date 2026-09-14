@@ -1,9 +1,9 @@
 # Shared test fixtures
 
-Domain-story export files spanning every on-disk format this library must read.
-Shared across the whole test suite (import-compatibility, normalizer, round-trip,
-and browser-tier boot specs) via `src/__tests__/helpers/importFixture.ts`, which
-imports them as JSON modules so they load in node, jsdom, and browser mode alike.
+Shared fixtures for domain-story import compatibility and cross-tier rendering
+regressions. On-disk story fixtures are loaded via
+`src/__tests__/helpers/importFixture.ts`, which imports them as JSON modules so
+they work in node, jsdom, and browser mode alike.
 
 ## Upstream fixtures
 
@@ -32,3 +32,4 @@ the story is imported onto a live canvas.
 | File                        | Shape                          | Content                                                            |
 | --------------------------- | ------------------------------ | ------------------------------------------------------------------ |
 | `egn_cinema_story.egn.json` | new `{ iconSet, domainStory }` | The Domain Storytelling "cinema" example (4 shapes, 3 activities). |
+| `unicodeIcons.ts`           | reusable SVG fixture           | Unicode metadata/text, safe attributes, and deterministic geometry. |

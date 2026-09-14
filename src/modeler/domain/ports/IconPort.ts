@@ -1,4 +1,5 @@
 import {
+    IconConfiguration,
     IconSet,
     IconSetData,
     IconCategory,
@@ -17,7 +18,10 @@ export interface IconPort {
     loadIcons(icons: Partial<IconSetData>): void;
 
     /**
-     * Add a single icon.
+     * Add a single icon. An existing name is replaced and matching live shapes
+     * repaint immediately. Artwork is shared by name across categories: an
+     * already-selected same-name entry in the other category is refreshed too,
+     * without adding new membership there.
      */
     addIcon(category: IconCategory, name: string, svg: string): void;
 
@@ -30,6 +34,12 @@ export interface IconPort {
      * Get all currently registered icons.
      */
     getIcons(): IconSet;
+
+    /** Returns the retained catalog, selection order, set name, and usage. */
+    getIconConfiguration(): IconConfiguration;
+
+    /** Reorders one selected category using an exact permutation. */
+    setIconOrder(category: IconCategory, names: readonly string[]): void;
 
     /**
      * Check if an icon exists.

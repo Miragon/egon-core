@@ -1,6 +1,6 @@
 # 0021 — Add a public-consumer Playwright journey tier
 
-- Status: accepted
+- Status: superseded by [0028](0028-isolated-package-consumer-validation.md)
 - Date: 2026-09-06
 
 ## Context

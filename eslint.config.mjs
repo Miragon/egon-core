@@ -36,16 +36,27 @@ export default tseslint.config(
     {
         files: ["demo/**/*.ts", "demo/**/*.mts"],
         rules: {
-            // ADR 0021: the demo is a consumer harness, so every import into
-            // library source must cross the public barrel.
+            // ADR 0028: the demo is a consumer harness. It uses only the two
+            // package exports a real host needs, even though Vite resolves
+            // those exact specifiers to source during local development.
             "no-restricted-imports": [
                 "error",
                 {
                     patterns: [
                         {
-                            regex: "^(?:\\.\\./)+src/(?!index\\.ts$|styles\\.scss$)",
+                            regex: "^(?:\\.\\./)+src/",
                             message:
-                                "Demo code must import library code and types only from src/index.ts.",
+                                "Demo code must import library code, types, and styles through egon-core package exports.",
+                        },
+                        {
+                            regex: "^(?:bpmn-font|diagram-js|diagram-js-minimap)(?:/|$)",
+                            message:
+                                "Demo code must obtain dependency editor styles from egon-core/style.css.",
+                        },
+                        {
+                            regex: "^egon-core/(?!style\\.css$)",
+                            message:
+                                "Demo code may import only egon-core and egon-core/style.css.",
                         },
                     ],
                 },

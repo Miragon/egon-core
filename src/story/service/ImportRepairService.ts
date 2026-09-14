@@ -50,10 +50,14 @@ export class ImportRepairService {
         return renameLegacyWorkObjectTypes(elements);
     }
 
-    // Early versions of Egon allowed Whitespaces in Icon names which are now not supported anymore.
-    // To find the right icon in the dictionary, they need to be replaced.
-    removeWhitespacesFromIcons(elements: BusinessObject[]): BusinessObject[] {
-        return normalizeIconNameWhitespace(elements);
+    // Conditional legacy compatibility only: ADR 0008 makes icon names
+    // verbatim data, so an exact spaced name wins. Hyphenate literal spaces
+    // only when the historical spelling resolves to an available icon.
+    removeWhitespacesFromIcons(
+        elements: BusinessObject[],
+        availableIconNames: ReadonlySet<string>,
+    ): BusinessObject[] {
+        return normalizeIconNameWhitespace(elements, availableIconNames);
     }
 
     /** Drops the BPMN moddle leftovers v1.3.0+ files still carry. */

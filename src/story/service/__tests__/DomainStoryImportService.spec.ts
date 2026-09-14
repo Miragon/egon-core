@@ -15,6 +15,7 @@ import { IconDictionaryService } from "../../../iconSet/service/IconDictionarySe
 import { IconSetImportExportService } from "../../../iconSet/service/IconSetImportExportService";
 import type { IconStyleSheetPort } from "../../../iconSet/domain/ports/IconStyleSheetPort";
 import { DomainStoryPropertiesService } from "../../../modeler/service/DomainStoryPropertiesService";
+import { passThroughIconSanitizer } from "../../../__tests__/helpers/passThroughIconSanitizer";
 
 // The import path under test never renders, so CSS injection is irrelevant here
 // (and with no style element configured the real injector no-ops anyway).
@@ -80,7 +81,10 @@ function makeHarness() {
         },
     } as unknown as EventBus;
 
-    const iconDictionaryService = new IconDictionaryService(noopStyleSheet);
+    const iconDictionaryService = new IconDictionaryService(
+        noopStyleSheet,
+        passThroughIconSanitizer,
+    );
     const iconSetService = new IconSetImportExportService(
         iconDictionaryService,
     );
@@ -106,6 +110,7 @@ function makeHarness() {
         byId,
         bannerCalls,
         propertiesService,
+        iconDictionaryService,
         /** `"shape:id"` / `"connection:id"` in the order the canvas saw them. */
         addedSignature: () => added.map((call) => `${call.kind}:${call.id}`),
     };
@@ -167,7 +172,94 @@ const activity = (id: string, source: string, target: string) => ({
     source,
     target,
     number: 1,
-    waypoints: [{ x: 0, y: 0 }],
+    waypoints: [
+        { x: 0, y: 0 },
+        { x: 100, y: 100 },
+    ],
+});
+
+describe("DomainStoryImportService icon-name preparation", () => {
+    it("uses incoming dictionary keys while preserving exact names and caller data", () => {
+        const harness = makeHarness();
+        const document = JSON.parse(
+            storyFile([
+                actor("shape_exact", {
+                    type: `${ElementTypes.ACTOR}My Icon`,
+                }),
+                workObject("shape_legacy", {
+                    type: `${ElementTypes.WORKOBJECT}Case File.v2`,
+                }),
+            ]),
+        );
+        document.iconSet.actors = {
+            "My Icon": "<svg data-icon='exact'/>",
+            "My-Icon": "<svg data-icon='hyphenated'/>",
+        };
+        document.iconSet.workObjects = {
+            "Case-File.v2": "<svg data-icon='legacy'/>",
+        };
+        const snapshot = structuredClone(document);
+        const selectedBefore = {
+            actors: harness.iconDictionaryService
+                .getActorsDictionary()
+                .toRecord(),
+            workObjects: harness.iconDictionaryService
+                .getWorkObjectsDictionary()
+                .toRecord(),
+        };
+
+        const prepared = harness.service.prepare(document);
+        const types = Object.fromEntries(
+            prepared.shapes.map((shape) => [shape.id, shape.type]),
+        );
+
+        expect(types).toEqual({
+            shape_exact: `${ElementTypes.ACTOR}My Icon`,
+            shape_legacy: `${ElementTypes.WORKOBJECT}Case-File.v2`,
+        });
+        expect(document).toEqual(snapshot);
+        expect(
+            harness.iconDictionaryService.getActorsDictionary().toRecord(),
+        ).toEqual(selectedBefore.actors);
+        expect(
+            harness.iconDictionaryService.getWorkObjectsDictionary().toRecord(),
+        ).toEqual(selectedBefore.workObjects);
+    });
+
+    it("uses retained custom-icon names without changing the active pool", () => {
+        const harness = makeHarness();
+        harness.iconDictionaryService.addIMGToIconDictionary(
+            "<svg data-icon='retained'/>",
+            "Retained-Icon",
+        );
+        const poolBefore = harness.iconDictionaryService
+            .getFullDictionary()
+            .toRecord();
+        const document = JSON.parse(
+            storyFile([
+                actor("shape_retained", {
+                    type: `${ElementTypes.ACTOR}Retained Icon`,
+                }),
+            ]),
+        );
+        document.iconSet = {
+            name: "empty incoming set",
+            actors: {},
+            workObjects: {},
+        };
+
+        const prepared = harness.service.prepare(document);
+
+        expect(prepared.shapes[0].type).toBe(
+            `${ElementTypes.ACTOR}Retained-Icon`,
+        );
+        expect(
+            harness.iconDictionaryService.getFullDictionary().toRecord(),
+        ).toEqual(poolBefore);
+        expect(document.domainStory.businessObjects[0].type).toBe(
+            `${ElementTypes.ACTOR}Retained Icon`,
+        );
+    });
 });
 
 describe("DomainStoryImportService insertion order", () => {
@@ -320,12 +412,14 @@ describe("DomainStoryImportService version gating", () => {
 });
 
 describe("DomainStoryImportService canvas lifecycle", () => {
-    it("clears the diagram before adding anything", () => {
+    it("materializes without destructively clearing its session", () => {
         const harness = makeHarness();
 
         harness.service.import(storyFile([actor("shape_actor")]));
 
-        expect(harness.fired[0].event).toBe("diagram.clear");
+        expect(
+            harness.fired.some((call) => call.event === "diagram.clear"),
+        ).toBe(false);
         expect(harness.added).toHaveLength(1);
     });
 
@@ -335,7 +429,7 @@ describe("DomainStoryImportService canvas lifecycle", () => {
         { what: "an unrecognized payload", story: '{"foo":1}' },
         { what: "a non-story array", story: '"not a story"' },
         { what: "invalid JSON", story: "{" },
-    ])("throws on $what before firing diagram.clear", ({ story }) => {
+    ])("throws on $what before firing editor events", ({ story }) => {
         const harness = makeHarness();
 
         expect(() => harness.service.import(story)).toThrow();

@@ -483,10 +483,9 @@ describe("update-handler commands (browser)", () => {
 
             modeler.modeling.removeGroup(group);
 
-            // Without the `groupTeardown` hint the child group's move would run
-            // `reworkGroupElements`, which rewrites parent/children outside the
-            // command stack — so the actor would be swallowed by a group it was
-            // never in, and no undo could give it back.
+            // Without the `groupTeardown` hint the child group's bookkeeping
+            // move would trigger geometric adoption, so the actor would be
+            // swallowed by a group it was never in.
             expect(actor.parent).toBe(modeler.root);
             expect(childGroup.children).not.toContain(actor);
 
