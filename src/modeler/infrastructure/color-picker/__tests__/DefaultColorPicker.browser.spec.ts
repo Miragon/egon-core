@@ -93,6 +93,100 @@ async function flush(): Promise<void> {
     await Promise.resolve();
 }
 
+function slider(dialog: HTMLElement, label: string): HTMLElement {
+    return dialog.querySelector<HTMLElement>(
+        `[role="slider"][aria-label="${label}"]`,
+    )!;
+}
+
+function point(
+    element: HTMLElement,
+    left: number,
+    top: number,
+): { x: number; y: number } {
+    const rect = element.getBoundingClientRect();
+    return {
+        x: rect.left + rect.width * left,
+        y: rect.top + rect.height * top,
+    };
+}
+
+function mouseDrag(
+    element: HTMLElement,
+    from: { left: number; top: number },
+    to: { left: number; top: number },
+): void {
+    const start = point(element, from.left, from.top);
+    const end = point(element, to.left, to.top);
+    element.dispatchEvent(
+        new MouseEvent("mousedown", {
+            bubbles: true,
+            buttons: 1,
+            cancelable: true,
+            clientX: start.x,
+            clientY: start.y,
+        }),
+    );
+    window.dispatchEvent(
+        new MouseEvent("mousemove", {
+            bubbles: true,
+            buttons: 1,
+            cancelable: true,
+            clientX: end.x,
+            clientY: end.y,
+        }),
+    );
+    window.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+}
+
+function touchDrag(
+    element: HTMLElement,
+    from: { left: number; top: number },
+    to: { left: number; top: number },
+): void {
+    const touch = (coordinates: { x: number; y: number }) =>
+        new Touch({
+            identifier: 1,
+            target: element,
+            clientX: coordinates.x,
+            clientY: coordinates.y,
+            pageX: coordinates.x,
+            pageY: coordinates.y,
+        });
+    const start = touch(point(element, from.left, from.top));
+    // Preact keeps the prop's casing when desktop Chromium does not expose
+    // ontouchstart; touch-capable browsers register the lowercase DOM event.
+    const startEvent = "ontouchstart" in element ? "touchstart" : "TouchStart";
+    element.dispatchEvent(
+        new TouchEvent(startEvent, {
+            bubbles: true,
+            cancelable: true,
+            changedTouches: [start],
+            targetTouches: [start],
+            touches: [start],
+        }),
+    );
+    const end = touch(point(element, to.left, to.top));
+    window.dispatchEvent(
+        new TouchEvent("touchmove", {
+            bubbles: true,
+            cancelable: true,
+            changedTouches: [end],
+            targetTouches: [end],
+            touches: [end],
+        }),
+    );
+    window.dispatchEvent(
+        new TouchEvent("touchend", {
+            bubbles: true,
+            cancelable: true,
+            changedTouches: [end],
+            targetTouches: [],
+            touches: [],
+        }),
+    );
+}
+
 describe("built-in color picker", () => {
     let diagram: TestDiagram | undefined;
 
@@ -154,6 +248,107 @@ describe("built-in color picker", () => {
         expect(exported()).toBeUndefined();
         current.commandStack.redo();
         expect(exported()).toBe("#f008");
+    });
+
+    it("handles mouse and touch slider drafts, cancellation, and undoable apply", async () => {
+        const services = probe();
+        diagram = await createTestDiagram({}, [services.module]);
+        diagram.client.import(story());
+        const current = services.get();
+        current.commandStack.clear();
+        current.dirty.makeClean();
+        const changed = vi.fn();
+        diagram.client.on("story.changed", changed);
+        current.selection.select(current.registry.get("Group_1"));
+        const origin = diagram.container.querySelector<HTMLButtonElement>(
+            'button[data-action="colorChange"]',
+        )!;
+        const errors: ErrorEvent[] = [];
+        const recordError = (event: ErrorEvent) => errors.push(event);
+        window.addEventListener("error", recordError);
+
+        try {
+            origin.click();
+            let dialog =
+                document.querySelector<HTMLElement>(".egon-color-picker")!;
+            let input = dialog.querySelector<HTMLInputElement>(
+                'input[name="color"]',
+            )!;
+
+            mouseDrag(
+                slider(dialog, "Color"),
+                { left: 0.2, top: 0.8 },
+                { left: 0.8, top: 0.2 },
+            );
+            await vi.waitFor(() => expect(input.value).not.toBe("#000000"));
+            const afterSaturation = input.value;
+
+            mouseDrag(
+                slider(dialog, "Hue"),
+                { left: 0.1, top: 0.5 },
+                { left: 0.65, top: 0.5 },
+            );
+            await vi.waitFor(() =>
+                expect(input.value).not.toBe(afterSaturation),
+            );
+            const afterHue = input.value;
+
+            mouseDrag(
+                slider(dialog, "Alpha"),
+                { left: 0.9, top: 0.5 },
+                { left: 0.25, top: 0.5 },
+            );
+            await vi.waitFor(() => expect(input.value).not.toBe(afterHue));
+            expect(input.value).toHaveLength(9);
+
+            const exported = () =>
+                (diagram!.client.export().domainStory.businessObjects[0] as any)
+                    .pickedColor;
+            expect(exported()).toBeUndefined();
+            expect(current.commandStack.canUndo()).toBe(false);
+            expect(current.dirty.dirty).toBe(false);
+            expect(changed).not.toHaveBeenCalled();
+            expect(errors).toEqual([]);
+
+            dialog
+                .querySelector<HTMLButtonElement>(
+                    ".egon-color-picker__actions button",
+                )!
+                .click();
+            await flush();
+            expect(document.querySelector(".egon-color-picker")).toBeNull();
+            expect(exported()).toBeUndefined();
+            expect(current.commandStack.canUndo()).toBe(false);
+
+            origin.click();
+            dialog = document.querySelector<HTMLElement>(".egon-color-picker")!;
+            input = dialog.querySelector<HTMLInputElement>(
+                'input[name="color"]',
+            )!;
+            touchDrag(
+                slider(dialog, "Color"),
+                { left: 0.25, top: 0.75 },
+                { left: 0.6, top: 0.2 },
+            );
+            await vi.waitFor(() => expect(input.value).not.toBe("#000000"));
+            const applied = input.value;
+            expect(exported()).toBeUndefined();
+            expect(current.commandStack.canUndo()).toBe(false);
+
+            dialog
+                .querySelector<HTMLButtonElement>(".egon-color-picker__apply")!
+                .click();
+            await flush();
+            expect(exported()).toBe(applied);
+            expect(current.commandStack.canUndo()).toBe(true);
+            current.commandStack.undo();
+            expect(exported()).toBeUndefined();
+            current.commandStack.redo();
+            expect(exported()).toBe(applied);
+            expect(errors).toEqual([]);
+        } finally {
+            window.removeEventListener("error", recordError);
+        }
     });
 
     it("cancels on Escape and outside interaction with the documented focus behavior", async () => {

@@ -1,4 +1,5 @@
 import { test, expect } from "./fixtures";
+import type { Locator, Page } from "@playwright/test";
 import {
     activityIds,
     activityNumber,
@@ -17,6 +18,26 @@ import {
 } from "./helpers";
 
 const primaryModifier = process.platform === "darwin" ? "Meta" : "Control";
+
+async function dragSlider(
+    page: Page,
+    slider: Locator,
+    from: { left: number; top: number },
+    to: { left: number; top: number },
+) {
+    const bounds = await slider.boundingBox();
+    if (!bounds) throw new Error("Could not measure color picker slider.");
+    await page.mouse.move(
+        bounds.x + bounds.width * from.left,
+        bounds.y + bounds.height * from.top,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+        bounds.x + bounds.width * to.left,
+        bounds.y + bounds.height * to.top,
+    );
+    await page.mouse.up();
+}
 
 test.beforeEach(async ({ page }) => {
     await openDemo(page);
@@ -125,6 +146,8 @@ test("edit labels and choose an autocomplete suggestion", async ({ page }) => {
 test("recolor with the built-in picker and undo/redo beside diagram-js UI", async ({
     page,
 }) => {
+    const pageErrors: Error[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error));
     const actor = await createShape(page, "Create Person", {
         x: 220,
         y: 180,
@@ -145,8 +168,47 @@ test("recolor with the built-in picker and undo/redo beside diagram-js UI", asyn
     );
     const input = picker.getByLabel("Hex color");
     await expect(input).toBeFocused();
+    const saturation = picker.getByRole("slider", { name: "Color" });
+    const hue = picker.getByRole("slider", { name: "Hue" });
+    const alpha = picker.getByRole("slider", { name: "Alpha" });
+    await dragSlider(
+        page,
+        saturation,
+        { left: 0.2, top: 0.8 },
+        { left: 0.8, top: 0.2 },
+    );
+    await expect(saturation).toHaveAttribute(
+        "aria-valuetext",
+        "Saturation 80%, Brightness 80%",
+    );
+    await expect(input).not.toHaveValue("#000000");
+    const afterSaturation = await input.inputValue();
+    await dragSlider(
+        page,
+        hue,
+        { left: 0.1, top: 0.5 },
+        { left: 0.65, top: 0.5 },
+    );
+    await expect(hue).toHaveAttribute("aria-valuenow", "234");
+    await expect(input).not.toHaveValue(afterSaturation);
+    const afterHue = await input.inputValue();
+    await dragSlider(
+        page,
+        alpha,
+        { left: 0.9, top: 0.5 },
+        { left: 0.25, top: 0.5 },
+    );
+    await expect(alpha).toHaveAttribute("aria-valuenow", "25");
+    await expect(input).not.toHaveValue(afterHue);
+    await expect(input).toHaveValue(/40$/);
+    expect(pageErrors).toEqual([]);
+
+    const apply = picker.getByRole("button", { name: "Apply" });
+    await input.fill("#");
+    await expect(apply).toBeDisabled();
     await input.fill("#36a8");
-    await picker.getByRole("button", { name: "Apply" }).click();
+    await expect(apply).toBeEnabled();
+    await apply.click();
     await expect(picker).toHaveCount(0);
     await expect(origin).toBeFocused();
 
@@ -177,6 +239,9 @@ test("recolor with the built-in picker and undo/redo beside diagram-js UI", asyn
             (element) => element.id === actor,
         ),
     ).toMatchObject({ pickedColor: "#36a8" });
+    await clickDiagramElement(page, actor);
+    await expect(page.getByTitle("Change color")).toBeVisible();
+    expect(pageErrors).toEqual([]);
 });
 
 test("export, reset, import and report malformed JSON", async ({ page }) => {
