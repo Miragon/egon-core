@@ -64,8 +64,9 @@ describe("release-please configuration", () => {
         expect(pullRequest.version.toString()).toBe(expected);
     });
 
-    it("loads one root Node package, an empty bootstrap manifest, and v-only tags", async () => {
+    it("loads one root Node package, a synchronized release manifest, and v-only tags", async () => {
         const { manifest, github } = await configuredManifest();
+        const packageManifest = await readJson("package.json");
 
         expect(github.getFileJson).toHaveBeenCalledWith(
             "release-please-config.json",
@@ -76,7 +77,10 @@ describe("release-please configuration", () => {
             "main",
         );
         expect(Object.keys(manifest.repositoryConfig)).toEqual(["."]);
-        expect(manifest.releasedVersions).toEqual({});
+        expect(Object.keys(manifest.releasedVersions)).toEqual(["."]);
+        expect(manifest.releasedVersions["."].toString()).toBe(
+            packageManifest.version,
+        );
         expect(manifest.repositoryConfig["."]).toMatchObject({
             releaseType: "node",
             initialVersion: "0.1.0",
