@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.2.0](https://github.com/Miragon/egon-core/compare/v0.1.0...v0.2.0) (2026-09-14)
+
+### ⚠ BREAKING CHANGES
+
+- replaces the public picker events and preview/confirm/cancel methods with a provider contract that owns cancellation, cleanup, and stale-result protection. Bundles react-colorful against diagram-js's shared Preact runtime without consumer React dependencies or aliases, includes license notices, and updates migration documentation, SYNC.md, and [ADR 0035](docs/adr/0035-bundled-color-picker-and-provider-contract.md). Validation passed: typecheck, lint, formatting, 892 unit tests including architecture checks, 177 browser tests, and all 8 isolated-package journeys after rebasing onto main, including the package build and consumer checks.
+
+### 🎉 New Features
+
+- add default color picker and host provider override ([#153](https://github.com/Miragon/egon-core/issues/153)) ([38973d7](https://github.com/Miragon/egon-core/commit/38973d7fa6579eb5f43a00e50a81401f4158249a))
+
+### 🐞 Bug Fixes
+
+- default color picker and host provider override ([#156](https://github.com/Miragon/egon-core/issues/156)) ([aef15d1](https://github.com/Miragon/egon-core/commit/aef15d1d255d7cb683d9fc78e34c8c5fdaee5465))
+- **deps:** update undici to 8.10.2 ([#154](https://github.com/Miragon/egon-core/issues/154)) ([f1ebf3b](https://github.com/Miragon/egon-core/commit/f1ebf3b0bff0a7c9375725709622666529d22310))
+
+### 🛠️ Misc
+
+- **deps:** bump js-yaml from 4.3.0 to 4.3.2 ([#142](https://github.com/Miragon/egon-core/issues/142)) ([b7e8e15](https://github.com/Miragon/egon-core/commit/b7e8e15ac191a0b473d56b4f9e860a0d988e9dbc))
+- **deps:** bump postcss from 8.5.20 to 8.5.28 ([#100](https://github.com/Miragon/egon-core/issues/100)) ([2a5732f](https://github.com/Miragon/egon-core/commit/2a5732fff19169875e65a081d71239942791c43d))
+- **deps:** bump tar from 7.5.20 to 7.5.22 ([#93](https://github.com/Miragon/egon-core/issues/93)) ([e07c7d0](https://github.com/Miragon/egon-core/commit/e07c7d06ae124839079fbbca67050deddbb93fc3))
+- **deps:** bump the github-actions-all group across 1 directory with 5 updates ([#130](https://github.com/Miragon/egon-core/issues/130)) ([25c050f](https://github.com/Miragon/egon-core/commit/25c050f79a3818138419678db14866cb9883051a))
+
 ## 0.1.0 (2026-09-13)
 
 ### 🎉 New Features
