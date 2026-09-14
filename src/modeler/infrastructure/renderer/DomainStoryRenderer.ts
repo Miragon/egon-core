@@ -4,7 +4,7 @@ import Canvas from "diagram-js/lib/core/Canvas";
 import BaseRenderer from "diagram-js/lib/draw/BaseRenderer";
 import { Connection, Element, Shape } from "diagram-js/lib/model/Types";
 import { componentsToPath, createLine } from "diagram-js/lib/util/RenderUtil";
-import Ids from "ids";
+import { Ids } from "ids";
 import {
     append as svgAppend,
     attr as svgAttr,

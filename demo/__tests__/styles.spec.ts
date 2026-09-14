@@ -18,7 +18,10 @@ test("ships diagram-js palette and context-pad layout", async ({ page }) => {
     const palette = canvas(page).locator(".djs-palette");
     await expect(palette).toHaveCSS("position", "absolute");
 
-    const paletteEntry = page.getByTitle("Create Person");
+    const paletteEntry = page.getByRole("button", {
+        name: "Create Person",
+        exact: true,
+    });
     await expect(paletteEntry).toHaveCSS("width", "46px");
     await expect(paletteEntry).toHaveCSS("height", "46px");
 
@@ -104,7 +107,10 @@ test("positions direct editing over its element and commits text", async ({
 test("loads font glyphs, built-in masks, and supplied icons", async ({
     page,
 }) => {
-    const lasso = page.getByTitle("Activate the lasso tool");
+    const lasso = page.getByRole("button", {
+        name: "Activate the lasso tool",
+        exact: true,
+    });
     const fontIcon = await lasso.evaluate((element) => {
         const style = getComputedStyle(element, "::before");
         return {
@@ -121,9 +127,18 @@ test("loads font glyphs, built-in masks, and supplied icons", async ({
     });
     expect(fontLoaded).toBe(true);
 
-    await expectPseudoImage(page.getByTitle("Create group"), "mask-image");
-    await expectPseudoImage(page.getByTitle("Create Person"), "mask-image");
-    await expectPseudoImage(page.getByTitle("Create Document"), "mask-image");
+    await expectPseudoImage(
+        page.getByRole("button", { name: "Create group", exact: true }),
+        "mask-image",
+    );
+    await expectPseudoImage(
+        page.getByRole("button", { name: "Create Person", exact: true }),
+        "mask-image",
+    );
+    await expectPseudoImage(
+        page.getByRole("button", { name: "Create Document", exact: true }),
+        "mask-image",
+    );
 
     const actor = await createShape(page, "Create Person", { x: 250, y: 200 });
     const documentId = await createShape(page, "Create Document", {

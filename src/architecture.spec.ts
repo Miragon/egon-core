@@ -21,9 +21,7 @@ import { extractGraph, projectFiles } from "archunit";
  *   package imports (the graph drops them entirely under this tsconfig) and
  *   dynamic `import()` calls (no edge is produced for them).
  */
-// __dirname rather than import.meta.url: the base tsconfig typechecks with
-// `module: commonjs`, which rejects import.meta; vitest's vite-node runtime
-// provides __dirname either way.
+// Vitest provides __dirname for source-relative filesystem checks.
 const REPO_ROOT = resolve(__dirname, "..");
 const TSCONFIG = resolve(REPO_ROOT, "tsconfig.lib.json");
 

@@ -55,7 +55,7 @@ describe("IconCssInjector", () => {
     }
 
     function encodedSvg(rule: CSSStyleRule): string {
-        const encoded = rule.cssText.match(/base64,([^')]+)/)![1]!;
+        const encoded = rule.cssText.match(/base64,([A-Za-z0-9+/=]+)/)![1]!;
         return new TextDecoder().decode(
             Uint8Array.from(atob(encoded), (character) =>
                 character.charCodeAt(0),

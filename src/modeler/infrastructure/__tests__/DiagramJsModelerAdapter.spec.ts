@@ -81,7 +81,7 @@ let canvasContainers: HTMLElement[] = [];
 // modules (plugin, import/export services) are pulled in only as `modules`
 // config and never invoked here.
 vi.mock("diagram-js", () => ({
-    default: vi.fn((options: Record<string, any>) => {
+    default: vi.fn(function (options: Record<string, any>) {
         diagramOptions.push(options);
         const canvasContainer = document.createElement("div");
         canvasContainer.className = "djs-container";

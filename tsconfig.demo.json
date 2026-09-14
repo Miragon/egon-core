@@ -5,7 +5,6 @@
         "moduleResolution": "Bundler",
         "target": "ES2022",
         "types": ["node", "vite/client", "@playwright/test"],
-        "baseUrl": ".",
         "paths": {
             "egon-core": ["./src/index.ts"],
             "egon-core/style.css": ["./src/styles.scss"]

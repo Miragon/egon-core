@@ -112,6 +112,12 @@ for webview routing and lifecycle details.
 | `yarn typecheck`       | Type-check library, tests, demo, and e2e code          |
 | `yarn lint`            | Lint with ESLint                                       |
 
+Typechecking uses TypeScript 7 (`yarn tsc`, supplied by `@typescript/native`).
+The `typescript` dependency aliases the TypeScript 6 compatibility API needed
+by ESLint, declaration generation, and source-analysis tests. The isolated
+package consumer also typechecks with TypeScript 7; see
+[ADR 0035](docs/adr/0035-typescript-native-compiler-and-compatible-tooling-api.md).
+
 ## Demo and end-to-end journeys
 
 After `nvm install`, `nvm use`, and `yarn install`, start the demo with:

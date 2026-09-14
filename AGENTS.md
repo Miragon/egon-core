@@ -15,7 +15,7 @@ only from `src/index.ts`.
 - `yarn build` — vite library build (ESM + `.d.ts` via vite-plugin-dts + style.css)
 - `yarn test` / `yarn test:watch` / `yarn test:coverage` — vitest, jsdom environment, config lives in `vite.config.mts`
 - `yarn lint` / `yarn format` — eslint / prettier
-- `yarn typecheck` — checks both `tsconfig.lib.json` and `tsconfig.spec.json`; run it, not bare `tsc`
+- `yarn typecheck` — checks library, spec, and demo tsconfigs; run it, not bare `tsc`
 - Yarn 4 (pinned via `packageManager`) — never use npm/npx
 
 ## Architecture (enforced, not just documented)
@@ -52,7 +52,8 @@ diffs stay reviewable.
 
 ## Gotchas
 
-- The base tsconfig typechecks with `module: commonjs`, so `import.meta` is
-  rejected in spec files — use `__dirname` (vitest's vite-node provides it).
+- `yarn tsc` uses TypeScript 7 via `@typescript/native`; the `typescript`
+  alias supplies the TypeScript 6 JavaScript API for linting and declarations.
+  Shared configs use ESNext modules with Bundler resolution.
 - `sideEffects` in package.json only lists styles — keep runtime modules free
   of import-time side effects or bundlers will tree-shake incorrectly.

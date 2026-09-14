@@ -1,6 +1,34 @@
 import { access, lstat, readFile, readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 
+/** Read asset URLs from emitted CSS, including quoted SVG data URLs. */
+export function extractCssAssetReferences(stylesheet) {
+    return Array.from(
+        stylesheet.matchAll(
+            /url\(\s*(?:"((?:\\[\s\S]|[^"\\])*)"|'((?:\\[\s\S]|[^'\\])*)'|((?:\\[\s\S]|[^)\\])*))\s*\)/gi,
+        ),
+        (match) => {
+            const value = match[1] ?? match[2] ?? match[3].trim();
+            return value.replace(
+                /\\(?:([a-f\d]{1,6})(?:\r\n|[\t\n\f\r ])?|(\r\n|[\n\f\r])|([\s\S]))/gi,
+                (_escape, hex, newline, character) => {
+                    if (hex) {
+                        const code = Number.parseInt(hex, 16);
+                        return String.fromCodePoint(
+                            code === 0 ||
+                                code > 0x10ffff ||
+                                (code >= 0xd800 && code <= 0xdfff)
+                                ? 0xfffd
+                                : code,
+                        );
+                    }
+                    return newline ? "" : character;
+                },
+            );
+        },
+    );
+}
+
 export const EXPECTED_PACKAGE_CONTRACT = Object.freeze({
     name: "egon-core",
     license: "GPL-3.0-or-later",
@@ -103,6 +131,7 @@ export async function inspectPackageContract({
             if (error?.code === "ENOENT") {
                 throw new Error(
                     `Installed package is missing emitted dist file: ${emittedFile}.`,
+                    { cause: error },
                 );
             }
             throw error;

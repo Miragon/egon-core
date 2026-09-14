@@ -88,7 +88,7 @@ describe("DomPurifyIconSanitizer", () => {
             "translate(1 2)",
         );
         expect(root.querySelector("g")?.style.fill).toContain("#paint");
-        expect(root.querySelector("g")?.style.stroke).toBe("#123");
+        expect(root.querySelector("g")?.style.stroke).toBe("rgb(17, 34, 51)");
         expect(root.querySelector("g")?.style.position).toBe("");
         expect(root.querySelector("g")?.style.backgroundImage).toBe("");
         expect(

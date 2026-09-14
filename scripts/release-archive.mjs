@@ -206,6 +206,7 @@ export class GitHubReleaseClient {
             if (error.status === 404) {
                 throw new Error(
                     `Published release ${tag} does not exist; archive recovery never creates releases.`,
+                    { cause: error },
                 );
             }
             throw error;

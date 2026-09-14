@@ -4,10 +4,43 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
     EXPECTED_PACKAGE_CONTRACT,
+    extractCssAssetReferences,
     inspectPackageContract,
 } from "../package-contract.mjs";
 
 const temporaryRoots = [];
+
+describe("CSS asset references", () => {
+    it("decodes escaped quotes in embedded SVG without treating it as a file", () => {
+        const css = String.raw`.icon { mask: url("data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\"><text>(icon)</text></svg>"); }`;
+        expect(extractCssAssetReferences(css)).toEqual([
+            'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg"><text>(icon)</text></svg>',
+        ]);
+    });
+
+    it("retains embedded data and relative paths across URL quoting styles", () => {
+        expect(
+            extractCssAssetReferences(`
+            @font-face { src: url( fonts/bpmn.woff2 ) }
+            .a { mask: url('icons/group.svg') }
+            .b { background: URL("data:image/png;base64,YQ==") }
+        `),
+        ).toEqual([
+            "fonts/bpmn.woff2",
+            "icons/group.svg",
+            "data:image/png;base64,YQ==",
+        ]);
+    });
+
+    it("decodes CSS escapes before validating asset paths", () => {
+        expect(
+            extractCssAssetReferences(String.raw`
+            .a { background: url(icons/a\)b.svg) }
+            .b { mask: url("\2e \2e /outside.svg") }
+        `),
+        ).toEqual(["icons/a)b.svg", "../outside.svg"]);
+    });
+});
 
 afterEach(async () => {
     await Promise.all(

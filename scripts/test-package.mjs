@@ -12,7 +12,10 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { clearTimeout, setTimeout } from "node:timers";
 import { fileURLToPath, URL } from "node:url";
-import { inspectPackageContract } from "./package-contract.mjs";
+import {
+    extractCssAssetReferences,
+    inspectPackageContract,
+} from "./package-contract.mjs";
 
 const REQUIRED_NODE_MAJOR = 24;
 const READY_TIMEOUT_MS = 120_000;
@@ -154,7 +157,8 @@ async function stageConsumer(root, archivePath, repositoryPackage) {
             "egon-core": `file:${archivePath}`,
         },
         devDependencies: {
-            typescript: repositoryPackage.devDependencies.typescript,
+            "@typescript/native":
+                repositoryPackage.devDependencies["@typescript/native"],
             vite: repositoryPackage.devDependencies.vite,
         },
     };
@@ -213,10 +217,7 @@ async function inspectPackagedStyles(packageRoot) {
         }
     }
 
-    const references = Array.from(
-        stylesheet.matchAll(/url\((?:"([^"]*)"|'([^']*)'|([^)]*))\)/g),
-        (match) => (match[1] ?? match[2] ?? match[3] ?? "").trim(),
-    );
+    const references = extractCssAssetReferences(stylesheet);
     if (references.length === 0) {
         throw new Error("Installed style.css contains no asset references.");
     }

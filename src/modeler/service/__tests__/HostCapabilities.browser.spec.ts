@@ -174,7 +174,7 @@ function extractEmbeddedDocument(svg: string): DomainStoryDocument {
 
 async function hasNonWhitePixel(bytes: Uint8Array): Promise<boolean> {
     const bitmap = await createImageBitmap(
-        new Blob([bytes], { type: "image/png" }),
+        new Blob([new Uint8Array(bytes)], { type: "image/png" }),
     );
     const canvas = document.createElement("canvas");
     canvas.width = bitmap.width;

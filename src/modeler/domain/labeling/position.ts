@@ -58,7 +58,6 @@ export function labelPosition(waypoints: readonly Coordinate[], lines = 1) {
 export function labelPositionX(startPoint: Coordinate, endPoint: Coordinate) {
     const angle = angleBetween(startPoint, endPoint);
     let offsetX = 0;
-    let scaledAngle = 0;
     if (angle === 0 || angle === 180 || angle === 90 || angle === 270) {
         offsetX = 0;
     } else if (angle > 0 && angle < 90) {
@@ -66,15 +65,15 @@ export function labelPositionX(startPoint: Coordinate, endPoint: Coordinate) {
         offsetX = 5 - angle / 6;
     } else if (angle > 90 && angle < 180) {
         // endpoint in upper left quadrant
-        scaledAngle = angle - 90;
+        const scaledAngle = angle - 90;
         offsetX = 5 - scaledAngle / 18;
     } else if (angle > 180 && angle < 270) {
         // endpoint in lower left quadrant
-        scaledAngle = angle - 180;
+        const scaledAngle = angle - 180;
         offsetX = scaledAngle / 18;
     } else if (angle > 270) {
         // endpoint in lower right quadrant
-        scaledAngle = angle - 270;
+        const scaledAngle = angle - 270;
         offsetX = 5 - scaledAngle / 6;
     }
     return offsetX + (startPoint.x + endPoint.x) / 2;
@@ -88,7 +87,6 @@ export function labelPositionY(
 ) {
     const angle = angleBetween(startPoint, endPoint);
     let offsetY = 0;
-    let scaledAngle = 0;
 
     if (angle === 0 || angle === 180) {
         offsetY = 15;
@@ -99,15 +97,15 @@ export function labelPositionY(
         offsetY = 15 - angle / 6;
     } else if (angle > 90 && angle < 180) {
         // endpoint in upper left quadrant
-        scaledAngle = angle - 90;
+        const scaledAngle = angle - 90;
         offsetY = (-scaledAngle / 9) * lines;
     } else if (angle > 180 && angle < 270) {
         // endpoint in lower left quadrant
-        scaledAngle = angle - 180;
+        const scaledAngle = angle - 180;
         offsetY = 15 - scaledAngle / 3;
     } else if (angle > 270) {
         // endpoint in lower right quadrant
-        scaledAngle = angle - 270;
+        const scaledAngle = angle - 270;
         offsetY = (-scaledAngle / 9) * lines;
     }
     return offsetY + (startPoint.y + endPoint.y) / 2;
