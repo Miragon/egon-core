@@ -35,3 +35,8 @@ and the rules (when to write one, how superseding works).
 | [0027](0027-refresh-shared-icon-artwork-on-add.md)                       | Refresh shared icon artwork on add                  | accepted                                                                    |
 | [0028](0028-isolated-package-consumer-validation.md)                     | Shared journeys through isolated package consumer   | accepted                                                                    |
 | [0029](0029-release-please-and-github-package-archives.md)               | Release Please + GitHub package archives            | accepted                                                                    |
+| [0030](0030-export-static-svg-from-a-captured-session.md)                | Export static SVG from a captured session           | accepted                                                                    |
+| [0031](0031-rasterize-png-with-cancellable-host-neutral-work.md)         | Cancellable host-neutral PNG rasterization          | accepted                                                                    |
+| [0032](0032-batch-label-renames-through-one-parent-command.md)           | Batch label renames through one parent command      | accepted                                                                    |
+| [0033](0033-expose-retained-icon-configuration-and-explicit-order.md)    | Expose retained icon configuration and order        | accepted                                                                    |
+| [0034](0034-headless-replay-with-domain-traversal.md)                    | Headless replay with domain traversal               | accepted                                                                    |

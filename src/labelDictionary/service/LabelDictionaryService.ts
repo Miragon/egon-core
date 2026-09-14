@@ -1,5 +1,10 @@
-import { LabelEntry } from "../domain/labelEntry";
-import { WorkObjectLabelEntry } from "../domain/workObjectLabelEntry";
+import type CommandStack from "diagram-js/lib/command/CommandStack";
+
+import type {
+    LabelDictionary,
+    LabelRenameBatch,
+    ResolvedLabelRename,
+} from "../domain/LabelDictionary";
 import { IconDictionaryService } from "../../iconSet/service";
 import { getIconId } from "../../story/domain/elementTypes";
 import { isActivity, isWorkObject } from "../../story/domain/elementPredicates";
@@ -9,103 +14,85 @@ export class LabelDictionaryService {
     static $inject: string[] = [
         "domainStoryElementRegistryService",
         "domainStoryIconDictionaryService",
+        "commandStack",
     ];
 
-    activityLabels: LabelEntry[] = [];
-    workObjektLabels: WorkObjectLabelEntry[] = [];
-
     constructor(
-        // private massNamingService: MassNamingService,
         private readonly elementRegistryService: ElementRegistryService,
         private readonly iconDictionaryService: IconDictionaryService,
-        // private dialogService: DialogService,
-        // private snackbar: MatSnackBar,
+        private readonly commandStack: CommandStack,
     ) {}
 
-    // openLabelDictionary() {
-    //     const isActivityWithLabel = (element: CanvasObject) =>
-    //         element.type.includes(ElementTypes.ACTIVITY) && element.businessObject.name;
-    //     const isWorkObjectWithLabel = (element: CanvasObject) =>
-    //         element.type.includes(ElementTypes.WORKOBJECT) &&
-    //         element.businessObject.name;
+    getDictionary(): LabelDictionary {
+        const activities = new Map<
+            string,
+            { name: string; originalName: string }
+        >();
+        const workObjects = new Map<
+            string,
+            { name: string; originalName: string; icon?: string }
+        >();
 
-    //     const hasAtLeastOneLabel = this.elementRegistryService
-    //         .getAllCanvasObjects()
-    //         .some(
-    //             (element) =>
-    //                 isActivityWithLabel(element) || isWorkObjectWithLabel(element),
-    //         );
-    //     if (hasAtLeastOneLabel) {
-    //         const config = new MatDialogConfig();
-    //         config.disableClose = false;
-    //         config.autoFocus = true;
-
-    //         this.dialogService.openDialog(LabelDictionaryDialogComponent, config);
-    //     } else {
-    //         this.snackbar.open(
-    //             "There are currently no activities or work objects with labels on the canvas",
-    //             undefined,
-    //             {
-    //                 duration: SNACKBAR_DURATION_LONGER,
-    //                 panelClass: SNACKBAR_INFO,
-    //             },
-    //         );
-    //     }
-    // }
-
-    createLabelDictionaries(): void {
-        this.activityLabels = [];
-        this.workObjektLabels = [];
-
-        const allObjects = this.elementRegistryService.getAllCanvasObjects();
-
-        allObjects.forEach((element) => {
+        this.elementRegistryService.getAllCanvasObjects().forEach((element) => {
             const name = element.businessObject.name;
             if (
                 name &&
                 name.length > 0 &&
                 isActivity(element) &&
-                !this.activityLabels.map((a) => a.name).includes(name)
+                !activities.has(name)
             ) {
-                this.activityLabels.push({
-                    name,
-                    originalName: name,
-                });
+                activities.set(name, { name, originalName: name });
             } else if (
                 name &&
                 name.length > 0 &&
                 isWorkObject(element) &&
-                !this.workObjektLabels.map((e) => e.name).includes(name)
+                !workObjects.has(name)
             ) {
                 const iconName = getIconId(element.type);
                 let icon = this.iconDictionaryService.getIconSource(iconName);
-                if (!icon) {
-                    return;
-                }
-                if (!icon.startsWith("data")) {
+                if (icon && !icon.startsWith("data")) {
                     icon = "data:image/svg+xml," + icon;
                 }
-                this.workObjektLabels.push({
+                workObjects.set(name, {
                     name,
                     originalName: name,
-                    icon,
+                    ...(icon ? { icon } : {}),
                 });
             }
         });
-        this.activityLabels.sort((a, b) => {
-            return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
-        });
-        this.workObjektLabels.sort((a, b) => {
-            return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
-        });
+
+        return {
+            activities: [...activities.values()].sort(compareLabels),
+            workObjects: [...workObjects.values()].sort(compareLabels),
+        };
     }
 
-    getActivityLabels(): LabelEntry[] {
-        return this.activityLabels.slice();
-    }
+    renameLabels(changes: LabelRenameBatch): readonly string[] {
+        const replacements = validatedReplacements(changes);
+        const updates: ResolvedLabelRename[] = [];
 
-    getWorkObjectLabels(): WorkObjectLabelEntry[] {
-        return this.workObjektLabels.slice();
+        for (const element of this.elementRegistryService.getAllCanvasObjects()) {
+            const category = isActivity(element)
+                ? "activity"
+                : isWorkObject(element)
+                  ? "workObject"
+                  : undefined;
+            if (!category) continue;
+
+            const originalName = element.businessObject.name;
+            const replacement = replacements.get(
+                `${category}\u0000${originalName}`,
+            );
+            if (replacement !== undefined && replacement !== originalName) {
+                updates.push({ element, name: replacement });
+            }
+        }
+
+        if (updates.length > 0) {
+            this.commandStack.execute("labels.renameBatch", { updates });
+        }
+
+        return updates.map(({ element }) => element.id);
     }
 
     getUniqueWorkObjectNames(): string[] {
@@ -120,36 +107,39 @@ export class LabelDictionaryService {
             ),
         ];
     }
+}
 
-    // massRenameLabels(
-    //     activityNames: string[],
-    //     originalActivityNames: string[],
-    //     workObjectNames: string[],
-    //     originalWorkObjectNames: string[],
-    // ): void {
-    //     for (let i = 0; i < originalActivityNames.length; i++) {
-    //         if (!activityNames[i]) {
-    //             activityNames[i] = "";
-    //         }
-    //         if (!(activityNames[i] == originalActivityNames[i])) {
-    //             this.massNamingService.massChangeNames(
-    //                 originalActivityNames[i],
-    //                 activityNames[i],
-    //                 ElementTypes.ACTIVITY,
-    //             );
-    //         }
-    //     }
-    //     for (let i = 0; i < originalWorkObjectNames.length; i++) {
-    //         if (!workObjectNames[i]) {
-    //             workObjectNames[i] = "";
-    //         }
-    //         if (!(workObjectNames[i] == originalWorkObjectNames[i])) {
-    //             this.massNamingService.massChangeNames(
-    //                 originalWorkObjectNames[i],
-    //                 workObjectNames[i],
-    //                 ElementTypes.WORKOBJECT,
-    //             );
-    //         }
-    //     }
-    // }
+function compareLabels(
+    left: { name: string },
+    right: { name: string },
+): number {
+    return (
+        left.name
+            .toLocaleLowerCase()
+            .localeCompare(right.name.toLocaleLowerCase()) ||
+        left.name.localeCompare(right.name)
+    );
+}
+
+function validatedReplacements(changes: LabelRenameBatch): Map<string, string> {
+    const replacements = new Map<string, string>();
+    for (const change of changes) {
+        if (
+            change?.category !== "activity" &&
+            change?.category !== "workObject"
+        ) {
+            throw new TypeError(
+                `Unknown label category: ${String(change?.category)}`,
+            );
+        }
+        const key = `${change.category}\u0000${change.originalName}`;
+        const existing = replacements.get(key);
+        if (existing !== undefined && existing !== change.name) {
+            throw new Error(
+                `Conflicting replacements for ${change.category} label ${change.originalName}`,
+            );
+        }
+        replacements.set(key, change.name);
+    }
+    return replacements;
 }

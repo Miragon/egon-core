@@ -4,6 +4,7 @@ import { ElementTypes } from "../../story/domain/elementTypes";
 import { sanitizeForCss } from "../../shared/domain/sanitizer";
 import { IconStyleSheetPort } from "../domain/ports/IconStyleSheetPort";
 import { IconSanitizerPort } from "../domain/ports/IconSanitizerPort";
+import type { IconCategory } from "../domain/IconTypes";
 
 export const ICON_CSS_CLASS_PREFIX = "icon-domain-story-";
 
@@ -186,6 +187,45 @@ export class IconDictionaryService {
 
     getIconSetName(): string {
         return this.iconSetName;
+    }
+
+    /** Reorders a selected category after validating an exact permutation. */
+    setIconOrder(category: IconCategory, names: readonly string[]): boolean {
+        const type =
+            category === "actor"
+                ? ElementTypes.ACTOR
+                : category === "workObject"
+                  ? ElementTypes.WORKOBJECT
+                  : undefined;
+        if (!type) {
+            throw new TypeError(`Unknown icon category: ${String(category)}`);
+        }
+
+        const current = this.getSelectedDictionary(type);
+        const currentNames = current.keysArray();
+        if (new Set(names).size !== names.length) {
+            throw new Error(`Icon order for ${category} contains duplicates`);
+        }
+        if (
+            names.length !== currentNames.length ||
+            names.some((name) => !current.has(name))
+        ) {
+            throw new Error(
+                `Icon order for ${category} must be an exact permutation of the selected names`,
+            );
+        }
+        if (names.every((name, index) => name === currentNames[index])) {
+            return false;
+        }
+
+        const reordered = new Dictionary<string>();
+        names.forEach((name) => reordered.set(name, current.get(name)));
+        if (type === ElementTypes.ACTOR) {
+            this.selectedActorsDictionary = reordered;
+        } else {
+            this.selectedWorkObjectsDictionary = reordered;
+        }
+        return true;
     }
 
     setIconSet(iconSet: IconSet): void {

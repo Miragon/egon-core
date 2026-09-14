@@ -33,3 +33,18 @@ export type IconSetData = {
 
 /** Icon category for identifying icon type */
 export type IconCategory = "actor" | "workObject";
+
+export type IconNamesByCategory = Readonly<
+    Record<IconCategory, readonly string[]>
+>;
+
+/** Complete, detached icon configuration snapshot. */
+export interface IconConfiguration {
+    readonly name: string;
+    /** All retained custom artwork, including icons used by live shapes. */
+    readonly catalog: IconMap;
+    /** Ordered palette selections. */
+    readonly selected: IconNamesByCategory;
+    /** Distinct icon names referenced by the current story. */
+    readonly used: IconNamesByCategory;
+}

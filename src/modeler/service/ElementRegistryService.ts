@@ -7,7 +7,6 @@ import { getIconId } from "../../story/domain/elementTypes";
 import {
     isActivity,
     isActor,
-    isAnnotation,
     isGroup,
     isWorkObject,
 } from "../../story/domain/elementPredicates";
@@ -131,10 +130,6 @@ export class ElementRegistryService {
 
             // ensure that Activities are always after Actors, Workobjects and Groups in .dst files
             else {
-                if (isAnnotation(canvasElement)) {
-                    canvasElement.businessObject.width = canvasElement.width;
-                    canvasElement.businessObject.height = canvasElement.height;
-                }
                 if (!objectList.includes(canvasElement)) {
                     objectList.unshift(canvasElement);
                 }

@@ -167,6 +167,8 @@ const FEATURE_ROOTS: readonly string[] = [
  */
 const FROZEN_INDEX_SPECIFIERS: readonly string[] = [
     "./iconSet/domain/IconTypes",
+    "./labelDictionary/domain/LabelDictionary",
+    "./modeler/domain/export/VisualExport",
     "./modeler/domain/model/TextRendererConfig",
     "./modeler/domain/model/Viewport",
     "./modeler/domain/ports/IconPort",
@@ -175,6 +177,7 @@ const FROZEN_INDEX_SPECIFIERS: readonly string[] = [
     "./modeler/service/EgonClientConfig",
     "./story/domain/DomainStoryDocument",
     "./story/domain/iconSet",
+    "./story/domain/replay",
     "./story/domain/scope",
 ];
 
@@ -216,7 +219,6 @@ const INFRASTRUCTURE_PREDICATE_IMPORT_ALLOWLIST: readonly string[] = [
     "src/modeler/infrastructure/copy-paste/DomainStoryPasteRestore.ts",
     "src/modeler/infrastructure/labeling/DomainStoryLabelEditingPreview.ts",
     "src/modeler/infrastructure/labeling/DomainStoryLabelEditingProvider.ts",
-    "src/modeler/infrastructure/labeling/utils.ts",
     "src/modeler/infrastructure/popup/DomainStoryActivityNumbering.ts",
     "src/modeler/infrastructure/popup/DomainStoryPopupService.ts",
     "src/modeler/infrastructure/renderer/DomainStoryRenderer.ts",

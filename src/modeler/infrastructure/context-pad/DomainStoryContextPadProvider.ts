@@ -32,6 +32,7 @@ import {
 } from "../../../story/domain/elementPredicates";
 import { DomainStoryNumberingRegistry } from "../popup/DomainStoryNumberingRegistry";
 import { ColorPickerCoordinator } from "../color-picker/ColorPickerCoordinator";
+import { numberingOnDirectionChange } from "../../../story/domain/activityNumbering";
 
 /**
  * Positions the replace ("Change type") popup menu just below the open context
@@ -428,13 +429,11 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
     private changeDirection(element: Connection) {
         const businessObject = element.businessObject;
         const source = element.source;
-        let newNumber: number | null;
-
-        if (isActor(source)) {
-            newNumber = null;
-        } else {
-            newNumber = this.numberingRegistry.generateAutomaticNumber();
-        }
+        const numberingDecision = numberingOnDirectionChange(source);
+        const newNumber =
+            numberingDecision === "clear"
+                ? null
+                : this.numberingRegistry.generateAutomaticNumber();
         const context = {
             businessObject: businessObject,
             newNumber: newNumber,
