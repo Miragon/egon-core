@@ -26,6 +26,20 @@ function createMockPorts() {
     const mockModelerPort: ModelerPort = {
         import: vi.fn(),
         export: vi.fn(),
+        exportSVG: vi.fn(),
+        exportPNG: vi.fn(),
+        getLabelDictionary: vi.fn().mockReturnValue({
+            activities: [],
+            workObjects: [],
+        }),
+        renameLabels: vi.fn().mockReturnValue([]),
+        getReplayState: vi.fn(),
+        startReplay: vi.fn(),
+        stopReplay: vi.fn(),
+        nextReplayStep: vi.fn(),
+        previousReplayStep: vi.fn(),
+        seekReplayStep: vi.fn(),
+        setReplayShowGroups: vi.fn(),
         getViewport: vi
             .fn()
             .mockReturnValue({ x: 0, y: 0, width: 100, height: 100 }),
@@ -38,6 +52,10 @@ function createMockPorts() {
         offStoryChanged: vi.fn(),
         offViewportChanged: vi.fn(),
         offImportRepaired: vi.fn(),
+        onLabelsChanged: vi.fn(),
+        offLabelsChanged: vi.fn(),
+        onReplayChanged: vi.fn(),
+        offReplayChanged: vi.fn(),
         onColorPickerRequested: vi.fn(),
         onColorPickerClosed: vi.fn(),
         offColorPickerRequested: vi.fn(),
@@ -53,6 +71,8 @@ function createMockPorts() {
         addIcon: vi.fn(),
         removeIcon: vi.fn(),
         getIcons: vi.fn().mockReturnValue({ actors: {}, workObjects: {} }),
+        getIconConfiguration: vi.fn(),
+        setIconOrder: vi.fn(),
         hasIcon: vi.fn(),
         onIconsChanged: vi.fn(),
         offIconsChanged: vi.fn(),
@@ -153,6 +173,32 @@ describe("EgonClient (Application Service)", () => {
             expect(result).toEqual(doc);
             expect(mockModelerPort.export).toHaveBeenCalledTimes(1);
         });
+
+        it("delegates SVG and adapts AbortSignal before PNG reaches the port", async () => {
+            const svgResult = { svg: "<svg/>", width: 1, height: 1 };
+            const pngResult = {
+                bytes: new Uint8Array([1]),
+                width: 2,
+                height: 2,
+            };
+            (mockModelerPort.exportSVG as Mock).mockResolvedValue(svgResult);
+            (mockModelerPort.exportPNG as Mock).mockResolvedValue(pngResult);
+            const controller = new AbortController();
+
+            await expect(client.exportSVG({ padding: 4 })).resolves.toBe(
+                svgResult,
+            );
+            await expect(
+                client.exportPNG({ scale: 2, signal: controller.signal }),
+            ).resolves.toBe(pngResult);
+            const request = (mockModelerPort.exportPNG as Mock).mock
+                .calls[0][0];
+            expect(request.scale).toBe(2);
+            expect(request).not.toHaveProperty("signal");
+            expect(request.cancellation.aborted).toBe(false);
+            controller.abort();
+            expect(request.cancellation.aborted).toBe(true);
+        });
     });
 
     describe("event subscription", () => {
@@ -193,6 +239,8 @@ describe("EgonClient (Application Service)", () => {
         it.each([
             ["colorPicker.requested", "onColorPickerRequested"],
             ["colorPicker.closed", "onColorPickerClosed"],
+            ["labels.changed", "onLabelsChanged"],
+            ["replay.changed", "onReplayChanged"],
         ] as const)("routes %s to the modeler port", (event, method) => {
             const callback = vi.fn();
             client.on(event, callback);
@@ -251,6 +299,8 @@ describe("EgonClient (Application Service)", () => {
         it.each([
             ["colorPicker.requested", "offColorPickerRequested"],
             ["colorPicker.closed", "offColorPickerClosed"],
+            ["labels.changed", "offLabelsChanged"],
+            ["replay.changed", "offReplayChanged"],
         ] as const)("routes off %s to the modeler port", (event, method) => {
             const callback = vi.fn();
             client.off(event, callback);
@@ -409,6 +459,76 @@ describe("EgonClient (Application Service)", () => {
                 "actor",
                 "CheckActor",
             );
+        });
+
+        it("delegates rich configuration and explicit order", () => {
+            const configuration = {
+                name: "set",
+                catalog: {},
+                selected: { actor: [], workObject: [] },
+                used: { actor: [], workObject: [] },
+            };
+            (mockIconPort.getIconConfiguration as Mock).mockReturnValue(
+                configuration,
+            );
+
+            expect(client.getIconConfiguration()).toBe(configuration);
+            client.setIconOrder("actor", ["Person"]);
+            expect(mockIconPort.setIconOrder).toHaveBeenCalledWith("actor", [
+                "Person",
+            ]);
+        });
+    });
+
+    describe("labels and replay", () => {
+        it("delegates dictionary reads and batch renames", () => {
+            const dictionary = { activities: [], workObjects: [] };
+            (mockModelerPort.getLabelDictionary as Mock).mockReturnValue(
+                dictionary,
+            );
+            (mockModelerPort.renameLabels as Mock).mockReturnValue(["a"]);
+            const changes = [
+                {
+                    category: "activity" as const,
+                    originalName: "old",
+                    name: "new",
+                },
+            ];
+
+            expect(client.getLabelDictionary()).toBe(dictionary);
+            expect(client.renameLabels(changes)).toEqual(["a"]);
+            expect(mockModelerPort.renameLabels).toHaveBeenCalledWith(changes);
+        });
+
+        it("delegates every replay control and returns port state", () => {
+            const state = {
+                active: true,
+                stepIndex: 0,
+                stepCount: 1,
+                activityNumber: 1,
+                hasGroups: false,
+                showGroups: false,
+            };
+            for (const method of [
+                "getReplayState",
+                "startReplay",
+                "stopReplay",
+                "nextReplayStep",
+                "previousReplayStep",
+                "seekReplayStep",
+                "setReplayShowGroups",
+            ] as const) {
+                (mockModelerPort[method] as Mock).mockReturnValue(state);
+            }
+
+            expect(client.getReplayState()).toBe(state);
+            expect(client.startReplay({ showGroups: true })).toBe(state);
+            expect(client.stopReplay()).toBe(state);
+            expect(client.nextReplayStep()).toBe(state);
+            expect(client.previousReplayStep()).toBe(state);
+            expect(client.seekReplayStep(3)).toBe(state);
+            expect(client.setReplayShowGroups(true)).toBe(state);
+            expect(mockModelerPort.seekReplayStep).toHaveBeenCalledWith(3);
         });
     });
 

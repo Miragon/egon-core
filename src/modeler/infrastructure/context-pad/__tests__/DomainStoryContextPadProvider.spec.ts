@@ -121,15 +121,21 @@ function provider(rulesOverride?: { allowed: (...args: any[]) => unknown }) {
         }),
     };
 
+    const numberingRegistry = new DomainStoryNumberingRegistry(eventBus, {
+        getActivitiesFromActors: () => [],
+    } as any);
+    const generateAutomaticNumber = vi.spyOn(
+        numberingRegistry,
+        "generateAutomaticNumber",
+    );
+
     const instance = new DomainStoryContextPadProvider(
         {} as any, // elementFactory
         {} as any, // modeling
         {} as any, // replaceMenuProvider
-        // The real registry against an empty canvas, so "does anything write to
-        // the model before the command runs" is actually observable.
-        new DomainStoryNumberingRegistry(eventBus, {
-            getActivitiesFromActors: () => [],
-        } as any),
+        // The real registry against an empty canvas, so number generation stays
+        // pure and "does anything write before the command" is observable.
+        numberingRegistry,
         dirtyFlagService as any,
         // iconDictionaryService: no icons, so the append-actor/work-object
         // entries stay empty and do not obscure the entries under test.
@@ -158,6 +164,7 @@ function provider(rulesOverride?: { allowed: (...args: any[]) => unknown }) {
         eventBus,
         replaceEntryClick,
         colorPickerCoordinator,
+        generateAutomaticNumber,
         openPadOnSelection: () => {
             padOpen = true;
         },
@@ -343,8 +350,19 @@ describe("DomainStoryContextPadProvider change direction", () => {
         } as any;
     }
 
+    /** An actor-sourced activity: after the swap it becomes a response. */
+    function actorSourcedActivity() {
+        return {
+            id: "Activity_2",
+            type: ElementTypes.ACTIVITY,
+            businessObject: { id: "Activity_2", number: 7 },
+            source: { type: ElementTypes.ACTOR + "Person" },
+            waypoints: [],
+        } as any;
+    }
+
     it("leaves the number to the command instead of minting it into the model", () => {
-        const { instance, commandStack } = provider();
+        const { instance, commandStack, generateAutomaticNumber } = provider();
         const activity = workObjectSourcedActivity();
         let numberAtExecute: unknown = "not executed";
         commandStack.execute.mockImplementation(() => {
@@ -355,9 +373,37 @@ describe("DomainStoryContextPadProvider change direction", () => {
         (entries["changeDirection"].action as any).click({}, activity);
 
         expect(numberAtExecute).toBeNull();
+        expect(generateAutomaticNumber).toHaveBeenCalledTimes(1);
         expect(commandStack.execute).toHaveBeenCalledWith(
             "activity.directionChange",
-            expect.objectContaining({ newNumber: 1, element: activity }),
+            {
+                businessObject: activity.businessObject,
+                newNumber: 1,
+                element: activity,
+            },
+        );
+    });
+
+    it("clears actor-sourced numbering without calling the registry", () => {
+        const { instance, commandStack, generateAutomaticNumber } = provider();
+        const activity = actorSourcedActivity();
+        let numberAtExecute: unknown = "not executed";
+        commandStack.execute.mockImplementation(() => {
+            numberAtExecute = activity.businessObject.number;
+        });
+
+        const entries = instance.getContextPadEntries(activity);
+        (entries["changeDirection"].action as any).click({}, activity);
+
+        expect(numberAtExecute).toBe(7);
+        expect(generateAutomaticNumber).not.toHaveBeenCalled();
+        expect(commandStack.execute).toHaveBeenCalledWith(
+            "activity.directionChange",
+            {
+                businessObject: activity.businessObject,
+                newNumber: null,
+                element: activity,
+            },
         );
     });
 });
