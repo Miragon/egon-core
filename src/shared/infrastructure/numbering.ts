@@ -32,7 +32,7 @@ export function numberBoxDefinitions(waypoints: Point[]): Box {
     let x = waypoints[0].x;
     let y = waypoints[0].y;
 
-    let fixedOffsetX = 0;
+    let fixedOffsetX: number;
     let fixedOffsetY = 0;
     let angleDependantOffsetX = 0;
     let angleDependantOffsetY = 0;

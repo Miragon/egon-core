@@ -2,7 +2,7 @@ import Diagram from "diagram-js";
 import type Canvas from "diagram-js/lib/core/Canvas";
 import type EventBus from "diagram-js/lib/core/EventBus";
 import type { ModuleDeclaration } from "didi";
-import Ids from "ids";
+import { Ids } from "ids";
 
 import EgonPlugin from "./plugin";
 import type { DomainStoryTextRendererConfig } from "../domain";

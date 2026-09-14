@@ -2,98 +2,119 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import releasePlease from "release-please";
 
 const require = createRequire(import.meta.url);
-const { buildStrategy } = require("release-please/build/src/factory.js");
-const {
-    parseConventionalCommits,
-} = require("release-please/build/src/commit.js");
-const { Version } = require("release-please/build/src/version.js");
-const { TagName } = require("release-please/build/src/util/tag-name.js");
-const { Manifest, VERSION } = releasePlease;
 const repositoryRoot = join(import.meta.dirname, "..", "..");
 // Keep this equal to the release-please version bundled by the action SHA in
 // .github/workflows/release-please.yml (from that action commit's lockfile).
 const ACTION_RELEASE_PLEASE_VERSION = "17.6.0";
 
-describe("release-please configuration", () => {
-    it("uses the exact implementation pinned by the repository", async () => {
-        const packageManifest = await readJson("package.json");
-
-        expect(VERSION).toBe(ACTION_RELEASE_PLEASE_VERSION);
-        expect(packageManifest.devDependencies["release-please"]).toBe(
-            ACTION_RELEASE_PLEASE_VERSION,
+// Verify both the upgrade and the implementation actually bundled by CI.
+describe.each(["release-please", "release-please-action-implementation"])(
+    "%s configuration",
+    (packageName) => {
+        const { Manifest, VERSION } = require(packageName);
+        const { buildStrategy } = require(
+            `${packageName}/build/src/factory.js`,
         );
-    });
+        const { parseConventionalCommits } = require(
+            `${packageName}/build/src/commit.js`,
+        );
+        const { Version } = require(`${packageName}/build/src/version.js`);
+        const { TagName } = require(
+            `${packageName}/build/src/util/tag-name.js`,
+        );
+        it("uses the exact implementation pinned by the repository", async () => {
+            const packageManifest = await readJson("package.json");
 
-    it.each([
-        ["first release", undefined, "fix: existing fix", "0.1.0"],
-        ["subsequent fix", "0.1.0", "fix: correct behavior", "0.1.1"],
-        ["pre-1.0 feature", "0.1.0", "feat: add behavior", "0.2.0"],
-        [
-            "pre-1.0 breaking change",
-            "0.1.0",
-            "feat!: replace behavior",
-            "0.2.0",
-        ],
-    ])("calculates %s as %s", async (_label, current, message, expected) => {
-        const { manifest, github } = await configuredManifest();
-        const strategy = await buildStrategy({
-            ...manifest.repositoryConfig["."],
-            github,
-            path: ".",
-            targetBranch: "main",
+            if (packageName === "release-please-action-implementation") {
+                expect(VERSION).toBe(ACTION_RELEASE_PLEASE_VERSION);
+                expect(packageManifest.devDependencies[packageName]).toBe(
+                    `npm:release-please@${ACTION_RELEASE_PLEASE_VERSION}`,
+                );
+            } else {
+                expect(packageManifest.devDependencies[packageName]).toBe(
+                    VERSION,
+                );
+            }
         });
-        const commits = parseConventionalCommits([
-            { sha: "a".repeat(40), message, files: ["src/index.ts"] },
-        ]);
-        const latestRelease = current
-            ? {
-                  tag: new TagName(Version.parse(current), "", undefined, true),
-                  sha: "b".repeat(40),
-                  notes: "",
-              }
-            : undefined;
 
-        const pullRequest = await strategy.buildReleasePullRequest(
-            commits,
-            latestRelease,
+        it.each([
+            ["first release", undefined, "fix: existing fix", "0.1.0"],
+            ["subsequent fix", "0.1.0", "fix: correct behavior", "0.1.1"],
+            ["pre-1.0 feature", "0.1.0", "feat: add behavior", "0.2.0"],
+            [
+                "pre-1.0 breaking change",
+                "0.1.0",
+                "feat!: replace behavior",
+                "0.2.0",
+            ],
+        ])(
+            "calculates %s as %s",
+            async (_label, current, message, expected) => {
+                const { manifest, github } = await configuredManifest(Manifest);
+                const strategy = await buildStrategy({
+                    ...manifest.repositoryConfig["."],
+                    github,
+                    path: ".",
+                    targetBranch: "main",
+                });
+                const commits = parseConventionalCommits([
+                    { sha: "a".repeat(40), message, files: ["src/index.ts"] },
+                ]);
+                const latestRelease = current
+                    ? {
+                          tag: new TagName(
+                              Version.parse(current),
+                              "",
+                              undefined,
+                              true,
+                          ),
+                          sha: "b".repeat(40),
+                          notes: "",
+                      }
+                    : undefined;
+
+                const pullRequest = await strategy.buildReleasePullRequest(
+                    commits,
+                    latestRelease,
+                );
+
+                expect(pullRequest.version.toString()).toBe(expected);
+            },
         );
 
-        expect(pullRequest.version.toString()).toBe(expected);
-    });
+        it("loads one root Node package, a synchronized release manifest, and v-only tags", async () => {
+            const { manifest, github } = await configuredManifest(Manifest);
+            const packageManifest = await readJson("package.json");
 
-    it("loads one root Node package, a synchronized release manifest, and v-only tags", async () => {
-        const { manifest, github } = await configuredManifest();
-        const packageManifest = await readJson("package.json");
-
-        expect(github.getFileJson).toHaveBeenCalledWith(
-            "release-please-config.json",
-            "main",
-        );
-        expect(github.getFileJson).toHaveBeenCalledWith(
-            ".release-please-manifest.json",
-            "main",
-        );
-        expect(Object.keys(manifest.repositoryConfig)).toEqual(["."]);
-        expect(Object.keys(manifest.releasedVersions)).toEqual(["."]);
-        expect(manifest.releasedVersions["."].toString()).toBe(
-            packageManifest.version,
-        );
-        expect(manifest.repositoryConfig["."]).toMatchObject({
-            releaseType: "node",
-            initialVersion: "0.1.0",
-            changelogPath: "CHANGELOG.md",
-            includeComponentInTag: false,
-            includeVInTag: true,
-            bumpMinorPreMajor: true,
-            bumpPatchForMinorPreMajor: false,
+            expect(github.getFileJson).toHaveBeenCalledWith(
+                "release-please-config.json",
+                "main",
+            );
+            expect(github.getFileJson).toHaveBeenCalledWith(
+                ".release-please-manifest.json",
+                "main",
+            );
+            expect(Object.keys(manifest.repositoryConfig)).toEqual(["."]);
+            expect(Object.keys(manifest.releasedVersions)).toEqual(["."]);
+            expect(manifest.releasedVersions["."].toString()).toBe(
+                packageManifest.version,
+            );
+            expect(manifest.repositoryConfig["."]).toMatchObject({
+                releaseType: "node",
+                initialVersion: "0.1.0",
+                changelogPath: "CHANGELOG.md",
+                includeComponentInTag: false,
+                includeVInTag: true,
+                bumpMinorPreMajor: true,
+                bumpPatchForMinorPreMajor: false,
+            });
         });
-    });
-});
+    },
+);
 
-async function configuredManifest() {
+async function configuredManifest(Manifest) {
     const config = await readJson("release-please-config.json");
     const versions = await readJson(".release-please-manifest.json");
     const packageContents = await readFile(

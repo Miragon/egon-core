@@ -1,6 +1,7 @@
 /// <reference types="vitest" />
 import { defineConfig } from "vite";
 import { configDefaults, coverageConfigDefaults } from "vitest/config";
+import { playwright } from "@vitest/browser-playwright";
 import dts from "vite-plugin-dts";
 import tsconfigPaths from "vite-tsconfig-paths";
 
@@ -25,20 +26,22 @@ export default defineConfig({
     ],
     css: {
         preprocessorOptions: {
-            // Vite 7 uses Sass's modern compiler API by default; the explicit
+            // Vite uses Sass's modern compiler API by default; the explicit
             // `api` option was removed, so no scss options are needed here.
             scss: {},
         },
     },
     build: {
         outDir: "dist",
+        // Vite 8 requires CSS splitting for a standalone stylesheet entry.
+        cssCodeSplit: true,
         lib: {
             entry: {
                 index: "src/index.ts",
                 style: "src/styles.scss",
             },
             formats: ["es"],
-            // Vite 7 names library CSS after the package by default; pin it back
+            // Vite names library CSS after the package by default; pin it back
             // to `style.css` to preserve the published `./style.css` export.
             cssFileName: "style",
         },
@@ -78,6 +81,8 @@ export default defineConfig({
         environment: "jsdom",
         coverage: {
             reportsDirectory: "coverage",
+            // Include untested production files as well as loaded modules (Vitest 4).
+            include: ["src/**/*.ts", "src/**/*.tsx"],
             // The public-consumer harness has its own Playwright verification. Do
             // not count unrelated demo/config/launcher files as uncovered in
             // the unit-only report (ADR 0028).
@@ -125,7 +130,7 @@ export default defineConfig({
                     browser: {
                         enabled: true,
                         headless: true,
-                        provider: "playwright",
+                        provider: playwright(),
                         instances: [{ browser: "chromium" }],
                     },
                 },

@@ -3,7 +3,7 @@ import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import type EventBus from "diagram-js/lib/core/EventBus";
 import type Selection from "diagram-js/lib/features/selection/Selection";
 import type { Element } from "diagram-js/lib/model/Types";
-import Ids from "ids";
+import { Ids } from "ids";
 
 import {
     hexToRGBA,

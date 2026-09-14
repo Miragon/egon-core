@@ -49,6 +49,9 @@ describe("unsanitizeTextForSVGExport", () => {
 });
 
 describe("sanitizeForDesktop", () => {
+    it("preserves an empty filename", () => {
+        expect(sanitizeForDesktop("")).toBe("");
+    });
     it("keeps filename sanitization behavior while retaining dash mapping", () => {
         expect(sanitizeForDesktop('a--b/<c>:"d"')).toBe("a––bcd");
     });

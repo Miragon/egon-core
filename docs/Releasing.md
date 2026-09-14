@@ -102,3 +102,12 @@ following in issue #125 or its release follow-up:
 - the release-event workflow attached `egon-core-0.1.0.tgz` and the documented
   `yarn add` command worked in a clean consumer; and
 - rerunning the archive workflow detected and preserved the matching asset.
+
+## Updating Release Please dependencies
+
+The release configuration suite runs against both the `release-please`
+dependency and `release-please-action-implementation`, an exact alias for the
+version bundled by the workflow action. When updating the action SHA, inspect
+that commit's lockfile and update the alias and `ACTION_RELEASE_PLEASE_VERSION`
+in the configuration test together. Keep testing both versions while they
+differ; remove the alias when they align (ADR 0037).

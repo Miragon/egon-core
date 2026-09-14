@@ -454,7 +454,7 @@ export class DomPurifyIconSanitizer implements IconSanitizerPort {
         const metadata = match[1].split(";");
         const mime = metadata.shift()?.toLowerCase() ?? "";
         const parameters = metadata.map((part) => part.toLowerCase());
-        const base64 = parameters.at(-1) === "base64";
+        const base64 = parameters[parameters.length - 1] === "base64";
         const nonEncodingParameters = base64
             ? parameters.slice(0, -1)
             : parameters;

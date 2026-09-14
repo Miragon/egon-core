@@ -37,6 +37,35 @@ function activity(
 }
 
 describe("createReplayStory", () => {
+    it("keeps work-object annotations while tolerating malformed downstream metadata", () => {
+        const actor = shape("actor", ElementTypes.ACTOR + "Person");
+        const receiver = shape("receiver", ElementTypes.ACTOR + "Person");
+        const work = shape("work", ElementTypes.WORKOBJECT + "Document");
+        const note = shape("note", ElementTypes.TEXTANNOTATION);
+        const root = activity("root", actor, work, 1);
+        const downstream = {
+            ...activity("downstream", work, receiver),
+            source: undefined,
+        } as unknown as ActivityCanvasObject;
+        const noteLink = {
+            id: "note-link",
+            type: ElementTypes.CONNECTION,
+            target: note,
+        } as unknown as ActivityCanvasObject;
+        work.outgoing = [noteLink, downstream];
+        work.attachers = [shape("", ElementTypes.TEXTANNOTATION)];
+
+        const replay = createReplayStory([actor, root, work], []);
+        expect(replay.steps[0].visibleElementIds).toEqual([
+            "actor",
+            "root",
+            "work",
+            "note-link",
+            "note",
+            "downstream",
+            "receiver",
+        ]);
+    });
     it("returns no steps without finite numbered actor-originating activities", () => {
         expect(createReplayStory([], [])).toEqual({
             steps: [],

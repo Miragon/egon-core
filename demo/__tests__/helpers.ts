@@ -44,8 +44,12 @@ export async function openDemo(page: Page) {
     await page.goto("/");
     await expect(page.getByRole("status")).toHaveText("Editor ready.");
     await expect(canvas(page).locator(".djs-container")).toBeVisible();
-    await expect(page.getByTitle("Create Person")).toBeVisible();
-    await expect(page.getByTitle("Create Document")).toBeVisible();
+    await expect(
+        page.getByRole("button", { name: "Create Person", exact: true }),
+    ).toBeVisible();
+    await expect(
+        page.getByRole("button", { name: "Create Document", exact: true }),
+    ).toBeVisible();
 }
 
 export async function createShape(
@@ -61,7 +65,7 @@ export async function createShape(
             elements.map((element) => element.getAttribute("data-element-id")),
         );
 
-    await page.getByTitle(title).click();
+    await page.getByRole("button", { name: title, exact: true }).click();
     await canvas(page).click({ position });
 
     const created = canvas(page).locator(
