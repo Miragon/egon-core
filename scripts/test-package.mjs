@@ -88,6 +88,7 @@ try {
         `Validated package identity, license, exports, and ${emittedFiles.length} emitted dist files.`,
     );
     await inspectPackagedStyles(installedPackageRoot);
+    await inspectPreactIntegration(consumerRoot, installedPackageRoot);
     await run(
         "yarn",
         ["tsc", "--project", "tsconfig.json", "--noEmit"],
