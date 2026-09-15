@@ -16,8 +16,9 @@ const reactColorfulCompat = fileURLToPath(
 /**
  * Standalone Vite build for the egon-core library.
  *
- * Emits two rollup entries — the ESM library (`index`) and the compiled
- * stylesheet (`style`) — plus a mirrored `.d.ts` tree via vite-plugin-dts.
+ * Emits three rollup entries — the ESM library (`index`), optional icon data
+ * (`icons`) and the compiled stylesheet (`style`) — plus a mirrored `.d.ts`
+ * tree via vite-plugin-dts.
  * External deps are left unbundled so consumers dedupe diagram-js & friends.
  */
 export default defineConfig({
@@ -59,6 +60,7 @@ export default defineConfig({
         lib: {
             entry: {
                 index: "src/index.ts",
+                icons: "src/icons.ts",
                 style: "src/styles.scss",
             },
             formats: ["es"],
@@ -69,6 +71,7 @@ export default defineConfig({
         rollupOptions: {
             input: {
                 index: "src/index.ts",
+                icons: "src/icons.ts",
                 style: "src/styles.scss",
             },
             external: (id: string) =>

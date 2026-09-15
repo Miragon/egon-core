@@ -44,3 +44,4 @@ and the rules (when to write one, how superseding works).
 | [0036](0036-vitest-4-browser-provider-and-coverage.md)                   | Vitest 4 provider and explicit coverage inputs          | accepted                                                                    |
 | [0037](0037-test-release-config-against-action-and-upgraded-library.md)  | Verify release configuration against action and library | accepted                                                                    |
 | [0038](0038-bundled-color-picker-and-provider-contract.md)               | Bundled picker + provider contract                      | accepted                                                                    |
+| [0039](0039-publish-optional-starter-icons.md)                           | Optional starter icons through a data-only entry        | accepted                                                                    |

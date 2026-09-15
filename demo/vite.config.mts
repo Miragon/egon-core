@@ -2,6 +2,7 @@ import { defineConfig, type Plugin } from "vite";
 import { fileURLToPath } from "node:url";
 
 const publicEntry = fileURLToPath(new URL("../src/index.ts", import.meta.url));
+const publicIcons = fileURLToPath(new URL("../src/icons.ts", import.meta.url));
 const publicStyles = fileURLToPath(
     new URL("../src/styles.scss", import.meta.url),
 );
@@ -39,6 +40,7 @@ export default defineConfig({
         // without allowing arbitrary egon-core subpaths (ADR 0028).
         alias: [
             { find: /^egon-core\/style\.css$/, replacement: publicStyles },
+            { find: /^egon-core\/icons$/, replacement: publicIcons },
             { find: /^egon-core$/, replacement: publicEntry },
             {
                 find: "react-dom/test-utils",

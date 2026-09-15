@@ -1,9 +1,8 @@
 import "egon-core/style.css";
 import "./styles.css";
 
-import actorIcon from "./icons/person.svg?raw";
-import workObjectIcon from "./icons/document.svg?raw";
 import { EgonClient, type DomainStoryDocument } from "egon-core";
+import { defaultIcons } from "egon-core/icons";
 
 function requiredElement<T extends Element>(selector: string): T {
     const element = document.querySelector<T>(selector);
@@ -49,11 +48,9 @@ async function createClient() {
     disposeClient();
     canvas.replaceChildren();
 
-    const nextClient = await EgonClient.create({ container: canvas });
-    nextClient.loadIcons({
-        name: "demo",
-        actors: { Person: actorIcon },
-        workObjects: { Document: workObjectIcon },
+    const nextClient = await EgonClient.create({
+        container: canvas,
+        defaultIcons,
     });
 
     storyChanged = () => setStatus("Story changed.");

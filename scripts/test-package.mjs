@@ -21,6 +21,7 @@ import {
 
 const REQUIRED_NODE_MAJOR = 24;
 const READY_TIMEOUT_MS = 120_000;
+const STARTER_ICON_MARKERS = ["M12 4a4 4 0 1 1 0 8", "M6 2h8l6 6v16"];
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const activeChildren = new Set();
 let interrupted = false;
@@ -101,6 +102,7 @@ try {
         consumerRoot,
         isolatedEnvironment,
     );
+    await verifyOptionalIconBundles(consumerRoot, isolatedEnvironment);
 
     const server = startPackageServer(consumerRoot, isolatedEnvironment);
     try {
@@ -197,15 +199,9 @@ function parseArguments(arguments_) {
 }
 
 async function stageConsumer(root, archivePath, repositoryPackage) {
-    await mkdir(join(root, "icons"), { recursive: true });
+    await mkdir(root, { recursive: true });
     for (const file of ["index.html", "main.ts", "styles.css"]) {
         await cp(join(repositoryRoot, "demo", file), join(root, file));
-    }
-    for (const file of ["person.svg", "document.svg"]) {
-        await cp(
-            join(repositoryRoot, "demo", "icons", file),
-            join(root, "icons", file),
-        );
     }
 
     const packageManifest = {
@@ -260,6 +256,90 @@ async function stageConsumer(root, archivePath, repositoryPackage) {
         join(root, "vite.config.mts"),
         `import { defineConfig, type Plugin } from "vite";\n\nfunction announceReady(): Plugin {\n    return {\n        name: "announce-package-preview-url",\n        configurePreviewServer(server) {\n            server.httpServer?.once("listening", () => {\n                const url = process.env.PORTLESS_URL;\n                if (!url) throw new Error("PORTLESS_URL is missing.");\n                console.log(\`EGON_PACKAGE_READY \${url}\`);\n            });\n        },\n    };\n}\n\nexport default defineConfig({\n    plugins: [announceReady()],\n    preview: { host: "127.0.0.1", strictPort: true },\n});\n`,
     );
+
+    await Promise.all([
+        stageBundleFixture(root, "client-only", false),
+        stageBundleFixture(root, "opted-in", true),
+    ]);
+}
+
+async function stageBundleFixture(consumerRoot, name, includeIcons) {
+    const root = join(consumerRoot, "bundle-fixtures", name);
+    await mkdir(root, { recursive: true });
+    await writeFile(
+        join(root, "index.html"),
+        '<div id="canvas"></div><script type="module" src="/main.ts"></script>\n',
+    );
+    await writeFile(
+        join(root, "main.ts"),
+        [
+            'import { EgonClient } from "egon-core";',
+            ...(includeIcons
+                ? ['import { defaultIcons } from "egon-core/icons";']
+                : []),
+            'const container = document.querySelector<HTMLElement>("#canvas")!;',
+            `void EgonClient.create({ container, colorPicker: false${includeIcons ? ", defaultIcons" : ""} }).then((client) => client.destroy());`,
+            "",
+        ].join("\n"),
+    );
+    await writeFile(
+        join(root, "vite.config.mts"),
+        `import { defineConfig } from "vite";\nimport { fileURLToPath } from "node:url";\n\nexport default defineConfig({\n    root: fileURLToPath(new URL(".", import.meta.url)),\n    build: { outDir: "dist", emptyOutDir: true },\n});\n`,
+    );
+}
+
+async function verifyOptionalIconBundles(consumerRoot, environment) {
+    const fixtureRoot = join(consumerRoot, "bundle-fixtures");
+    for (const name of ["client-only", "opted-in"]) {
+        await run(
+            "yarn",
+            [
+                "vite",
+                "build",
+                "--config",
+                join("bundle-fixtures", name, "vite.config.mts"),
+            ],
+            consumerRoot,
+            environment,
+        );
+    }
+
+    const [clientOnly, optedIn] = await Promise.all([
+        readBundleText(join(fixtureRoot, "client-only", "dist")),
+        readBundleText(join(fixtureRoot, "opted-in", "dist")),
+    ]);
+    for (const marker of STARTER_ICON_MARKERS) {
+        if (clientOnly.includes(marker)) {
+            throw new Error(
+                `Client-only consumer bundle unexpectedly contains starter artwork: ${marker}.`,
+            );
+        }
+        if (!optedIn.includes(marker)) {
+            throw new Error(
+                `Opted-in consumer bundle is missing starter artwork: ${marker}.`,
+            );
+        }
+    }
+    console.log(
+        "Validated starter icon exclusion and inclusion in isolated consumer bundles.",
+    );
+}
+
+async function readBundleText(root) {
+    const contents = [];
+    await visit(root);
+    return contents.join("\n");
+
+    async function visit(directory) {
+        for (const entry of await readdir(directory, { withFileTypes: true })) {
+            const absolute = join(directory, entry.name);
+            if (entry.isDirectory()) {
+                await visit(absolute);
+            } else if (entry.isFile()) {
+                contents.push(await readFile(absolute, "utf8"));
+            }
+        }
+    }
 }
 
 async function inspectPackagedStyles(packageRoot) {

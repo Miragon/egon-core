@@ -36,7 +36,8 @@ export default tseslint.config(
     {
         files: ["demo/**/*.ts", "demo/**/*.mts"],
         rules: {
-            // ADR 0028: the demo is a consumer harness. It uses only the two
+            // ADRs 0028 and 0039: the demo is a consumer harness. It uses only
+            // the three
             // package exports a real host needs, even though Vite resolves
             // those exact specifiers to source during local development.
             "no-restricted-imports": [
@@ -54,9 +55,9 @@ export default tseslint.config(
                                 "Demo code must obtain dependency editor styles from egon-core/style.css.",
                         },
                         {
-                            regex: "^egon-core/(?!style\\.css$)",
+                            regex: "^egon-core/(?!icons$|style\\.css$)",
                             message:
-                                "Demo code may import only egon-core and egon-core/style.css.",
+                                "Demo code may import only egon-core, egon-core/icons, and egon-core/style.css.",
                         },
                     ],
                 },

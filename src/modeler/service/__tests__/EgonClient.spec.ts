@@ -141,6 +141,87 @@ describe("EgonClient (Application Service)", () => {
         });
     });
 
+    describe("initial icon configuration", () => {
+        const initialIcons: IconSetData = {
+            name: "initial",
+            actors: { Person: '<svg data-icon="person" />' },
+            workObjects: { Document: '<svg data-icon="document" />' },
+        };
+
+        it("loads a supplied pack exactly once before create resolves", async () => {
+            const ports = createMockPorts();
+
+            const configured = await EgonClient.create(
+                { container, colorPicker: false, defaultIcons: initialIcons },
+                [],
+                {
+                    modelerPort: ports.mockModelerPort,
+                    iconPort: ports.mockIconPort,
+                },
+            );
+
+            expect(ports.mockIconPort.loadIcons).toHaveBeenCalledTimes(1);
+            expect(ports.mockIconPort.loadIcons).toHaveBeenCalledWith(
+                initialIcons,
+            );
+            configured.destroy();
+        });
+
+        it.each([undefined, false] as const)(
+            "does not load icons when defaultIcons is %s",
+            async (defaultIcons) => {
+                const ports = createMockPorts();
+
+                const configured = await EgonClient.create(
+                    { container, colorPicker: false, defaultIcons },
+                    [],
+                    {
+                        modelerPort: ports.mockModelerPort,
+                        iconPort: ports.mockIconPort,
+                    },
+                );
+
+                expect(ports.mockIconPort.loadIcons).not.toHaveBeenCalled();
+                configured.destroy();
+            },
+        );
+
+        it("destroys both ports and rejects when initial loading fails", async () => {
+            const ports = createMockPorts();
+            const initializationError = new Error("invalid starter pack");
+            const provider = vi.fn(() => ({
+                result: Promise.resolve(null),
+                dispose: vi.fn(),
+            }));
+            (ports.mockIconPort.loadIcons as Mock).mockImplementation(() => {
+                throw initializationError;
+            });
+
+            await expect(
+                EgonClient.create(
+                    {
+                        container,
+                        colorPicker: provider,
+                        defaultIcons: initialIcons,
+                    },
+                    [],
+                    {
+                        modelerPort: ports.mockModelerPort,
+                        iconPort: ports.mockIconPort,
+                    },
+                ),
+            ).rejects.toBe(initializationError);
+            expect(ports.mockIconPort.destroy).toHaveBeenCalledTimes(1);
+            expect(ports.mockModelerPort.destroy).toHaveBeenCalledTimes(1);
+            expect(
+                ports.mockModelerPort.offColorPickerRequested,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                ports.mockModelerPort.offColorPickerClosed,
+            ).toHaveBeenCalledTimes(1);
+        });
+    });
+
     describe("color picker configuration", () => {
         it("installs the built-in provider when omitted", async () => {
             const ports = createMockPorts();

@@ -13,6 +13,10 @@
             "types": "./dist/index.d.ts",
             "import": "./dist/index.js"
         },
+        "./icons": {
+            "types": "./dist/icons.d.ts",
+            "import": "./dist/icons.js"
+        },
         "./style.css": "./dist/style.css",
         "./package.json": "./package.json"
     },
