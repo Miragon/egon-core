@@ -88,7 +88,11 @@ try {
         `Validated package identity, license, exports, and ${emittedFiles.length} emitted dist files.`,
     );
     await inspectPackagedStyles(installedPackageRoot);
-    await inspectPreactIntegration(consumerRoot, installedPackageRoot);
+    await inspectPreactIntegration(
+        consumerRoot,
+        installedPackageRoot,
+        repositoryPackage.dependencies?.preact,
+    );
     await run(
         "yarn",
         ["tsc", "--project", "tsconfig.json", "--noEmit"],
@@ -125,7 +129,11 @@ try {
     await rm(temporaryRoot, { recursive: true, force: true });
 }
 
-async function inspectPreactIntegration(consumerRoot, packageRoot) {
+async function inspectPreactIntegration(
+    consumerRoot,
+    packageRoot,
+    expectedPreactVersion,
+) {
     const distRoot = join(packageRoot, "dist");
     const javascript = (await readdir(distRoot)).filter((file) =>
         file.endsWith(".js"),
@@ -175,8 +183,16 @@ async function inspectPreactIntegration(consumerRoot, packageRoot) {
     const manifest = JSON.parse(
         await readFile(join(packageRoot, "package.json"), "utf8"),
     );
-    if (manifest.dependencies?.preact !== "10.29.7") {
-        throw new Error("Installed package does not pin Preact 10.29.7.");
+    const packagedPreactVersion = manifest.dependencies?.preact;
+    if (!packagedPreactVersion) {
+        throw new Error(
+            "Installed package must declare Preact as a runtime dependency.",
+        );
+    }
+    if (packagedPreactVersion !== expectedPreactVersion) {
+        throw new Error(
+            `Installed package Preact dependency ${packagedPreactVersion} does not match repository dependency ${expectedPreactVersion}.`,
+        );
     }
     console.log(
         "Validated React-free shared Preact runtime and bundled notices.",
