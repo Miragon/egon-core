@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.0](https://github.com/Miragon/egon-core/compare/v0.2.0...v0.3.0) (2026-09-15)
+
+### 🎉 New Features
+
+- publish optional starter icon pack ([#159](https://github.com/Miragon/egon-core/issues/159)) ([1f8dcc6](https://github.com/Miragon/egon-core/commit/1f8dcc6fc6d9ee29b53fdac30bf19e5072835b38))
+
+### 🛠️ Misc
+
+- add conductor settings ([a65a8b8](https://github.com/Miragon/egon-core/commit/a65a8b8cff5dc40cbb6fbf59ffce913aeeeef6b8))
+- **deps:** bump the npm-all group with 3 updates ([#157](https://github.com/Miragon/egon-core/issues/157)) ([ffde328](https://github.com/Miragon/egon-core/commit/ffde32894ff18cdfc56ddc3fe8529e9f9964f20d))
+
 ## [0.2.0](https://github.com/Miragon/egon-core/compare/v0.1.0...v0.2.0) (2026-09-14)
 
 ### ⚠ BREAKING CHANGES
