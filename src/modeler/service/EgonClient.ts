@@ -1,6 +1,6 @@
 import type { ModuleDeclaration } from "didi";
 
-import { EgonClientConfig } from "./EgonClientConfig";
+import type { EgonClientConfig } from "./EgonClientConfig";
 import { IconPort, ImportRepairData, ModelerPort } from "../domain/ports";
 import type { ColorPickerProvider } from "./ColorPickerProvider";
 
@@ -145,12 +145,26 @@ export class EgonClient {
             );
         }
 
-        return new EgonClient(
+        const client = new EgonClient(
             modelerPort,
             iconPort,
             config.viewport,
             colorPickerController,
         );
+
+        try {
+            if (config.defaultIcons) {
+                client.loadIcons(config.defaultIcons);
+            }
+            return client;
+        } catch (error) {
+            try {
+                client.destroy();
+            } catch {
+                // Preserve the initialization failure that made creation fail.
+            }
+            throw error;
+        }
     }
 
     // --- Document Operations ---

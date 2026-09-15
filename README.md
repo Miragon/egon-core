@@ -38,14 +38,17 @@ resolve ESM.
 
 ## Usage
 
-Import the client and the stylesheet, then mount it into a DOM container:
+Import the client, optional starter icons, and the stylesheet, then mount it
+into a DOM container:
 
 ```ts
 import { EgonClient } from "egon-core";
+import { defaultIcons } from "egon-core/icons";
 import "egon-core/style.css";
 
 const client = await EgonClient.create({
     container: document.getElementById("canvas")!,
+    defaultIcons,
 });
 
 client.on("story.changed", () => {
@@ -54,9 +57,13 @@ client.on("story.changed", () => {
 });
 ```
 
-Both the runtime (`dist/index.js`) and its type declarations
-(`dist/index.d.ts`) are emitted to `dist/`, and the compiled styles to
-`dist/style.css`. The exported stylesheet includes diagram-js's required editor
+Omit `defaultIcons`, or set it to `false`, to keep the palette empty. The
+explicit `egon-core/icons` import lets application bundlers exclude the
+`Person` and `Document` starter artwork when a host supplies its own icons.
+
+The client runtime (`dist/index.js`), optional icon entry (`dist/icons.js`),
+their type declarations, and the compiled `dist/style.css` are emitted to
+`dist/`. The exported stylesheet includes diagram-js's required editor
 layout, the BPMN icon font, and egon-core's built-in SVG masks. Hosts only need
 to give the canvas container a usable size. See
 [docs/Client.md](docs/Client.md) for the full `EgonClient` API.
@@ -126,7 +133,8 @@ subdomain. The proxy uses loopback HTTP on port `1355` and does not edit
 Its temporary proxy state is shared by egon-core worktrees and may be overridden
 with `PORTLESS_STATE_DIR` when needed.
 
-The canvas palette creates actors and work objects. Select an element to use its
+The demo opts into the packaged `Person` and `Document` starter icons. Its
+canvas palette creates actors and work objects. Select an element to use its
 context pad, double-click shapes or activities to edit them, and use Ctrl/Cmd+Z
 and Ctrl/Cmd+Shift+Z for undo/redo. Export and import use the in-page JSON panel
 only; **New story** resets the canvas while retaining that text.

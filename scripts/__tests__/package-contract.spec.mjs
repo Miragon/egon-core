@@ -58,6 +58,8 @@ describe("installed package contract", () => {
 
         expect(result.emittedFiles).toEqual([
             "chunk.js",
+            "icons.d.ts",
+            "icons.js",
             "index.d.ts",
             "index.js",
             "style.css",
@@ -95,6 +97,8 @@ async function packageFixture(overrides = {}) {
     for (const [file, contents] of Object.entries({
         "index.js": "export {};",
         "index.d.ts": "export {};",
+        "icons.js": "export const defaultIcons = {};",
+        "icons.d.ts": "export declare const defaultIcons: {};",
         "style.css": ".editor {}",
         "chunk.js": "export const chunk = true;",
     })) {

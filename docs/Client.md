@@ -7,6 +7,7 @@ infrastructure (adapters, ports) behind it.
 
 ```ts
 import { EgonClient } from "egon-core";
+import { defaultIcons } from "egon-core/icons";
 import "egon-core/style.css";
 ```
 
@@ -40,6 +41,7 @@ static create(
 | `viewport`     | `ViewportData?`                  | Initial viewport (scroll + zoom).                      |
 | `textRenderer` | `DomainStoryTextRendererConfig?` | Label typography overrides.                            |
 | `colorPicker`  | `ColorPickerProvider \| false`   | Built-in when omitted; custom provider; or no actions. |
+| `defaultIcons` | `IconSetData \| false`           | Optional icon data loaded before creation resolves.    |
 
 `additionalModules` accepts extra diagram-js
 [`ModuleDeclaration`](https://github.com/nikku/didi)s. `ports` is intended for
@@ -56,8 +58,17 @@ the core transaction.
 const client = await EgonClient.create({
     container: document.getElementById("canvas")!,
     viewport: { x: 0, y: 0, width: 1200, height: 800 },
+    defaultIcons,
 });
 ```
+
+`defaultIcons` is an explicitly imported starter pack containing the `Person`
+actor and `Document` work object. Omitting the option or setting it to `false`
+keeps the initial palette empty; a host may pass its own `IconSetData` through
+the same option. Initialization uses the normal icon sanitization and loading
+pipeline before `create()` resolves. If it fails, creation disposes the new
+client and rejects. Later `loadIcons()` calls and document imports replace this
+initial selection normally; removed starters do not return automatically.
 
 ## Document operations
 

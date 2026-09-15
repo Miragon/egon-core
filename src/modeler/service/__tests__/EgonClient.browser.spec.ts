@@ -21,6 +21,7 @@ import type { ViewportData } from "../../domain";
 import type { DomainStoryElementFactory } from "../../infrastructure/element-factory/DomainStoryElementFactory";
 import type { DomainStoryModeling } from "../../infrastructure/modeling/DomainStoryModeling";
 import type { IconDictionaryService } from "../../../iconSet/service";
+import { defaultIcons } from "../../../icons";
 
 /**
  * The other half of `EgonClient.spec.ts`: the same public API, but wired to the
@@ -488,7 +489,7 @@ function renderedArtwork(
 ): string | undefined {
     return container
         .querySelector(`[data-element-id="${elementId}"] .djs-visual > svg`)
-        ?.querySelector("circle, rect, polygon")?.localName;
+        ?.querySelector("circle, rect, polygon, path")?.localName;
 }
 
 describe("EgonClient on real adapters (browser)", () => {
@@ -710,6 +711,113 @@ describe("EgonClient on real adapters (browser)", () => {
     });
 
     describe("icons", () => {
+        it("loads, renders, exports and re-imports the optional starter icons", async () => {
+            const probe = iconRefreshProbe();
+            diagram = await createTestDiagram({ defaultIcons }, [probe.module]);
+            let reopened: TestDiagram | undefined;
+
+            try {
+                expect(diagram.client.getIconConfiguration().name).toBe(
+                    "egon-default",
+                );
+                expect(
+                    diagram.container.querySelector(
+                        '[data-action="domainStory-actorPerson"]',
+                    ),
+                ).not.toBeNull();
+                expect(
+                    diagram.container.querySelector(
+                        '[data-action="domainStory-workObjectDocument"]',
+                    ),
+                ).not.toBeNull();
+
+                const actor = probe.create("actor", "Person");
+                const workObject = probe.create("workObject", "Document");
+                expect(renderedArtwork(diagram.container, actor.id)).toBe(
+                    "path",
+                );
+                expect(renderedArtwork(diagram.container, workObject.id)).toBe(
+                    "path",
+                );
+
+                const exported = diagram.client.export();
+                expect(exported.iconSet.name).toBe("egon-default");
+                expect(exported.iconSet.actors["Person"]).toContain(
+                    "M12 4a4 4 0 1 1 0 8",
+                );
+                expect(exported.iconSet.workObjects["Document"]).toContain(
+                    "M6 2h8l6 6v16",
+                );
+
+                reopened = await createTestDiagram();
+                reopened.client.import(exported);
+                expect(reopened.client.export().iconSet).toEqual(
+                    exported.iconSet,
+                );
+                expect(renderedArtwork(reopened.container, actor.id)).toBe(
+                    "path",
+                );
+                expect(renderedArtwork(reopened.container, workObject.id)).toBe(
+                    "path",
+                );
+            } finally {
+                reopened?.cleanup();
+            }
+        });
+
+        it("keeps starter icon initialization isolated between clients", async () => {
+            diagram = await createTestDiagram({ defaultIcons });
+            const empty = await createTestDiagram();
+
+            try {
+                expect(diagram.client.hasIcon("actor", "Person")).toBe(true);
+                expect(empty.client.getIcons()).toEqual({
+                    actors: {},
+                    workObjects: {},
+                });
+                expect(
+                    empty.container.querySelector(
+                        '[data-action="domainStory-actorPerson"]',
+                    ),
+                ).toBeNull();
+            } finally {
+                empty.cleanup();
+            }
+        });
+
+        it("does not restore starter icons after later replacements", async () => {
+            diagram = await createTestDiagram({ defaultIcons });
+
+            diagram.client.loadIcons({
+                name: "replacement",
+                actors: {
+                    Other: '<svg xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="5" r="5"/></svg>',
+                },
+                workObjects: {},
+            });
+
+            expect(diagram.client.hasIcon("actor", "Person")).toBe(false);
+            expect(diagram.client.hasIcon("workObject", "Document")).toBe(
+                false,
+            );
+            expect(diagram.client.hasIcon("actor", "Other")).toBe(true);
+
+            diagram.client.import({
+                iconSet: { name: "document", actors: {}, workObjects: {} },
+                domainStory: {
+                    businessObjects: [],
+                    title: "",
+                    description: "",
+                    version: "4.0.0",
+                },
+            });
+
+            expect(diagram.client.getIcons()).toEqual({
+                actors: {},
+                workObjects: {},
+            });
+        });
+
         it("loadIcons publishes the set to getIcons/hasIcon and fires icons.changed", async () => {
             diagram = await createTestDiagram();
             // A fresh canvas has no icon set: the export configuration is built

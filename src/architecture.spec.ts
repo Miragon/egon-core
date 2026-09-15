@@ -188,6 +188,13 @@ const FROZEN_INDEX_RUNTIME_EXPORTS: readonly string[] = [
     "PointInTime",
 ];
 
+/** The deliberately narrow, data-only secondary entry from ADR 0039. */
+const FROZEN_ICONS_SPECIFIERS: readonly string[] = [
+    "./iconSet/domain/defaultIcons",
+];
+
+const FROZEN_ICONS_RUNTIME_EXPORTS: readonly string[] = ["defaultIcons"];
+
 /**
  * Column-0 declarations that introduce mutable state at module scope (rule H).
  * Class members are indented, so anchoring at `^` (no leading whitespace)
@@ -472,11 +479,10 @@ describe("architecture", () => {
 
     // ─── G. Public surface freeze ────────────────────────────────────────────
     //
-    // `src/index.ts` is the package barrel and the whole public API. It is frozen
-    // to EgonClient plus the port/wire-format types (ADR 0010): EgonPlugin and
-    // the former internal service exports are gone, and `additionalModules` is
-    // the advanced-integration escape hatch. Widening the surface must be a
-    // deliberate edit to the frozen lists here, never an accident.
+    // `src/index.ts` remains the client entry frozen by ADR 0010. ADR 0039 adds
+    // one narrow, data-only `src/icons.ts` entry without making the client entry
+    // depend on its artwork. Widening either surface must be a deliberate edit
+    // to the frozen lists here, never an accident.
     describe("public surface freeze", () => {
         // G1: the barrel imports exactly the frozen specifiers, and never an
         // infrastructure path (which would pull a didi default module into the
@@ -503,12 +509,82 @@ describe("architecture", () => {
             expect(runtimeExports).toEqual([...FROZEN_INDEX_RUNTIME_EXPORTS]);
         });
 
-        // G3: the package manifest exposes only the barrel, the stylesheet and
-        // its own manifest, and ships only `dist` — so nothing bypasses index.ts.
-        it("package.json exports and files stay locked to the barrel", () => {
+        it("keeps the icons entry data-only and exactly frozen", async () => {
+            const specifiers = [
+                ...new Set(importedModules(readSource("src/icons.ts"))),
+            ].sort();
+            expect(specifiers).toEqual([...FROZEN_ICONS_SPECIFIERS]);
+            expect(
+                specifiers.filter(
+                    (specifier) =>
+                        specifier.endsWith(".css") ||
+                        specifier.endsWith(".scss") ||
+                        !specifier.startsWith("."),
+                ),
+            ).toEqual([]);
+
+            const module = await import("./icons");
+            const runtimeExports = Object.keys(module)
+                .filter((name) => name !== "__esModule")
+                .sort();
+            expect(runtimeExports).toEqual([...FROZEN_ICONS_RUNTIME_EXPORTS]);
+
+            const iconFiles = [
+                "src/icons.ts",
+                "src/iconSet/domain/defaultIcons.ts",
+            ];
+            const forbiddenRuntimeReferences = iconFiles.flatMap((file) => {
+                const content = readSource(file);
+                return [
+                    ...importedModules(content)
+                        .filter(
+                            (specifier) =>
+                                !specifier.startsWith(".") ||
+                                /\.(?:css|scss)$/.test(specifier),
+                        )
+                        .map((specifier) => `${file} → ${specifier}`),
+                    ...(/\b(?:document|window|customElements|HTMLElement|SVGElement)\b/.test(
+                        content,
+                    )
+                        ? [`${file} → DOM global/type`]
+                        : []),
+                ];
+            });
+            expect(forbiddenRuntimeReferences).toEqual([]);
+        });
+
+        it("the main entry cannot reach the optional icon pack", () => {
+            const reachable = new Set(["src/index.ts"]);
+            let changed = true;
+            while (changed) {
+                changed = false;
+                for (const edge of edges) {
+                    if (
+                        edge.external ||
+                        !reachable.has(edge.source) ||
+                        reachable.has(edge.target)
+                    ) {
+                        continue;
+                    }
+                    reachable.add(edge.target);
+                    changed = true;
+                }
+            }
+
+            expect(
+                [...reachable].filter((file) =>
+                    file.endsWith("/defaultIcons.ts"),
+                ),
+            ).toEqual([]);
+        });
+
+        // G3: the package manifest exposes only the client entry, optional icon
+        // data, stylesheet and its own manifest, and ships only `dist`.
+        it("package.json exports and files stay locked to public entries", () => {
             const packageJson = JSON.parse(readSource("package.json"));
             expect(Object.keys(packageJson.exports).sort()).toEqual([
                 ".",
+                "./icons",
                 "./package.json",
                 "./style.css",
             ]);

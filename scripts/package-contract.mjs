@@ -41,6 +41,10 @@ export const EXPECTED_PACKAGE_CONTRACT = Object.freeze({
             types: "./dist/index.d.ts",
             import: "./dist/index.js",
         },
+        "./icons": {
+            types: "./dist/icons.d.ts",
+            import: "./dist/icons.js",
+        },
         "./style.css": "./dist/style.css",
         "./package.json": "./package.json",
     },
@@ -155,6 +159,8 @@ function exportTargets(manifest) {
         manifest.style,
         manifest.exports["."].types,
         manifest.exports["."].import,
+        manifest.exports["./icons"].types,
+        manifest.exports["./icons"].import,
         manifest.exports["./style.css"],
         manifest.exports["./package.json"],
     ];
