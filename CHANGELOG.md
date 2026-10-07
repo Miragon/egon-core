@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.1](https://github.com/Miragon/egon-core/compare/v0.3.0...v0.3.1) (2026-10-07)
+
+### 🐞 Bug Fixes
+
+- make client creation exception safe ([#164](https://github.com/Miragon/egon-core/issues/164)) ([4137bc1](https://github.com/Miragon/egon-core/commit/4137bc116cda10d8b36e7e71a4606a5749aa34a5))
+
 ## [0.3.0](https://github.com/Miragon/egon-core/compare/v0.2.0...v0.3.0) (2026-09-15)
 
 ### 🎉 New Features
