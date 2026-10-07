@@ -21,6 +21,31 @@ type PromotionListener = (
     current: EditorSession,
 ) => void;
 
+/**
+ * Fires diagram teardown without allowing one faulty listener to strand the
+ * listeners and DOM owned by the remaining services.
+ */
+function destroyEventBus(
+    eventBus: EventBus,
+    destroy: () => void = () => eventBus.fire("diagram.destroy"),
+    reportErrors = true,
+): void {
+    const cleanupErrors: unknown[] = [];
+    const handleCleanupError = (event: unknown): false => {
+        cleanupErrors.push((event as { error: unknown }).error);
+        return false;
+    };
+    eventBus.on("error", handleCleanupError);
+    try {
+        destroy();
+    } catch (error) {
+        cleanupErrors.push(error);
+    } finally {
+        eventBus.off("error", handleCleanupError);
+    }
+    if (reportErrors) cleanupErrors.forEach(reportPostCommitError);
+}
+
 /** Owns the one active diagram-js injector and any isolated import candidate. */
 export class EditorSessionOwner {
     private active: EditorSession;
@@ -126,7 +151,7 @@ export class EditorSessionOwner {
                 ? session.canvas.getContainer()
                 : undefined;
         try {
-            session.diagram.destroy();
+            destroyEventBus(session.eventBus, () => session.diagram.destroy());
         } finally {
             canvasContainer?.remove();
             session.iconStyleElement.remove();
@@ -148,6 +173,12 @@ export class EditorSessionOwner {
         canvasHost.appendChild(iconStyleElement);
 
         let diagram: Diagram | undefined;
+        let creationEventBus: EventBus | undefined;
+        const captureEventBus = (eventBus: EventBus): object => {
+            creationEventBus = eventBus;
+            return {};
+        };
+        (captureEventBus as any).$inject = ["eventBus"];
         try {
             diagram = new Diagram({
                 canvas: {
@@ -165,7 +196,17 @@ export class EditorSessionOwner {
                 domainStoryColorPicker: {
                     enabled: this.colorPickerEnabled,
                 },
-                modules: [EgonPlugin, ...this.additionalModules],
+                modules: [
+                    {
+                        __init__: ["domainStoryCreationCleanup"],
+                        domainStoryCreationCleanup: [
+                            "factory",
+                            captureEventBus,
+                        ],
+                    },
+                    EgonPlugin,
+                    ...this.additionalModules,
+                ],
             });
             const canvas = diagram.get<Canvas>("canvas");
             const eventBus = diagram.get<EventBus>("eventBus");
@@ -180,10 +221,17 @@ export class EditorSessionOwner {
             };
         } catch (error) {
             try {
-                diagram?.destroy();
-            } catch {
-                // Preserve the construction error; the caller cannot act on a
-                // teardown error for an editor that never became observable.
+                if (creationEventBus) {
+                    destroyEventBus(
+                        creationEventBus,
+                        () => creationEventBus?.fire("diagram.destroy"),
+                        false,
+                    );
+                } else {
+                    diagram?.destroy();
+                }
+            } catch (cleanupError) {
+                reportPostCommitError(cleanupError);
             } finally {
                 iconStyleElement.remove();
             }
