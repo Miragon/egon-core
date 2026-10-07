@@ -99,70 +99,70 @@ export class EgonClient {
         additionalModules: ModuleDeclaration[] = [],
         ports?: EgonClientPorts,
     ): Promise<EgonClient> {
-        let modelerPort: ModelerPort;
-        let iconPort: IconPort;
-
-        if (ports) {
-            modelerPort = ports.modelerPort;
-            iconPort = ports.iconPort;
-        } else {
-            // dynamic ESM import (works in browser and node ESM)
-            const { DiagramJsModelerAdapter } =
-                await import("../infrastructure/DiagramJsModelerAdapter");
-            const { DiagramJsIconAdapter } =
-                await import("../infrastructure/DiagramJsIconAdapter");
-
-            const modelerAdapter = new DiagramJsModelerAdapter(
-                config.container,
-                config.width ?? "100%",
-                config.height ?? "100%",
-                additionalModules,
-                config.textRenderer,
-                config.colorPicker !== false,
-            );
-
-            modelerPort = modelerAdapter;
-            iconPort = new DiagramJsIconAdapter(
-                modelerAdapter.getSessionOwner(),
-            );
-        }
-
+        let modelerPort: ModelerPort | undefined;
+        let iconPort: IconPort | undefined;
         let colorPickerController: ColorPickerControllerPort | undefined;
-        if (config.colorPicker !== false) {
-            let provider: ColorPickerProvider;
-            if (config.colorPicker) {
-                provider = config.colorPicker;
-            } else {
-                const { createDefaultColorPickerProvider } =
-                    await import("../infrastructure/color-picker/DefaultColorPickerProvider");
-                provider = createDefaultColorPickerProvider(config.container);
-            }
-            const { ColorPickerController } =
-                await import("../infrastructure/color-picker/ColorPickerController");
-            colorPickerController = new ColorPickerController(
-                modelerPort,
-                provider,
-            );
-        }
-
-        const client = new EgonClient(
-            modelerPort,
-            iconPort,
-            config.viewport,
-            colorPickerController,
-        );
 
         try {
+            if (ports) {
+                modelerPort = ports.modelerPort;
+                iconPort = ports.iconPort;
+            } else {
+                // dynamic ESM import (works in browser and node ESM)
+                const { DiagramJsModelerAdapter } =
+                    await import("../infrastructure/DiagramJsModelerAdapter");
+                const { DiagramJsIconAdapter } =
+                    await import("../infrastructure/DiagramJsIconAdapter");
+
+                const modelerAdapter = new DiagramJsModelerAdapter(
+                    config.container,
+                    config.width ?? "100%",
+                    config.height ?? "100%",
+                    additionalModules,
+                    config.textRenderer,
+                    config.colorPicker !== false,
+                );
+
+                modelerPort = modelerAdapter;
+                iconPort = new DiagramJsIconAdapter(
+                    modelerAdapter.getSessionOwner(),
+                );
+            }
+
+            if (config.colorPicker !== false) {
+                let provider: ColorPickerProvider;
+                if (config.colorPicker) {
+                    provider = config.colorPicker;
+                } else {
+                    const { createDefaultColorPickerProvider } =
+                        await import("../infrastructure/color-picker/DefaultColorPickerProvider");
+                    provider = createDefaultColorPickerProvider(
+                        config.container,
+                    );
+                }
+                const { ColorPickerController } =
+                    await import("../infrastructure/color-picker/ColorPickerController");
+                colorPickerController = new ColorPickerController(
+                    modelerPort,
+                    provider,
+                );
+            }
+
+            const client = new EgonClient(
+                modelerPort,
+                iconPort,
+                config.viewport,
+                colorPickerController,
+            );
+
             if (config.defaultIcons) {
                 client.loadIcons(config.defaultIcons);
             }
             return client;
         } catch (error) {
-            try {
-                client.destroy();
-            } catch {
-                // Preserve the initialization failure that made creation fail.
-            }
+            safelyDestroy(colorPickerController);
+            safelyDestroy(iconPort);
+            safelyDestroy(modelerPort);
             throw error;
         }
     }
@@ -426,9 +426,18 @@ export class EgonClient {
     destroy(): void {
         if (this.destroyed) return;
         this.destroyed = true;
-        this.colorPickerController?.destroy();
-        this.iconPort.destroy();
-        this.modelerPort.destroy();
+        safelyDestroy(this.colorPickerController);
+        safelyDestroy(this.iconPort);
+        safelyDestroy(this.modelerPort);
+    }
+}
+
+function safelyDestroy(resource: { destroy(): void } | undefined): void {
+    try {
+        resource?.destroy();
+    } catch {
+        // Creation preserves its original failure; destruction continues so a
+        // faulty disposer cannot strand resources owned by later ports.
     }
 }
 

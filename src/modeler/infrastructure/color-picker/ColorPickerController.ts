@@ -23,15 +23,32 @@ export class ColorPickerController {
         private readonly provider: ColorPickerProvider,
     ) {
         modelerPort.onColorPickerRequested(this.onRequested);
-        modelerPort.onColorPickerClosed(this.onClosed);
+        try {
+            modelerPort.onColorPickerClosed(this.onClosed);
+        } catch (error) {
+            try {
+                modelerPort.offColorPickerRequested(this.onRequested);
+            } catch (cleanupError) {
+                reportPostCommitError(cleanupError);
+            }
+            throw error;
+        }
     }
 
     /** Dispose provider resources before the modeler port tears its session down. */
     destroy(): void {
         if (this.destroyed) return;
         this.destroyed = true;
-        this.modelerPort.offColorPickerRequested(this.onRequested);
-        this.modelerPort.offColorPickerClosed(this.onClosed);
+        try {
+            this.modelerPort.offColorPickerRequested(this.onRequested);
+        } catch (error) {
+            reportPostCommitError(error);
+        }
+        try {
+            this.modelerPort.offColorPickerClosed(this.onClosed);
+        } catch (error) {
+            reportPostCommitError(error);
+        }
 
         const request = this.active;
         if (!request) return;

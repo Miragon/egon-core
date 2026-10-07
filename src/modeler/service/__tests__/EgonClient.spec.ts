@@ -139,6 +139,37 @@ describe("EgonClient (Application Service)", () => {
                 initialViewport,
             );
         });
+
+        it("preserves setup errors while continuing cleanup after a disposer throws", async () => {
+            const ports = createMockPorts();
+            const setupError = new Error("viewport setup failed");
+            const cleanupError = new Error("icon cleanup failed");
+            (ports.mockModelerPort.setViewport as Mock).mockImplementation(
+                () => {
+                    throw setupError;
+                },
+            );
+            (ports.mockIconPort.destroy as Mock).mockImplementation(() => {
+                throw cleanupError;
+            });
+
+            await expect(
+                EgonClient.create(
+                    {
+                        container,
+                        viewport: { x: 1, y: 2, width: 3, height: 4 },
+                        colorPicker: false,
+                    },
+                    [],
+                    {
+                        modelerPort: ports.mockModelerPort,
+                        iconPort: ports.mockIconPort,
+                    },
+                ),
+            ).rejects.toBe(setupError);
+            expect(ports.mockIconPort.destroy).toHaveBeenCalledOnce();
+            expect(ports.mockModelerPort.destroy).toHaveBeenCalledOnce();
+        });
     });
 
     describe("initial icon configuration", () => {
@@ -223,6 +254,38 @@ describe("EgonClient (Application Service)", () => {
     });
 
     describe("color picker configuration", () => {
+        it("rolls back a partial controller and all created ports", async () => {
+            const ports = createMockPorts();
+            const setupError = new Error("closed listener failed");
+            (
+                ports.mockModelerPort.onColorPickerClosed as Mock
+            ).mockImplementation(() => {
+                throw setupError;
+            });
+
+            await expect(
+                EgonClient.create(
+                    {
+                        container,
+                        colorPicker: () => ({
+                            result: Promise.resolve(null),
+                            dispose: vi.fn(),
+                        }),
+                    },
+                    [],
+                    {
+                        modelerPort: ports.mockModelerPort,
+                        iconPort: ports.mockIconPort,
+                    },
+                ),
+            ).rejects.toBe(setupError);
+            expect(
+                ports.mockModelerPort.offColorPickerRequested,
+            ).toHaveBeenCalledOnce();
+            expect(ports.mockIconPort.destroy).toHaveBeenCalledOnce();
+            expect(ports.mockModelerPort.destroy).toHaveBeenCalledOnce();
+        });
+
         it("installs the built-in provider when omitted", async () => {
             const ports = createMockPorts();
             const configured = await EgonClient.create({ container }, [], {

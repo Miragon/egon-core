@@ -1,10 +1,12 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ModuleDeclaration } from "didi";
 import {
     createTestDiagram,
     type TestDiagram,
 } from "../../__tests__/helpers/createTestDiagram";
 import { importFixture } from "../../__tests__/helpers/importFixture";
 import type { DomainStoryDocument } from "../../story/domain/DomainStoryDocument";
+import { EgonClient } from "../service/EgonClient";
 
 /**
  * Browser-tier smoke test — the proof the whole harness works end to end.
@@ -48,5 +50,59 @@ describe("EgonClient boot (browser)", () => {
         // The model also round-trips back out through the live element registry.
         const exported = diagram.client.export();
         expect(exported.domainStory.businessObjects.length).toBeGreaterThan(0);
+    });
+
+    it("cleans every partially booted resource and permits a clean retry", async () => {
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const callback = vi.fn();
+        const marker = document.createElement("div");
+        marker.dataset["creationProbe"] = "";
+
+        const createProbe = (eventBus: {
+            on(event: string, callback: () => void): void;
+        }): object => {
+            container.appendChild(marker);
+            window.addEventListener("egon.creation.probe", callback);
+            eventBus.on("diagram.destroy", () => {
+                throw new Error("faulty disposer");
+            });
+            eventBus.on("diagram.destroy", () => {
+                marker.remove();
+                window.removeEventListener("egon.creation.probe", callback);
+            });
+            return {};
+        };
+        (createProbe as any).$inject = ["eventBus"];
+        const fail = (): never => {
+            throw new Error("injected creation failure");
+        };
+        const failingModule: ModuleDeclaration = {
+            __init__: ["creationProbe", "creationFailure"],
+            creationProbe: ["factory", createProbe],
+            creationFailure: ["factory", fail],
+        };
+
+        await expect(
+            EgonClient.create({ container, colorPicker: false }, [
+                failingModule,
+            ]),
+        ).rejects.toThrow("injected creation failure");
+
+        window.dispatchEvent(new Event("egon.creation.probe"));
+        expect(callback).not.toHaveBeenCalled();
+        expect(container.querySelector("[data-creation-probe]")).toBeNull();
+        expect(container.querySelector(".djs-container")).toBeNull();
+        expect(container.querySelector("[data-egon-icons-css]")).toBeNull();
+
+        const recovered = await EgonClient.create({
+            container,
+            colorPicker: false,
+        });
+        expect(container.querySelector(".djs-container")).not.toBeNull();
+        recovered.destroy();
+        recovered.destroy();
+        expect(container.children).toHaveLength(0);
+        container.remove();
     });
 });
