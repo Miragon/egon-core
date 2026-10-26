@@ -97,20 +97,21 @@ validation, and migration details.
 
 ## Scripts
 
-| Script                 | Description                                            |
-| ---------------------- | ------------------------------------------------------ |
-| `yarn build`           | Production build → `dist/` (ESM, `.d.ts` tree, styles) |
-| `yarn dev`             | Build in development mode                              |
-| `yarn demo`            | Start the public-API demo through portless             |
-| `yarn test`            | Run the unit suite (Vitest, jsdom)                     |
-| `yarn test:watch`      | Run unit tests in watch mode                           |
-| `yarn test:coverage`   | Run unit tests with coverage                           |
-| `yarn test:browser`    | Run browser-tier Vitest integration specs              |
-| `yarn test:e2e`        | Run public Playwright journeys and stylesheet checks   |
-| `yarn test:e2e:headed` | Run the Playwright journeys in a visible browser       |
-| `yarn test:package`    | Pack and test an isolated installed-package consumer   |
-| `yarn typecheck`       | Type-check library, tests, demo, and e2e code          |
-| `yarn lint`            | Lint with ESLint                                       |
+| Script                       | Description                                             |
+| ---------------------------- | ------------------------------------------------------- |
+| `yarn build`                 | Production build → `dist/` (ESM, `.d.ts` tree, styles)  |
+| `yarn dev`                   | Build in development mode                               |
+| `yarn demo`                  | Start the public-API demo through portless              |
+| `yarn test`                  | Run the unit suite (Vitest, jsdom)                      |
+| `yarn test:watch`            | Run unit tests in watch mode                            |
+| `yarn test:coverage`         | Run unit and browser specs with merged coverage gates   |
+| `yarn test:coverage:ratchet` | Same, and raise any layer threshold that gained a point |
+| `yarn test:browser`          | Run browser-tier Vitest integration specs               |
+| `yarn test:e2e`              | Run public Playwright journeys and stylesheet checks    |
+| `yarn test:e2e:headed`       | Run the Playwright journeys in a visible browser        |
+| `yarn test:package`          | Pack and test an isolated installed-package consumer    |
+| `yarn typecheck`             | Type-check library, tests, demo, and e2e code           |
+| `yarn lint`                  | Lint with ESLint                                        |
 
 Typechecking uses TypeScript 7 (`yarn tsc`, supplied by `@typescript/native`).
 The `typescript` dependency aliases the TypeScript 6 compatibility API needed

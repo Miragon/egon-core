@@ -23,12 +23,21 @@ function hitTarget(modeler: TestModeler, element: Element): SVGElement {
     )!;
 }
 
+// Clicks only while the pad is closed, because clicking a selected element
+// deselects it and closes the pad. Retrying absorbs diagram-js's post-drag
+// ghost-click trap, which swallows one element click for up to 400 ms, without
+// depending on whether that trap is still armed.
 async function openPad(modeler: TestModeler, element: Element) {
-    await userEvent.click(hitTarget(modeler, element), {
-        force: true,
-    } as never);
+    const contextPad = modeler.get<any>("contextPad");
     await expect
-        .poll(() => modeler.get<any>("contextPad").isOpen(element))
+        .poll(async () => {
+            if (!contextPad.isOpen(element)) {
+                await userEvent.click(hitTarget(modeler, element), {
+                    force: true,
+                } as never);
+            }
+            return contextPad.isOpen(element);
+        })
         .toBe(true);
     return modeler.container.querySelector<HTMLElement>(
         ".djs-context-pad.open",
@@ -110,12 +119,6 @@ describe("context-pad DOM interactions", () => {
         if (modeler.container.querySelector(".djs-direct-editing-content")) {
             await userEvent.keyboard("{Escape}");
         }
-        // diagram-js consumes the first post-drag element click as a ghost-click
-        // guard. Drive that documented transition explicitly before starting a
-        // distinct context-pad gesture.
-        await userEvent.click(hitTarget(modeler, actor), {
-            force: true,
-        } as never);
 
         await clickEntry(modeler, actor, "connect");
         await userEvent.click(hitTarget(modeler, target), {
