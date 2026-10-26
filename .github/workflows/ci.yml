@@ -38,35 +38,59 @@ jobs:
             - uses: ./.github/actions/setup
             - run: yarn format:check
 
+    # Runs the unit and browser tiers together so coverage is merged and gated
+    # per layer (ADR TST-1). The browser tier needs chromium on the runner.
     test:
         runs-on: ubuntu-latest
+        # actions: read lets a PR fetch main's coverage baseline artifact;
         # pull-requests: write lets the coverage action post/update its comment.
         permissions:
             contents: read
+            actions: read
             pull-requests: write
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-            - uses: ./.github/actions/setup
-            - run: yarn test:coverage
-            # if: always() so a failing test run still reports coverage;
-            # continue-on-error so read-only fork tokens can't fail the job.
-            - name: Report coverage on the PR
-              if: always() && github.event_name == 'pull_request'
-              continue-on-error: true
-              uses: davelosert/vitest-coverage-report-action@8f86cfb56ed6d5613ea8cdc5259f207fbfd51ece # v2.13.1
-
-    # Real-browser tier: boots a genuine EgonClient in headless chromium, which
-    # jsdom can't (diagram-js measures SVG via getBBox). Kept a separate job so
-    # the fast unit `test` job still gates coverage without a browser download.
-    test-browser:
-        runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - uses: ./.github/actions/setup
             # --with-deps pulls chromium's apt libraries; the browser version is
             # pinned via the exact-pinned playwright dependency.
             - run: yarn playwright install --with-deps chromium
-            - run: yarn test:browser
+            - run: yarn test:coverage
+            # Every green main push publishes the baseline that PR comments
+            # compare against.
+            - name: Upload coverage baseline
+              if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  name: coverage-summary-main
+                  path: coverage/coverage-summary.json
+                  retention-days: 90
+            # The newest successful main run is the baseline. A missing baseline
+            # only drops the deltas from the comment, so it never fails the job.
+            - name: Download coverage baseline
+              id: baseline
+              if: always() && github.event_name == 'pull_request'
+              continue-on-error: true
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  run_id=$(gh run list --repo "$GITHUB_REPOSITORY" \
+                    --workflow ci.yml --branch main --event push --status success \
+                    --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+                  test -n "$run_id"
+                  gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+                    --name coverage-summary-main --dir coverage-main
+                  echo "summary=coverage-main/coverage-summary.json" >> "$GITHUB_OUTPUT"
+            # if: always() so a failing test run still reports coverage;
+            # continue-on-error so read-only fork tokens can't fail the job.
+            # The action reads only the first threshold in vite.config.mts, so
+            # its targets are the domain's; the per-layer gate is vitest's.
+            - name: Report coverage on the PR
+              if: always() && github.event_name == 'pull_request'
+              continue-on-error: true
+              uses: davelosert/vitest-coverage-report-action@8f86cfb56ed6d5613ea8cdc5259f207fbfd51ece # v2.13.1
+              with:
+                  json-summary-compare-path: ${{ steps.baseline.outputs.summary }}
+                  file-coverage-mode: changes
 
     # Source-based public-consumer browser journeys: resolve the public package
     # specifiers through exact development aliases and drive only the UI.
@@ -153,7 +177,6 @@ jobs:
                 typecheck,
                 format-check,
                 test,
-                test-browser,
                 test-e2e,
                 test-package,
                 build,

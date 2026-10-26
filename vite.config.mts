@@ -1,6 +1,6 @@
 /// <reference types="vitest" />
 import { defineConfig } from "vite";
-import { configDefaults, coverageConfigDefaults } from "vitest/config";
+import { configDefaults } from "vitest/config";
 import { playwright } from "@vitest/browser-playwright";
 import dts from "vite-plugin-dts";
 import tsconfigPaths from "vite-tsconfig-paths";
@@ -97,10 +97,11 @@ export default defineConfig({
     },
     // Two tiers, split by vitest projects (ADR TST-1). Root options are shared
     // via `extends: true`; each project narrows environment and file set.
-    // - `unit`: fast jsdom suite; the default `yarn test`/coverage loop. Ports
-    //   and diagram-js are mocked here.
+    // - `unit`: fast jsdom suite; the default `yarn test` loop. Ports and
+    //   diagram-js are mocked here.
     // - `browser`: real chromium via playwright, the only tier where a genuine
     //   EgonClient boot renders (jsdom can't compute SVG getBBox).
+    // `yarn test:coverage` runs both and merges their coverage into one report.
     test: {
         globals: true,
         environment: "jsdom",
@@ -113,28 +114,47 @@ export default defineConfig({
             reportsDirectory: "coverage",
             // Include untested production files as well as loaded modules (Vitest 4).
             include: ["src/**/*.ts", "src/**/*.tsx"],
-            // The public-consumer harness has its own Playwright verification. Do
-            // not count unrelated demo/config/launcher files as uncovered in
-            // the unit-only report (ADR TST-3).
+            // Vitest's default exclude list is empty, so name every non-production
+            // path: test helpers and fixtures, ambient types, and the entry barrels
+            // that only re-export (ADR TST-1).
             exclude: [
-                ...coverageConfigDefaults.exclude,
-                "demo/**",
-                "scripts/**",
-                "playwright.config.ts",
+                "src/**/__tests__/**",
+                "src/**/*.d.ts",
+                "src/types/**",
+                "src/icons.ts",
+                "src/index.ts",
             ],
             // json-summary + json feed the PR coverage-report action; the v8
             // default omits them, so name the reporters explicitly.
             reporter: ["text", "json-summary", "json"],
-            // Coverage runs unit-only, so gate just the framework-free domain
-            // model — the layer that must stay well-tested. Ratchet upward as
-            // coverage improves; never lower to make a red build pass.
+            // Coverage merges both projects, so every layer is gated at its
+            // measured value rounded down (ADR TST-1). Thresholds only ratchet up:
+            // `yarn test:coverage:ratchet` raises any layer that gained a whole
+            // point. Lowering one needs a decision in ADR TST-1.
             thresholds: {
                 "src/**/domain/**": {
-                    statements: 80,
+                    statements: 99,
                     branches: 98,
-                    functions: 80,
-                    lines: 80,
+                    functions: 99,
+                    lines: 99,
                 },
+                "src/*/service/**": {
+                    statements: 97,
+                    branches: 91,
+                    functions: 99,
+                    lines: 98,
+                },
+                "src/*/infrastructure/**": {
+                    statements: 90,
+                    branches: 81,
+                    functions: 92,
+                    lines: 91,
+                },
+                // Rewrites this file, so it is opt-in and never set in CI.
+                autoUpdate:
+                    process.env["COVERAGE_RATCHET"] === "1"
+                        ? (threshold: number) => Math.floor(threshold)
+                        : false,
             },
         },
         projects: [

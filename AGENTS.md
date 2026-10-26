@@ -13,7 +13,11 @@ only from `src/index.ts`.
 ## Commands
 
 - `yarn build` — vite library build (ESM + `.d.ts` via vite-plugin-dts + style.css)
-- `yarn test` / `yarn test:watch` / `yarn test:coverage` — vitest, jsdom environment, config lives in `vite.config.mts`
+- `yarn test` / `yarn test:watch` — vitest unit project (jsdom); config lives in `vite.config.mts`
+- `yarn test:coverage` — unit + browser projects with merged coverage and
+  per-layer thresholds (needs `yarn playwright install chromium`).
+  `yarn test:coverage:ratchet` raises a layer's threshold once it gains a
+  whole point (ADR TST-1); commit that config change with the PR.
 - `yarn lint` / `yarn format` — eslint / prettier
 - `yarn typecheck` — checks library, spec, and demo tsconfigs; run it, not bare `tsc`
 - Yarn 4 (pinned via `packageManager`) — never use npm/npx

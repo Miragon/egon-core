@@ -3,11 +3,14 @@
 Test tiers, coverage, the domain mutation gate, and how the published package
 is validated.
 
-## <a id="tst-1"></a>TST-1 — Two test tiers: fast jsdom unit tests, real-Chromium browser tests
+## <a id="tst-1"></a>TST-1 — Two test tiers with merged, per-layer coverage gates
 
 - Status: accepted
 - History: 2026-07-24 decided (ADR 0013); 2026-09-14 Vitest 4 provider and
-  explicit coverage inputs (ADR 0036)
+  explicit coverage inputs (ADR 0036); 2026-10-26 coverage merges both tiers
+  and gates each layer, the exclusions are explicit (#174)
+- Enforced by: `coverage.thresholds` in `vite.config.mts`, checked by the CI
+  `test` job
 
 **Context.** A real `EgonClient.create()` boot cannot run under jsdom.
 diagram-js measures SVG with `getBBox`, which jsdom reports as zero, so the
@@ -15,24 +18,45 @@ canvas never renders and the boot path goes untested. The local `yarn test`
 loop must stay fast. Downloading a browser and rendering for real on every run
 would push people to skip tests.
 
+Vitest collects coverage from the browser tier as well, but CI ran coverage
+over the unit project only. At `32075e3` that reported 62.8% statements while
+both tiers together covered 92.9%. The unit-only number pushed contributors toward brittle unit mocks for
+adapter behaviour that browser specs already exercised. The only gate,
+`src/**/domain/**` at 80% statements, sat 19 points below the measured 99.1%,
+so it never caught a regression. Vitest's default coverage exclude list is
+empty, so test helpers and fixtures counted as production code.
+
 **Decision.**
 
 - There are two Vitest projects:
-    - `unit` runs under jsdom and is the default for `yarn test`,
-      `test:watch`, and `test:coverage`. Ports and diagram-js are mocked here.
+    - `unit` runs under jsdom and is the default for `yarn test` and
+      `test:watch`. Ports and diagram-js are mocked here.
     - `browser` runs headless Chromium through `@vitest/browser-playwright` and
-      includes only `*.browser.spec.ts` files. It runs with `yarn test:browser`
-      locally and as a separate required `test-browser` job in CI.
+      includes only `*.browser.spec.ts` files. It runs alone with
+      `yarn test:browser`.
 - Shared helpers and fixtures live in `src/__tests__/`, which the architecture
   scans skip. `importFixture` loads fixtures as JSON modules and clones them on
   every call, so the same registry works in Node, jsdom, and the browser.
 - Coverage:
-    - It runs in the unit tier only.
-    - It explicitly includes every source file, so untested production files
-      count.
-    - It gates `src/**/domain/**` with the thresholds in `vite.config.mts`.
-    - Thresholds only go up. Never lower a threshold or exclude production files
-      to make a build pass.
+    - `yarn test:coverage` runs both projects and merges their coverage into
+      one report. CI runs it in a single `test` job that installs Chromium.
+      Shard with blob reports only once the browser tier takes more than about
+      60 seconds.
+    - It includes every file under `src/`, so untested production files count.
+      It excludes, explicitly, `src/**/__tests__/**`, `src/**/*.d.ts`,
+      `src/types/**`, and the re-export entries `src/index.ts` and
+      `src/icons.ts`.
+    - Each layer has its own thresholds in `vite.config.mts`:
+      `src/**/domain/**`, `src/*/service/**`, and `src/*/infrastructure/**`.
+      Each starts at its measured merged value, rounded down.
+    - **Ratchet.** A PR that raises a layer by one point or more raises its
+      threshold in the same PR. `yarn test:coverage:ratchet` does this
+      locally through Vitest's `autoUpdate`, rounded down to whole points.
+      `autoUpdate` never runs in CI.
+    - Lowering a threshold, or excluding production files, requires changing
+      this decision.
+    - The PR comment shows the delta against the newest green `main` run,
+      which uploads its coverage summary as an artifact.
 - Vitest, its browser provider, and its coverage packages are pinned to the
   same version.
 
@@ -40,21 +64,32 @@ would push people to skip tests.
 
 - **One environment for everything (happy-dom or a heavier jsdom shim):** no
   DOM shim computes real SVG geometry.
-- **Coverage thresholds for all of `src`:** most infrastructure code is
-  reachable only from the browser tier, which reports no coverage. A global
-  gate would either be trivially low or force brittle mocks.
+- **Unit-only coverage (the original decision):** it understated coverage by
+  30 points and rewarded mocking diagram-js over driving it.
+- **One threshold for all of `src`:** the layers differ by up to 17 points
+  (branches), so a single number is either slack for the domain or out of
+  reach for infrastructure.
+- **`autoUpdate` in CI:** it rewrites the config in a throwaway checkout.
+  Thresholds change only through a reviewed diff.
 
 **Consequences.**
 
-- CI has a slower, separate browser job. The local loop is unchanged.
+- `yarn test` stays a fast jsdom loop. `yarn test:coverage` needs Chromium
+  locally (`yarn playwright install chromium`), and the CI coverage job
+  downloads it.
 - A browser spec must end in `.browser.spec.ts`. Otherwise it runs under jsdom
   and fails on `getBBox`.
-- Browser specs add no coverage, so pure logic needs unit tests to count.
+- Browser specs count toward coverage, so adapter behaviour can be tested
+  through the real canvas ([TST-2](#tst-2)). The mutation gate
+  ([TST-4](#tst-4)) still runs only the unit project, so domain logic needs
+  unit specs.
+- A flaky browser spec now also blocks the coverage gate.
 
 ## <a id="tst-2"></a>TST-2 — Specs that drive the canvas are browser tier
 
 - Status: accepted
-- History: 2026-07-26 decided (ADR 0014)
+- History: 2026-07-26 decided (ADR 0014); 2026-10-26 adapter specs may move
+  to the browser tier without losing coverage (#174)
 
 **Context.** The modeling-command suite (#55) was meant to use a real
 `Diagram` in jsdom, but jsdom cannot support it:
@@ -72,6 +107,11 @@ through `modeling.*`, `commandStack.execute`, `copyPaste.*`, or `import()`.
 Specs that never touch the canvas stay in the unit tier, for example event-bus
 listeners, numbering arithmetic, and policies.
 
+Coverage merges both tiers ([TST-1](#tst-1)). An adapter spec that mocks
+diagram-js in the unit tier may move to the browser tier and drive the real
+canvas instead, without losing coverage. Domain specs stay in the unit tier,
+because the mutation gate ([TST-4](#tst-4)) runs only there.
+
 There are two harness entry points:
 
 - `createTestDiagram()` boots `EgonClient`, for public-API specs.
@@ -87,14 +127,17 @@ comment explains why the spec is in its tier.
 - **A real `Diagram` in jsdom:** no command runs.
 - **Mock `SvgTransformUtil` across an integration suite:** this mocks away the
   thing under test while looking like coverage.
-- **Put everything in the browser tier:** this slows the default loop and drops
-  specs out of coverage.
+- **Put everything in the browser tier:** this slows the default loop and takes
+  specs out of the mutation gate's unit run.
 
 **Consequences.**
 
 - Modeling regressions show up in the browser tier. To keep that tier cheap,
   create one `createTestModeler()` per `it` and clean it up in `afterEach`.
   Leaked canvases slow the tier down far more than the number of spec files.
+- Browser specs wait on observable state, never on diagram-js timers. For
+  example, the post-drag click trap expires after 400 ms, so a step that
+  relies on it fails under load (#174).
 
 ## <a id="tst-3"></a>TST-3 — Public journeys run against the installed package
 
