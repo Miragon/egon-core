@@ -8,28 +8,18 @@ import { Rect } from "diagram-js/lib/util/Types";
 import { DomainStoryLabelEditingPreview } from "../DomainStoryLabelEditingPreview";
 import { ElementTypes } from "../../../../story/domain/elementTypes";
 
-// jsdom does not implement SVGSVGElement.createSVGTransform, so diagram-js's
-// translate() throws. It only positions the preview group and never touches the
-// path's `d`, so stubbing it keeps the test on jsdom without affecting what we
-// assert.
+// jsdom lacks SVGSVGElement.createSVGTransform, so translate() throws. It never
+// touches the path's `d`, so stubbing it keeps the test on jsdom.
 vi.mock("diagram-js/lib/util/SvgTransformUtil", () => ({
     translate: vi.fn(),
 }));
 
 /**
- * Regression test for the annotation-resize preview (issue #8). The resize
- * handler used to call `svgAttr(path, pathString)` — passing the path *string*
- * where tiny-svg treats a string second argument as a getter, so the bracket
- * preview silently never followed the annotation's new height. The fix passes
- * an attrs object (`{ d: ... }`); this test drives activate→resize and asserts
- * the rendered path's `d` actually changes. jsdom supplies the SVG DOM.
+ * tiny-svg treats a string second argument to `svgAttr` as a getter, so the
+ * bracket preview must be updated with an attrs object to follow the new height.
  */
 
-/**
- * Records handlers by event name and fires them with the raw context object.
- * diagram-js copies fired data onto the event the listener receives, so the
- * handlers' `context.active`/`context.height` reads work against this stand-in.
- */
+/** Fires handlers with the raw context; diagram-js copies fired data onto the event. */
 class RecordingEventBus {
     private readonly handlers = new Map<string, (context: any) => void>();
 
@@ -48,11 +38,7 @@ class RecordingEventBus {
     }
 }
 
-/**
- * Minimal Canvas: hands back the layer the preview appends to and a fixed
- * absolute bbox (height 50) that the resize handler divides by. Marker calls
- * are irrelevant to the path assertion, so they are no-ops.
- */
+/** Fixed absolute bbox height 50, which the resize handler divides by. */
 function makeCanvas(defaultLayer: SVGElement, bbox: Rect): Canvas {
     return {
         getDefaultLayer: () => defaultLayer,

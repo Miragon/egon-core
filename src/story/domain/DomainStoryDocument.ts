@@ -2,13 +2,8 @@ import type { Scope } from "./scope";
 import type { IconSetExportConfiguration } from "./iconSet";
 
 /**
- * A complete domain story document in the EGN v4.0.0 shape.
- *
- * It is deliberately structurally identical to the on-disk file, so the modeler
- * adapter round-trips it with a plain `JSON.stringify`/`JSON.parse` and needs no
- * field mapping. `iconSet` and `Scope` reuse the shared domain DTOs (both
- * dependency-free) rather than duplicating them, keeping a single source of
- * truth for the wire format.
+ * A complete domain story in the EGN v4.0.0 shape. It is structurally identical
+ * to the file, so it round-trips through plain `JSON.stringify`/`JSON.parse`.
  */
 export interface DomainStoryDocument {
     readonly iconSet: IconSetExportConfiguration;

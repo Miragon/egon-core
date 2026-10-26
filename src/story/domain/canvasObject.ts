@@ -3,12 +3,9 @@ import { ActivityBusinessObject } from "./activityBusinessObject";
 import { Waypoint } from "./waypoint";
 
 /**
- * The canvas-element cluster of the domain model. `CanvasObject`,
- * `ActivityCanvasObject` and `RootObject` are mutually recursive — elements
- * know their parent and their connecting activities, activities connect
- * elements, the root holds children — so they live in one file: splitting
- * them across files forces an import cycle, which the architecture tests
- * (src/architecture.spec.ts) forbid.
+ * `CanvasObject`, `ActivityCanvasObject` and `RootObject` are mutually
+ * recursive, so they share one file: splitting them creates an import cycle,
+ * which the architecture tests forbid.
  */
 export interface RootObject {
     children: CanvasObject[];

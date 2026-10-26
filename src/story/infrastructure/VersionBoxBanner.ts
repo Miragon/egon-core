@@ -5,10 +5,7 @@ import VersionBox from "../../shared/infrastructure/ui/VersionBox";
 import { VersionBannerPort } from "../domain/ports/VersionBannerPort";
 
 /**
- * Infrastructure adapter that renders the imported story's version as a floating
- * VersionBox. This is the DOM half the import service must not own: locating the
- * instance's canvas and the diagram-js `html`/`render` call live here, behind
- * {@link VersionBannerPort}.
+ * The DOM half of {@link VersionBannerPort}, kept out of the import service.
  */
 export class VersionBoxBanner implements VersionBannerPort {
     static $inject: string[] = ["canvas", "eventBus"];

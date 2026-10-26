@@ -11,15 +11,8 @@ import { DomainStoryNumberingRegistry } from "../../popup/DomainStoryNumberingRe
 
 /**
  * The whole activity-edit transaction: label, number, multiple-number allowance
- * and the renumbering cascade the new number triggers.
- *
- * WHY it owns all of it: the popup used to mutate the business object before
- * executing this command and run the cascade after it, which left three of the
- * four steps outside the undo stack. `preExecute` therefore snapshotted an
- * already-edited model (undo restored the *new* number) and `redo` — which
- * re-runs `execute` only — re-applied the edit without the cascade, duplicating
- * numbers. The transaction boundary belongs to the command; the popup only
- * builds the context.
+ * and the renumbering cascade. All of it lives here so undo and redo cover every
+ * step; the popup only builds the context.
  */
 export class ActivityChangedHandler implements CommandHandler {
     static $inject: string[] = [
@@ -34,11 +27,7 @@ export class ActivityChangedHandler implements CommandHandler {
         private readonly numberingRegistry: DomainStoryNumberingRegistry,
     ) {}
 
-    /**
-     * Snapshots only — this runs once and is *skipped on redo*, so every field
-     * here must be a value read before any mutation. Nothing may be changed from
-     * this phase or the redo path would diverge from the first execute.
-     */
+    /** Snapshots only: skipped on redo, so a mutation here breaks redo. */
     preExecute(context: CommandContext) {
         context.oldLabel = context.businessObject.name;
         context.oldNumber = context.businessObject.number;
@@ -50,24 +39,14 @@ export class ActivityChangedHandler implements CommandHandler {
     }
 
     /**
-     * Applies the edit *and* the cascade it triggers. Three non-obvious
-     * constraints:
+     * Also the redo path (diagram-js re-runs `execute` alone), so the cascade must
+     * run here. It may not use the command stack: `CommandStack._atomicDo` throws
+     * "illegal invocation" on nested actions.
      *
-     * - This **is** the redo path (diagram-js re-runs `execute` alone), so
-     *   anything the popup used to do after `commandStack.execute` has to happen
-     *   here or redo re-applies half the edit.
-     * - It may not touch the command stack: `CommandStack._atomicDo` is active
-     *   during `execute`/`revert` and a nested action throws "illegal invocation".
-     *   The cascade stays direct mutation plus `eventBus.fire`.
-     * - The truthiness guard on `newNumber` is load-bearing: `PopupMenu` maps an
-     *   empty number field to `0`, and cascading from `0` would walk the registry
-     *   from its `[false]` sentinel slot and renumber everything.
-     * - Clearing the number field of an actor-sourced activity **re-mints** one.
-     *   That is not new behaviour: until #74 the repaint that followed this
-     *   command found `number == null` and minted it in `renderExternalNumber`.
-     *   Drawing is a read now, so the transaction that cleared the number has to
-     *   be the one that replaces it, or the step would silently leave the
-     *   sequence.
+     * The truthiness guard on `newNumber` matters: `PopupMenu` maps an empty field
+     * to `0`, and cascading from `0` would renumber everything from the registry's
+     * `[false]` sentinel slot. Clearing an actor-sourced activity's number mints a
+     * new one so the step stays in the sequence.
      */
     execute(context: CommandContext): ElementLike[] {
         const businessObject = context.businessObject;
@@ -84,9 +63,8 @@ export class ActivityChangedHandler implements CommandHandler {
         businessObject.multipleNumberAllowed =
             context.newMultipleNumberAllowed ?? false;
 
-        // Computed *after* the clear above, so it reads a registry in which this
-        // activity holds no number and cannot collide with itself. The write
-        // belongs here, inside execute, so revert can put the old number back.
+        // After the clear above, so the new number cannot collide with this
+        // activity's old one.
         if (!context.newNumber && isActor(element["source"])) {
             businessObject.number =
                 this.numberingRegistry.generateAutomaticNumber();
@@ -100,10 +78,8 @@ export class ActivityChangedHandler implements CommandHandler {
             });
         }
 
-        // Fired last so the edited element redraws against the final state. Only
-        // this element is returned: the cascaded ones already got their own
-        // `element.changed` from the registry, and naming them here would double
-        // the redraw.
+        // Only this element: the registry already fired `element.changed` for the
+        // cascaded ones, and returning them would redraw them twice.
         this.eventBus.fire("element.changed", { element });
 
         return [element];
@@ -120,10 +96,8 @@ export class ActivityChangedHandler implements CommandHandler {
             context.oldMultipleNumberRegistry,
         );
 
-        // Overlaps with the line above for an actor-sourced activity (the
-        // snapshot contains it and re-assigns the same value). Harmless — and the
-        // line above is what keeps a work-object-sourced activity, which never
-        // appears in this snapshot, correct.
+        // Re-assigns an actor-sourced activity's number again. Harmless; the line
+        // above covers work-object-sourced ones, which the snapshot lacks.
         revertAutomaticNumberGenerationChange(
             context.oldNumbersWithIDs,
             this.elementRegistryService.getActivitiesFromActors(),
@@ -142,15 +116,8 @@ export class ActivityDirectionChangedHandler implements CommandHandler {
     constructor(private readonly eventBus: EventBus) {}
 
     /**
-     * Snapshots only, so `revert` can put the pre-swap state back — `execute` is
-     * the redo path and must not depend on anything this phase computed.
-     *
-     * `null`, not `0`, is "this activity has no number" (#74). The `0` this used
-     * to normalize to was laundered away by the repaint that followed:
-     * `renderExternalNumber` overwrote the number of every non-actor-sourced
-     * activity with `null`. With drawing reduced to a read, that `0` would
-     * survive into the exported file as `"number": 0` — a value no other writer
-     * produces and no reader expects.
+     * Snapshots only: skipped on redo. `null`, not `0`, means "no number"; a `0`
+     * would be exported as `"number": 0`, which no reader expects.
      */
     preExecute(context: CommandContext) {
         context.oldNumber = context.businessObject.number ?? null;
@@ -162,10 +129,8 @@ export class ActivityDirectionChangedHandler implements CommandHandler {
         const element: Connection = context.element;
         const swapSource = element.source;
         const waypoints = element.waypoints;
-        // Reverse the array without changing the live waypoint order in place.
-        // The persisted copy below must also be independent of these points:
-        // imported connections can have `element.waypoints` and
-        // `businessObject.waypoints` aliased before this command runs.
+        // Copy, never reverse in place: imported connections can alias
+        // `element.waypoints` and `businessObject.waypoints`.
         const newWaypoints = [...waypoints].reverse();
 
         element.source = element.target;
@@ -173,8 +138,7 @@ export class ActivityDirectionChangedHandler implements CommandHandler {
         element.target = swapSource;
         businessObject.target = swapSource?.id;
 
-        // See `preExecute`: the context pad passes `null` for "the swap makes a
-        // work object the source", and nothing downstream normalizes it any more.
+        // `null` when the swap makes a work object the source.
         businessObject.number = context.newNumber ?? null;
         element.waypoints = newWaypoints;
         businessObject.waypoints = copyWaypoints(newWaypoints);
@@ -205,11 +169,8 @@ export class ActivityDirectionChangedHandler implements CommandHandler {
 }
 
 /**
- * Copies connection points the same way the connection updater does.
- *
- * `diagram-js` does not declare the optional `original` docking anchor on its
- * `Point` type, but imported and cropped activities can carry it. Clone that
- * nested point too so persisted geometry never aliases the live connection.
+ * Deep-copies waypoints, including the `original` docking anchor that diagram-js
+ * leaves off its `Point` type, so persisted geometry never aliases the live one.
  */
 function copyWaypoints(waypoints: readonly Point[]): Point[] {
     return waypoints.map((point) => {
@@ -233,7 +194,6 @@ function copyWaypoints(waypoints: readonly Point[]): Point[] {
     });
 }
 
-// reverts the automatic changes done by the automatic number-generation at editing
 function revertAutomaticNumberGenerationChange(
     iDWithNumber: { id: string; number?: number }[],
     activities: ActivityCanvasObject[],

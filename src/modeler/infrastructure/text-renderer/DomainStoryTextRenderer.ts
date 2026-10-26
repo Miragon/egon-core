@@ -21,11 +21,7 @@ export class DomainStoryTextRenderer {
 
     private textUtil: TextUtil;
 
-    /**
-     * `config` is optional because didi resolves an absent dotted key to
-     * `undefined` (as long as a `config` provider exists at all) — the host is
-     * not required to supply typography.
-     */
+    /** Optional: didi resolves an absent dotted config key to `undefined`. */
     constructor(config?: DomainStoryTextRendererConfig) {
         const defaultStyle: DomainStoryTextRendererStyle = assign(
             {
@@ -37,13 +33,8 @@ export class DomainStoryTextRenderer {
             config?.defaultStyle ?? {},
         );
 
-        // min-dash `assign` is Object.assign: passing `defaultStyle` as the
-        // target mutated it and returned it, so both styles were one object at
-        // 11px and every label rendered and measured a point too small.
-        //
-        // The external style derives from the *merged* default, so a host that
-        // only overrides `defaultStyle` still gets the one-point-smaller
-        // external label; an explicit `externalStyle` overrides that in turn.
+        // Fresh target: `assign` mutates its first argument. Derived from the
+        // merged default so external labels stay one point smaller.
         const externalStyle: DomainStoryTextRendererStyle = assign(
             {},
             defaultStyle,
@@ -63,9 +54,6 @@ export class DomainStoryTextRenderer {
         });
     }
 
-    /**
-     * Get the new bounds of an externally rendered and arranged label.
-     */
     getExternalLabelBounds(bounds: Rect, text: string): Rect {
         const layoutDimensions = this.textUtil.getDimensions(text, {
             box: {
@@ -75,7 +63,6 @@ export class DomainStoryTextRenderer {
             style: this.config.externalStyle,
         });
 
-        // resize label shape to fit label text
         return {
             x: Math.round(
                 bounds.x + bounds.width / 2 - layoutDimensions.width / 2,
@@ -86,9 +73,6 @@ export class DomainStoryTextRenderer {
         };
     }
 
-    /**
-     * Get the new bounds of text annotation.
-     */
     getTextAnnotationBounds(bounds: Rect, text: string): Rect {
         const layoutDimensions = this.textUtil.getDimensions(text, {
             box: bounds,
@@ -108,28 +92,14 @@ export class DomainStoryTextRenderer {
         };
     }
 
-    /**
-     * Create an arranged text element.
-     *
-     * @param {string} text
-     * @param {TextLayoutConfig} [options]
-     *
-     * @return {SVGElement} rendered text
-     */
     createText(text: string, options: TextLayoutConfig): SVGElement {
         return this.textUtil.createText(text, options || {});
     }
 
-    /**
-     * Get the default text style.
-     */
     getDefaultStyle() {
         return this.config.defaultStyle;
     }
 
-    /**
-     * Get the external text style.
-     */
     getExternalStyle() {
         return this.config.externalStyle;
     }

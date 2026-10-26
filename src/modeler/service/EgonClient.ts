@@ -27,9 +27,6 @@ import type {
     ReplayState,
 } from "../../story/domain/replay";
 
-/**
- * User-friendly event types exposed by EgonClient.
- */
 export type EgonEventMap = {
     "story.changed": () => void;
     "viewport.changed": (viewport: ViewportData) => void;
@@ -37,19 +34,16 @@ export type EgonEventMap = {
     "labels.changed": (labels: LabelDictionary) => void;
     "replay.changed": (state: ReplayState) => void;
     /**
-     * The story just imported was damaged and had to be repaired to load —
-     * dangling activity edges were dropped. Fires during `import()`, before it
-     * returns, so a host can warn that saving now would make the loss permanent.
+     * The imported story was repaired by dropping dangling activity edges.
+     * Fires before `import()` returns, so a host can warn that saving would
+     * make the loss permanent.
      */
     "import.repaired": (repair: ImportRepairData) => void;
 };
 
 export type EgonEventName = keyof EgonEventMap;
 
-/**
- * Optional port injection for testing purposes.
- * When provided, EgonClient will use these ports instead of creating adapters.
- */
+/** Test-only port injection that replaces the diagram-js adapters. */
 export interface EgonClientPorts {
     modelerPort: ModelerPort;
     iconPort: IconPort;
@@ -59,19 +53,7 @@ interface ColorPickerControllerPort {
     destroy(): void;
 }
 
-/**
- * EgonClient - Application Service / Facade
- *
- * This is the main entry point for consumers of the diagram-js-egon-plugin.
- * It orchestrates use cases by coordinating between ports (abstractions)
- * and provides a clean, domain-focused API.
- *
- * Following DDD principles:
- * - Acts as an Application Service that coordinates workflows
- * - Depends on port interfaces, not concrete implementations
- * - Maps internal events to user-friendly event names
- * - Hides infrastructure complexity from consumers
- */
+/** Public entry point of the plugin: a facade over the modeler and icon ports. */
 export class EgonClient {
     private destroyed = false;
 
@@ -81,18 +63,17 @@ export class EgonClient {
         viewport?: ViewportData,
         private readonly colorPickerController?: ColorPickerControllerPort,
     ) {
-        // Apply the initial viewport if provided
         if (viewport) {
             this.setViewport(viewport);
         }
     }
 
     /**
-     * Creates a new EgonClient instance.
+     * Creates a client rendering into `config.container`. On failure, anything
+     * already created is destroyed and the original error is rethrown.
      *
-     * @param config - Configuration options for the client
-     * @param additionalModules - Optional array of additional diagram-js modules
-     * @param ports - Optional port injection for testing (bypasses adapter creation)
+     * @param additionalModules - extra diagram-js modules to register
+     * @param ports - test-only; bypasses the diagram-js adapters
      */
     static async create(
         config: EgonClientConfig,
@@ -108,7 +89,7 @@ export class EgonClient {
                 modelerPort = ports.modelerPort;
                 iconPort = ports.iconPort;
             } else {
-                // dynamic ESM import (works in browser and node ESM)
+                // Lazy: hosts injecting their own ports never load diagram-js.
                 const { DiagramJsModelerAdapter } =
                     await import("../infrastructure/DiagramJsModelerAdapter");
                 const { DiagramJsIconAdapter } =
@@ -170,20 +151,14 @@ export class EgonClient {
     // --- Document Operations ---
 
     /**
-     * Import a domain story document into the diagram.
-     * Icons from the document's domain section are automatically loaded.
-     *
-     * Supported historical damage is repaired; structurally invalid input is
-     * rejected atomically. Subscribe to `import.repaired` to learn what had to
-     * be dropped.
+     * Import a domain story document, loading the icons of its domain section.
+     * Repairable damage is fixed and reported via `import.repaired`;
+     * structurally invalid input is rejected atomically.
      */
     import(document: DomainStoryDocument): void {
         this.modelerPort.import(document);
     }
 
-    /**
-     * Export the current diagram state as a domain story document.
-     */
     export(): DomainStoryDocument {
         return this.modelerPort.export();
     }
@@ -203,10 +178,8 @@ export class EgonClient {
     // --- Event Subscription ---
 
     /**
-     * Subscribe to an event. Registering the same callback for the same event
-     * more than once is idempotent; one matching {@link off} removes it. The
-     * same callback may still be subscribed independently to different events.
-     * Throws a `TypeError` if a JavaScript caller supplies an unknown event.
+     * Subscribe to an event. Idempotent per event and callback; one matching
+     * {@link off} removes it. Throws a `TypeError` for an unknown event.
      */
     on<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void {
         switch (event) {
@@ -246,9 +219,8 @@ export class EgonClient {
     }
 
     /**
-     * Unsubscribe from an event. One call fully removes the matching callback,
-     * including a pending debounced delivery. Removing a callback that is not
-     * registered is harmless. Throws a `TypeError` for an unknown event.
+     * Unsubscribe, including a pending debounced delivery. Unknown callbacks
+     * are ignored; throws a `TypeError` for an unknown event.
      */
     off<E extends EgonEventName>(event: E, callback: EgonEventMap[E]): void {
         switch (event) {
@@ -289,33 +261,27 @@ export class EgonClient {
 
     // --- Viewport Operations ---
 
-    /**
-     * Get the current viewport as a fresh object containing exactly
-     * `{ x, y, width, height }`.
-     */
+    /** Returns a fresh object containing exactly `{ x, y, width, height }`. */
     getViewport(): ViewportData {
         return this.modelerPort.getViewport();
     }
 
-    /**
-     * Set the viewport.
-     */
     setViewport(viewport: ViewportData): void {
         this.modelerPort.setViewport(viewport);
     }
 
     /**
-     * Shift all diagram contents to positive coordinates so external tools can
-     * export the story. Undoable and may fire `story.changed`; dirty-flag hosts
-     * should call it before a save/export, not on every edit.
+     * Shift all contents to positive coordinates, which external tools need.
+     * Undoable and may fire `story.changed`, so dirty-flag hosts should call it
+     * before a save or export, not on every edit.
      */
     alignToOrigin(): void {
         this.modelerPort.alignToOrigin();
     }
 
     /**
-     * Align to origin, then fit the whole story into the visible canvas — for a
-     * "fit to screen" UI action. May fire `story.changed` because it aligns.
+     * Align to origin, then fit the whole story into the visible canvas.
+     * May fire `story.changed` because it aligns.
      */
     fitToScreen(): void {
         this.modelerPort.fitToScreen();
@@ -324,44 +290,30 @@ export class EgonClient {
     // --- Icon Management ---
 
     /**
-     * Load a set of icons (actors and/or work objects).
-     *
-     * **Replaces** the currently selected icon set — this is file-import
-     * semantics, matching what opening a story does. A category left out of
-     * `icons` becomes empty, it is not carried over. To merge, spread
-     * `getIcons()` into the new set.
+     * **Replaces** the selected icon set, like opening a story does: an omitted
+     * category becomes empty. To merge, spread `getIcons()` into the new set.
      */
     loadIcons(icons: Partial<IconSetData>): void {
         this.iconPort.loadIcons(icons);
     }
 
     /**
-     * Add a single icon. An existing name is replaced and matching live shapes
-     * repaint immediately. Artwork is shared by name across categories: an
-     * already-selected same-name entry in the other category is refreshed too,
-     * without adding new membership there.
+     * Add one icon. An existing name is replaced and matching shapes repaint.
+     * Artwork is shared by name, so a selected same-name entry in the other
+     * category refreshes too, without gaining membership there.
      */
     addIcon(category: IconCategory, name: string, svg: string): void {
         this.iconPort.addIcon(category, name, svg);
     }
 
-    /**
-     * Remove a single icon.
-     */
     removeIcon(category: IconCategory, name: string): void {
         this.iconPort.removeIcon(category, name);
     }
 
-    /**
-     * Get all currently registered icons.
-     */
     getIcons(): IconSet {
         return this.iconPort.getIcons();
     }
 
-    /**
-     * Check if a specific icon is registered.
-     */
     hasIcon(category: IconCategory, name: string): boolean {
         return this.iconPort.hasIcon(category, name);
     }
@@ -416,17 +368,12 @@ export class EgonClient {
 
     // --- Lifecycle ---
 
-    /**
-     * Destroy the client and clean up resources.
-     *
-     * Icon port first: the modeler port tears down the diagram-js injector both
-     * ports read from, so an icon callback still in flight afterwards would
-     * query destroyed services.
-     */
+    /** Destroy the client and release its resources. Idempotent. */
     destroy(): void {
         if (this.destroyed) return;
         this.destroyed = true;
         safelyDestroy(this.colorPickerController);
+        // Icon port first: the modeler port tears down the injector both read.
         safelyDestroy(this.iconPort);
         safelyDestroy(this.modelerPort);
     }

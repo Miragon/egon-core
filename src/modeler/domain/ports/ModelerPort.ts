@@ -16,12 +16,8 @@ import type {
 } from "../../../story/domain/replay";
 
 /**
- * What an import had to throw away to produce a loadable story.
- *
- * WHY ids rather than the dropped elements: a host's only sensible reaction is
- * to tell the user the file was lossy and name what is missing. Handing out the
- * internal business objects would leak the model representation across the
- * public API and invite hosts to write to it.
+ * What an import had to drop to produce a loadable story. Ids only, so the
+ * internal business objects do not leak across the public API.
  */
 export interface ImportRepairData {
     removedConnectionIds: string[];
@@ -40,19 +36,10 @@ export interface ColorPickerClosedData {
     requestId: string;
 }
 
-/**
- * Port interface for diagram modeler operations.
- * Infrastructure layer provides the concrete implementation.
- */
 export interface ModelerPort {
-    /**
-     * Import an untrusted domain story document atomically.
-     */
+    /** Import an untrusted domain story document atomically. */
     import(document: DomainStoryDocument): void;
 
-    /**
-     * Export the current diagram state.
-     */
     export(): DomainStoryDocument;
 
     exportSVG(options?: SvgExportOptions): Promise<SvgExportResult>;
@@ -69,54 +56,34 @@ export interface ModelerPort {
     seekReplayStep(index: number): ReplayState;
     setReplayShowGroups(value: boolean): ReplayState;
 
-    /**
-     * Get the current viewport as a fresh object containing exactly
-     * `{ x, y, width, height }`.
-     */
+    /** Returns a fresh object containing exactly `{ x, y, width, height }`. */
     getViewport(): ViewportData;
 
-    /**
-     * Set the viewport.
-     */
     setViewport(viewport: ViewportData): void;
 
     /**
-     * Shift all diagram contents so they sit at positive coordinates
-     * (origin + offset). Keeps stories exportable by external tools that
-     * choke on negative coordinates. Runs through the command stack, so it is
-     * undoable and fires story-changed — hosts should call it before a visual
-     * export, not on every edit.
+     * Shift all contents to positive coordinates, which external tools need.
+     * Undoable and fires story-changed, so call it before an export, not per edit.
      */
     alignToOrigin(): void;
 
     /**
-     * Align to origin, then fit the whole story into the visible canvas.
-     * Upstream `fitStoryToScreen` parity for a UI "fit to screen" button.
-     * Because it aligns first, it too may fire story-changed.
+     * Align to origin, then fit the story into the canvas (upstream:
+     * `fitStoryToScreen`). May fire story-changed because it aligns first.
      */
     fitToScreen(): void;
 
     /**
-     * Subscribe to internal diagram events. Each method is idempotent for the
-     * same callback; one call to its matching `off` method fully removes that
-     * event subscription, including a pending debounced delivery.
+     * Every `on*` is idempotent per callback; one matching `off*` removes it,
+     * including a pending debounced delivery.
      */
     onStoryChanged(callback: () => void): void;
-    /**
-     * The viewport callback receives a fresh object containing exactly
-     * `{ x, y, width, height }`.
-     */
+    /** Receives a fresh object containing exactly `{ x, y, width, height }`. */
     onViewportChanged(callback: (viewport: ViewportData) => void): void;
 
-    /**
-     * Subscribe to "the last import silently dropped something". Fires at most
-     * once per `import()`, and only when there was damage to repair.
-     */
+    /** Fires at most once per `import()`, and only when damage was repaired. */
     onImportRepaired(callback: (repair: ImportRepairData) => void): void;
 
-    /**
-     * Unsubscribe from events.
-     */
     offStoryChanged(callback: () => void): void;
     offViewportChanged(callback: (viewport: ViewportData) => void): void;
     offImportRepaired(callback: (repair: ImportRepairData) => void): void;
@@ -126,10 +93,7 @@ export interface ModelerPort {
     onReplayChanged(callback: (state: ReplayState) => void): void;
     offReplayChanged(callback: (state: ReplayState) => void): void;
 
-    /**
-     * Internal color-picker events are synchronous and idempotent per callback.
-     * The per-client controller uses them to bridge provider lifecycle.
-     */
+    /** Synchronous; the per-client controller bridges provider lifecycle with them. */
     onColorPickerRequested(
         callback: (request: ColorPickerRequestData) => void,
     ): void;
@@ -146,8 +110,5 @@ export interface ModelerPort {
     confirmPickedColor(requestId: string, color: string): boolean;
     cancelColorPicker(requestId: string): boolean;
 
-    /**
-     * Clean up resources.
-     */
     destroy(): void;
 }

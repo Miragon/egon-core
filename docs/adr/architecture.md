@@ -96,18 +96,19 @@ When a rule fails, fix the code, never the rule. Allowlists only shrink.
 Widening a frozen list is a deliberate change to both the list and the
 decision that owns it.
 
-| Rule | Locks                                                          | Decision                     |
-| ---- | -------------------------------------------------------------- | ---------------------------- |
-| A    | the import graph is not empty (sanity check)                   | ARC-2                        |
-| B    | no import cycles                                               | [ARC-1](#arc-1)              |
-| C    | domain purity                                                  | [ARC-1](#arc-1)              |
-| D    | the modeler service is framework-free                          | [ARC-1](#arc-1)              |
-| E    | service → infrastructure only in composition roots             | [ARC-1](#arc-1)              |
-| F    | sibling isolation                                              | [ARC-1](#arc-1)              |
-| G    | frozen public surface: both entries, package `exports`/`files` | [API-1](public-api.md#api-1) |
-| H    | no module-level mutable state                                  | [ARC-5](#arc-5)              |
-| I    | renderers do not write to the model                            | [ARC-4](#arc-4)              |
-| J    | infrastructure imports of element predicates only shrink       | [ARC-3](#arc-3)              |
+| Rule | Locks                                                          | Decision                                |
+| ---- | -------------------------------------------------------------- | --------------------------------------- |
+| A    | the import graph is not empty (sanity check)                   | ARC-2                                   |
+| B    | no import cycles                                               | [ARC-1](#arc-1)                         |
+| C    | domain purity                                                  | [ARC-1](#arc-1)                         |
+| D    | the modeler service is framework-free                          | [ARC-1](#arc-1)                         |
+| E    | service → infrastructure only in composition roots             | [ARC-1](#arc-1)                         |
+| F    | sibling isolation                                              | [ARC-1](#arc-1)                         |
+| G    | frozen public surface: both entries, package `exports`/`files` | [API-1](public-api.md#api-1)            |
+| H    | no module-level mutable state                                  | [ARC-5](#arc-5)                         |
+| I    | renderers do not write to the model                            | [ARC-4](#arc-4)                         |
+| J    | infrastructure imports of element predicates only shrink       | [ARC-3](#arc-3)                         |
+| K    | comments carry no issue or PR references                       | [ENG-5](engineering-practices.md#eng-5) |
 
 **Rejected alternatives.**
 
@@ -144,9 +145,9 @@ That seam was untyped, and diagram-js distinguishes four rule results:
 - `null`: ignore.
 
 Because of the `undefined` case, a forgotten `return` silently allowed an
-action the notation forbids (#66). More broadly, infrastructure adapters
+action the notation forbids. More broadly, infrastructure adapters
 imported domain predicates and made notation policy themselves, and pure
-geometry lived in infrastructure (#70).
+geometry lived in infrastructure.
 
 **Decision.** A branch is classified by its effect. Notation policy and pure,
 framework-free geometry belong in domain. Framework translation,
@@ -213,7 +214,7 @@ dirty flag). Each was a defect, for three reasons:
 - A repaint is not a user action, so the write bypassed undo and
   transactions.
 - Repaints run an unbounded number of times, so a correction that reads its
-  own output accumulates. #65 measured 5 px of file corruption per open.
+  own output accumulates: an activity's start point crept 5 px per open.
 - Imported stories share business objects with the file, so drawing wrote
   directly into the next export.
 
@@ -256,7 +257,7 @@ previews ([EDT-2](editor-features.md#edt-2)), but never writes it.
 VS Code webview editors, route reuse, side-by-side diffs. Each diagram gets its
 own didi injector. Mutable state at module scope (the custom-icon pool, the id
 list, the renderer's marker counter, a number stash) was shared by every
-instance anyway, so clients contaminated each other (#12).
+instance anyway, so clients contaminated each other.
 
 **Decision.**
 
@@ -345,8 +346,8 @@ successful swap or by destruction. A failed import does not invalidate it.
 - History: 2026-10-26 decided (ADR 0040)
 
 **Context.** The domain layers were a functional core of interfaces and free
-functions, and no domain object owned an invariant. The architecture review
-for epic #173 found the cost of that:
+functions, and no domain object owned an invariant. An architecture review
+found the cost of that:
 
 - Activity numbering was spread over seven or more sites, and three
   infrastructure sites each restated "a step is an actor-sourced activity".
@@ -357,8 +358,8 @@ for epic #173 found the cost of that:
   import-based purity rule cannot detect framework leakage through a type's
   shape.
 - `BusinessObject` serves as the wire DTO, the domain record, and the
-  diagram-js attribute bag at once. This is the root of the #65/#74 class of
-  bugs.
+  diagram-js attribute bag at once. This is the root of the bugs where
+  drawing wrote to the persisted model.
 
 diagram-js owns element identity, mutation, and undo through its command
 stack. Upstream sync depends on keeping upstream's file and method names
@@ -372,13 +373,12 @@ functions to objects that protect an invariant.
 
 - **Inputs are domain snapshots**, not framework-shaped objects. A
   `StoryGraph` and persisted element records are built by infrastructure from
-  the element registry, and they replace `CanvasObject` (#201).
+  the element registry, and they replace `CanvasObject`.
 - **A classic aggregate only where diagram-js does not own the state.**
-  `IconCatalog` (#200) owns the icon pool. Everything element-shaped stays in
+  `IconCatalog` owns the icon pool. Everything element-shaped stays in
   the registry.
-- **Planned objects:** `ElementType` (#196), `ActivitySequence` (#197),
-  `GroupTree` (#198), the label-dictionary projection (#199), `IconCatalog`
-  (#200), and `StoryGraph` (#201).
+- **Planned objects:** `ElementType`, `ActivitySequence`, `GroupTree`, the
+  label-dictionary projection, `IconCatalog`, and `StoryGraph`.
 - **Classes only for invariants.** Pure functions that own no invariant stay
   functions.
 - **Upstream names survive moves.** Logic moved out of an upstream-mapped file
@@ -393,11 +393,11 @@ functions to objects that protect an invariant.
 - **A `DomainStory` aggregate that owns elements alongside diagram-js:** every
   built-in diagram-js command would need two-way synchronization, undo would
   have to be reimplemented, and upstream sync would become far more expensive.
-- **A domain event bus:** the command stack already is the event source. #203
-  types the existing events instead.
+- **A domain event bus:** the command stack already is the event source. Typing
+  the existing events is enough.
 - **Keep the functional core unchanged:** without an owner, invariants keep
-  being restated at each call site. That is how the group-source (#181) and
-  hidden-number (#182) bugs slipped through near-total line coverage.
+  being restated at each call site. That is how the group-source and
+  hidden-number bugs slipped through near-total line coverage.
 - **Move ports into an `application/` folder:** a rename with no behavioral
   gain, which would churn imports and the sync mapping.
 

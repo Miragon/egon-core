@@ -3,11 +3,9 @@ declare module "diagram-js-direct-editing" {
     import { Rect } from "diagram-js/lib/util/Types";
 
     /**
-     * The contract `registerProvider` expects. Typed explicitly because the
-     * former `provider: any` hid a wrong `update()` arity: DirectEditing calls
-     * `provider.update(element, newText, oldText, bounds)`
-     * (diagram-js-direct-editing/lib/DirectEditing.js:120), so a 3-parameter
-     * provider silently received the old text where it expected the bounds.
+     * Typed explicitly because DirectEditing calls
+     * `update(element, newText, oldText, bounds)` (lib/DirectEditing.js:120);
+     * a 3-parameter provider would receive the old text as its bounds.
      */
     export interface DirectEditingProvider {
         /**
@@ -25,9 +23,8 @@ declare module "diagram-js-direct-editing" {
     }
 
     /**
-     * Declared as an interface, not a class: the package exports only a didi
-     * module as its default export, so `DirectEditing` exists as a type but
-     * never as a runtime value.
+     * An interface, not a class: the package exports only a didi module, so
+     * `DirectEditing` never exists as a runtime value.
      */
     export interface DirectEditing {
         registerProvider(provider: DirectEditingProvider): void;

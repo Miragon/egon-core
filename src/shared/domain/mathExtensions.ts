@@ -1,13 +1,10 @@
-// convert rad to deg
 export function degrees(radians: number): number {
     return (radians * 180) / Math.PI;
 }
 
-// calculate the angle between two points in 2D
 export function angleBetween(startPoint: Point, endPoint: Point): number {
     let quadrant: 0 | 1 | 2 | 3;
 
-    // determine in which quadrant we are
     if (startPoint.x <= endPoint.x) {
         if (startPoint.y >= endPoint.y) {
             quadrant = 0;
@@ -27,7 +24,7 @@ export function angleBetween(startPoint: Point, endPoint: Point): number {
     const adjacent = Math.abs(startPoint.y - endPoint.y);
     const opposite = Math.abs(startPoint.x - endPoint.x);
 
-    // since the arcus-tangens only gives values between 0 and 90, we have to adjust for the quadrant we are in
+    // atan2 of absolute values only spans 0–90°, so adjust for the quadrant.
 
     if (quadrant === 0) {
         return 90 - degrees(Math.atan2(opposite, adjacent));

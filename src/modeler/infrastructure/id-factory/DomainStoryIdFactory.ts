@@ -1,11 +1,4 @@
-/**
- * Generates collision-free element ids for one diagram.
- *
- * The set of already-used ids lives on the instance (not at module scope) so
- * that two EgonClient instances sharing the JS module realm keep separate id
- * pools — a shared pool would let one diagram's ids suppress another's and
- * cross-contaminate generation (issue #12). Each didi injector owns one factory.
- */
+/** Collision-free ids for one diagram; the pool is per instance (ADR ARC-5). */
 export class DomainStoryIdFactory {
     private readonly ids = new Set<string>();
 

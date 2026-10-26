@@ -18,10 +18,8 @@ export class DomainStoryReplaceOption {
     ) {}
 
     /**
-     * Build the "change to" entries for an actor: every registered actor icon
-     * except the one the element already is. `push` (not index assignment)
-     * keeps the array dense — the current type is filtered out, so an index-keyed
-     * write would leave a hole that renders as an empty menu slot.
+     * `push`, not index assignment: the current type is skipped, and a hole would
+     * render as an empty menu slot.
      */
     actorReplaceOptions(name: string) {
         const actors = this.iconDictionaryService.getIconsAssignedAs(
@@ -46,13 +44,7 @@ export class DomainStoryReplaceOption {
         return replaceOption;
     }
 
-    /**
-     * The work-object counterpart of {@link actorReplaceOptions}. The
-     * `replace-with-workobject-` prefix mirrors the actor branch's shape; the
-     * former `replace-with-actor-` was a copy-paste bug (also present upstream —
-     * see SYNC.md). `actionName` is only used as a menu-entry record key, so the
-     * rename is user-invisible.
-     */
+    /** Upstream copy-pastes the `replace-with-actor-` prefix here (SYNC.md). */
     workObjectReplaceOptions(name: string) {
         const workObjects = this.iconDictionaryService.getIconsAssignedAs(
             ElementTypes.WORKOBJECT,

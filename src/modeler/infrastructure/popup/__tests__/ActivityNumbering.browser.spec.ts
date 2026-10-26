@@ -13,26 +13,12 @@ import {
 import type { DomainStoryNumberingRegistry } from "../DomainStoryNumberingRegistry";
 
 /**
- * Automatic activity numbering, end to end (issue #55).
+ * Automatic activity numbering, end to end. A number is the product of several
+ * services agreeing across the command stack, so mocking any of them tests the
+ * mock; the arithmetic has its own domain spec.
  *
- * WHY this cannot be a unit spec: a number is the product of
- * `DomainStoryActivityNumbering`, `DomainStoryNumberingRegistry`,
- * `ElementRegistryService` and `ActivityChangedHandler` agreeing across the
- * command stack. Mocking any of them tests the mock. The pure arithmetic already
- * has its own spec (`story/domain/__tests__` for `activityNumbering`); this spec
- * proves the wiring.
- *
- * WHY browser tier (ADR TST-2): every case runs `modeling.*`, which reaches
- * `canvas.addShape`/`addConnection` → tiny-svg `translate()` →
+ * Browser tier (ADR TST-2): `modeling.*` reaches tiny-svg `translate()` →
  * `SVGSVGElement.createSVGTransform`, absent in jsdom.
- *
- * **Inverted by #74.** Numbering used to happen inside
- * `DomainStoryRenderer.renderExternalNumber`, so only a real *draw pass*
- * assigned it — once a reason for the browser tier, no longer true (ADR ARC-4). It is a
- * command interceptor on `connection.create`/`connection.reconnect` now, so the
- * number exists before anything paints, and undo takes it away again. The cases
- * below assert the model *before* forcing a render wherever the distinction
- * matters.
  */
 describe("activity numbering (browser)", () => {
     let modelers: TestModeler[] = [];
@@ -67,12 +53,8 @@ describe("activity numbering (browser)", () => {
     }
 
     /**
-     * The context `DomainStoryPopupService.handleUpdate` builds — and, since
-     * #68, all it builds. The popup no longer touches the model and no longer
-     * runs the cascade; `ActivityChangedHandler` owns the whole transaction, so
-     * everything here is undoable and redoable as one action. Reproduced here
-     * because the context shape is the command-handler contract; popup opening
-     * and instance-local rendering have their own browser regressions.
+     * The context `DomainStoryPopupService.handleUpdate` builds, reproduced
+     * because its shape is the command-handler contract.
      */
     function editActivityThroughPopupFlow(
         modeler: TestModeler,
@@ -97,10 +79,7 @@ describe("activity numbering (browser)", () => {
 
             const activity = connect(modeler, actor, workObjects[0])!;
 
-            // The command assigned it. Before #74 this line was only true
-            // because creating the connection also drew it.
             expect(numberOf(activity)).toBe(1);
-            // …and the badge still reaches the canvas, drawn from the model.
             const gfx = modeler.container.querySelector(
                 `[data-element-id="${activity.id}"]`,
             )!;
@@ -112,9 +91,7 @@ describe("activity numbering (browser)", () => {
         });
 
         it("assigns the number without needing anything to be drawn", () => {
-            // The distinction #74 turns on: the write happens inside the
-            // command, so it is already visible to a listener that runs before
-            // the canvas repaints. A renderer-minted number could not be.
+            // The write happens inside the command, so it is visible before any repaint.
             const modeler = boot();
             const { actor, workObjects } = addStoryCast(modeler, 1);
             let numberAtExecuted: number | null | undefined = "unset" as never;
@@ -148,8 +125,7 @@ describe("activity numbering (browser)", () => {
 
             modeler.commandStack.redo();
 
-            // Redo re-runs `execute` and re-fires `executed` but never
-            // `preExecute`, so the whole decision has to live in `executed`.
+            // Redo re-fires `executed` but never `preExecute`.
             expect(numberOf(second)).toBe(2);
         });
 
@@ -174,8 +150,7 @@ describe("activity numbering (browser)", () => {
             modeler.modeling.removeConnection(activities[1]);
             const replacement = connect(modeler, actor, workObjects[1])!;
 
-            // `nextAvailableActivityNumber` returns the smallest unused positive
-            // integer, so the freed 2 is reused rather than a fourth number added.
+            // The smallest unused number is reused rather than a fourth added.
             expect(numberOf(replacement)).toBe(2);
             expect([
                 numberOf(activities[0]),
@@ -191,24 +166,17 @@ describe("activity numbering (browser)", () => {
 
             const response = connect(modeler, workObjects[0], workObjects[1])!;
 
-            // Only an activity whose *source* is an actor is a story step; the
-            // `connection.create` interceptor nulls the number on every other
-            // activity — the renderer used to, on every paint.
+            // Only an activity whose source is an actor is a story step.
             expect(numberOf(response)).toBeNull();
             expect(numberOf(numbered)).toBe(1);
-            // …and it stays out of the sequence, so the next step is 2, not 3.
             const nextStep = connect(modeler, actor, workObjects[1])!;
             expect(numberOf(nextStep)).toBe(2);
         });
     });
 
     /**
-     * The paths that can change *which shape an activity starts at*.
-     *
-     * These are what the interceptor exists for, and the risk #74 carries: while
-     * numbering lived in the draw pass, any route that re-pointed a connection
-     * got renumbered for free simply by being repainted. Each route now has to
-     * be named explicitly, so each gets a case.
+     * Every route that can change which shape an activity starts at must be named
+     * in the interceptor explicitly, so each gets a case.
      */
     describe("connection.reconnect", () => {
         it("clears the number when the source stops being an actor", () => {
@@ -252,9 +220,7 @@ describe("activity numbering (browser)", () => {
         });
 
         it("leaves the number alone when only the target moves", () => {
-            // The `== null` guard: re-pointing the far end is not a renumbering
-            // event, and a repaint-driven implementation could not tell them
-            // apart without help.
+            // The `== null` guard: re-pointing the far end is not a renumbering event.
             const modeler = boot();
             const { actor, workObjects } = addStoryCast(modeler, 3);
             connect(modeler, actor, workObjects[0]);
@@ -271,20 +237,14 @@ describe("activity numbering (browser)", () => {
         });
 
         it("clears the number when the source actor is replaced by a work object", () => {
-            // `shape.replace` never touches numbering itself: diagram-js'
-            // `ReplaceShapeHandler.preExecute` re-points the attached connections
-            // through `modeling.reconnectStart`/`reconnectEnd`, so the
-            // `connection.reconnect` interceptor covers replace for free. If that
-            // ever stops being true, this is where it surfaces.
+            // Replace re-points attached connections through nested
+            // `connection.reconnect`s; this case breaks if diagram-js stops doing so.
             const modeler = boot();
             const { actor, workObjects } = addStoryCast(modeler, 1);
             const activity = connect(modeler, actor, workObjects[0])!;
             expect(numberOf(activity)).toBe(1);
 
-            // `modeling.replaceShape` directly, not the `ds-replace` menu: that
-            // menu only offers icons of the *same* family, so an actor can never
-            // become a work object through it. The command is the route under
-            // test either way.
+            // Not the `ds-replace` menu: it only offers icons of the same family.
             modeler.modeling.replaceShape(
                 actor,
                 {
@@ -338,22 +298,15 @@ describe("activity numbering (browser)", () => {
             });
             modeler.commandStack.undo();
 
-            // The cascade revert is what `oldNumbersWithIDs` /
-            // `restoredNumberAssignments` exist for: the command names one
-            // element, so without the snapshot the two *cascaded* activities
-            // would keep the numbers the cascade gave them.
+            // The command names one element; without its snapshot the cascaded
+            // activities would keep their new numbers.
             expect([numberOf(first), numberOf(second)]).toEqual([1, 2]);
-            // …and the edited activity comes back too (#68). It used to keep the
-            // number the edit gave it, because the popup wrote it onto the model
-            // before `preExecute` could snapshot the old one — leaving two
-            // activities numbered 1 after an undo.
             expect(numberOf(third)).toBe(3);
             expect(third.businessObject.name).toBe("");
 
             modeler.commandStack.redo();
 
-            // Redo re-runs `execute` only. With the cascade outside the command
-            // it re-applied the edited element alone and the duplicates returned.
+            // Redo re-runs `execute` only, so the cascade must live inside it.
             expect([
                 numberOf(third),
                 numberOf(first),
@@ -361,8 +314,7 @@ describe("activity numbering (browser)", () => {
             ]).toEqual([1, 2, 3]);
             expect(third.businessObject.name).toBe("third");
 
-            // A second undo has to land in the same place as the first — the
-            // command's snapshots must survive being replayed.
+            // The command's snapshots must survive being replayed.
             modeler.commandStack.undo();
 
             expect([
@@ -399,13 +351,9 @@ describe("activity numbering (browser)", () => {
 
             modeler.commandStack.undo();
 
-            // The registry flag is part of the transaction now; it used to be set
-            // from the popup, outside the command, and so survived every undo.
             expect(numberingRegistry.isNumberMultiple(1)).toBe(false);
-            // `undefined`, not `false`: a freshly drawn activity carries no such
-            // field, and the revert restores the value `preExecute` saw rather
-            // than normalizing one in. Writing `false` would put a key into the
-            // exported bytes that undoing an edit has no business adding.
+            // `undefined`, not `false`: undo restores what `preExecute` saw and
+            // must not add a key to the exported bytes.
             expect(third.businessObject.multipleNumberAllowed).toBeUndefined();
 
             modeler.commandStack.redo();
@@ -422,12 +370,8 @@ describe("activity numbering (browser)", () => {
             );
             const response = connect(modeler, workObjects[0], workObjects[1])!;
 
-            // A work-object-sourced activity renders no number input, so the
-            // popup always submits `newNumber: undefined` for it — which is why
-            // the `splice(indexOf(...) === -1, 1)` defect this guards against was
-            // never reachable through the UI. Its real lock is the domain case
-            // "excludes the edited activity from its own cascade"; this one
-            // covers the non-actor / `oldNumber == null` path end to end.
+            // Covers the non-actor / `oldNumber == null` path end to end; the
+            // domain spec "excludes the edited activity from its own cascade" locks the rest.
             editActivityThroughPopupFlow(modeler, response, {
                 label: "response",
             });
@@ -456,9 +400,7 @@ describe("activity numbering (browser)", () => {
                 label: "third",
             });
 
-            // `execute` clears the number; the redraw that follows finds it null
-            // and `renderExternalNumber` mints the lowest free one. Today's
-            // behaviour, preserved.
+            // An empty field re-mints the lowest free number.
             expect(numberOf(activities[2])).toBe(2);
 
             modeler.commandStack.undo();
@@ -468,10 +410,8 @@ describe("activity numbering (browser)", () => {
     });
 
     /**
-     * Swapping an activity's ends is the one numbering path that starts in the
-     * context pad rather than in an interceptor, so it is driven through the pad
-     * entry here: the defect was in how the provider *prepared* the command, and
-     * executing `activity.directionChange` directly would step right over it.
+     * Driven through the context-pad entry: the provider prepares the command,
+     * and executing `activity.directionChange` directly would skip that step.
      */
     describe("activity.directionChange", () => {
         function changeDirectionThroughContextPad(
@@ -501,20 +441,17 @@ describe("activity numbering (browser)", () => {
 
             modeler.commandStack.undo();
 
-            // The number must never have touched the model before the command
-            // ran — otherwise preExecute snapshots 2 as the "old" number and the
-            // work-object-sourced activity keeps it forever, exported verbatim.
+            // A write before the command would make preExecute snapshot 2 as the
+            // "old" number, and undo would keep it.
             expect(numberOf(response)).toBeNull();
         });
     });
 
-    describe("multi-instance isolation (extends issue #12)", () => {
+    describe("multi-instance isolation", () => {
         it("numbers and mints ids per instance, with no pool shared", () => {
-            // Pin the id factory's randomness so both instances *want* the same
-            // ids. A shared pool would make the second instance skip past them —
-            // which is exactly the leak issue #12 is about — so identical ids are
-            // the proof of independence, and the registry lookups below show the
-            // sameness is harmless.
+            // Pinned randomness makes both instances want the same ids; a shared
+            // pool would make the second skip past them, so identical ids prove
+            // independence.
             vi.spyOn(Math, "random").mockReturnValue(0.0001);
 
             const first = boot();

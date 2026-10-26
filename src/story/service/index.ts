@@ -2,10 +2,8 @@ import StoryImportModule from "./importModule";
 import StoryExportModule from "./exportModule";
 
 /**
- * Public surface of the story feature. Unlike the other features there is no
- * default export: story ships two independent didi modules (import and export),
- * so they are named explicitly (`StoryImportModule`/`StoryExportModule`) for the
- * plugin to register, alongside the service classes siblings type against.
+ * No default export, unlike the other features: story ships two independent
+ * didi modules, so they are named for the plugin to register.
  */
 export { DomainStoryImportService } from "./DomainStoryImportService";
 export { DomainStoryExportService } from "./DomainStoryExportService";

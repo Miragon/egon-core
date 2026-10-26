@@ -15,11 +15,9 @@ import {
 } from "../../infrastructure/DomPurifyIconSanitizer";
 
 /**
- * Regression cover for issue #4: a custom icon whose name contains a dot must
- * still yield a valid CSS class, and the class the service publishes must be the
- * exact one the palette looks up. Since the DOM/CSSOM write now lives behind
- * IconStyleSheetPort, this test proves only that the service delegates the right
- * class; the injection itself is covered by IconCssInjector.spec.ts.
+ * A dotted icon name must still yield a valid CSS class, and the published
+ * class must be the one the palette looks up. Injection itself is covered by
+ * IconCssInjector.spec.ts.
  */
 class RecordingStyleSheetPort implements IconStyleSheetPort {
     readonly calls: Array<[string, string]> = [];
@@ -52,8 +50,7 @@ describe("IconDictionaryService CSS class generation", () => {
 
         expect(cssClass).toBe("icon-domain-story-my_icon_v2");
         // Stripped of the prefix, the token must be a legal CSS identifier
-        // (starts with a letter/underscore, no dots) — the actual bug was that
-        // the old sanitizer left the interior dots in place.
+        // (starts with a letter/underscore, no dots).
         expect(cssClass.slice(ICON_CSS_CLASS_PREFIX.length)).toMatch(
             /^[a-zA-Z_][a-zA-Z0-9_-]*$/,
         );
@@ -71,8 +68,7 @@ describe("IconDictionaryService CSS class generation", () => {
 
             service.addIconsToCss(icons);
 
-            // The regression itself: the class handed to the port must equal
-            // the one the palette computes for the same name.
+            // The class handed to the port must equal the palette's.
             expect(port.calls).toEqual([
                 [service.getCSSClassOfIcon("my.icon.v2"), "<svg/>"],
             ]);
@@ -80,11 +76,7 @@ describe("IconDictionaryService CSS class generation", () => {
         });
     });
 
-    /**
-     * Issue #12: the custom-icon pool is instance-owned, so two services on one
-     * page keep separate pools. An icon added to A must be invisible to B — this
-     * fails against the pre-#12 module-level `customIcons` global.
-     */
+    /** Two services on one page must keep separate icon pools (ADR ARC-5). */
     describe("custom-icon isolation between instances", () => {
         it("keeps an icon added to one service out of another", () => {
             const serviceA = new IconDictionaryService(
@@ -105,9 +97,8 @@ describe("IconDictionaryService CSS class generation", () => {
     });
 
     /**
-     * getIconSource resolves through a fallback chain: custom pool first, then
-     * the selected dictionaries. An icon registered only via registerIconForType
-     * (never added to customIcons) must still be found through that fallback.
+     * An icon registered only via registerIconForType bypasses the pool and
+     * must still resolve through the selected-dictionary fallback.
      */
     describe("getIconSource fallback resolution", () => {
         it("returns '' for a name that is in no dictionary", () => {

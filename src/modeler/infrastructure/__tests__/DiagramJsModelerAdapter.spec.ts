@@ -10,11 +10,6 @@ import {
 
 import { createRecordingEventBus } from "./helpers/createRecordingEventBus";
 
-/**
- * Stub the diagram-js services the adapter pulls out of the injector. `Diagram`
- * itself is mocked (below) so the constructor never boots a real canvas; each
- * `get()` here just hands back the matching spy object.
- */
 function createMockDiagramServices() {
     const mockEventBus = createRecordingEventBus();
 
@@ -22,9 +17,7 @@ function createMockDiagramServices() {
         viewbox: vi
             .fn()
             .mockReturnValue({ x: 0, y: 0, width: 100, height: 100 }),
-        // The adapter realizes diagram-js' *implicit* root at boot — the real
-        // `getRootElement()` creates and installs one when none is set. It must
-        // be the implicit root because `isBackground` keys off that id prefix.
+        // `isBackground` keys off the implicit root's id prefix.
         getRootElement: vi
             .fn()
             .mockReturnValue({ id: "__implicitroot_0", children: [] }),
@@ -66,20 +59,13 @@ function createMockDiagramServices() {
     };
 }
 
-// Shared handle so the mocked Diagram constructor and the tests see the same
-// service stubs; reassigned per test in beforeEach.
 let services: ReturnType<typeof createMockDiagramServices>;
 
-// Every options object the adapter handed to `new Diagram(...)`, so a case can
-// assert on wiring that only exists as a DI config key — the compiler cannot
-// check those strings from the producer side.
+// Captured so cases can pin DI config keys the compiler cannot check.
 let diagramOptions: Record<string, any>[] = [];
 let canvasContainers: HTMLElement[] = [];
 
-// Mock diagram-js so `new Diagram(...)` returns our stub injector instead of
-// instantiating a real modeler (jsdom has no SVG canvas). The other modeler
-// modules (plugin, import/export services) are pulled in only as `modules`
-// config and never invoked here.
+// jsdom has no SVG canvas, so `new Diagram(...)` returns a stub injector.
 vi.mock("diagram-js", () => ({
     default: vi.fn(function (options: Record<string, any>) {
         diagramOptions.push(options);
@@ -103,7 +89,6 @@ vi.mock("diagram-js", () => ({
 import { DiagramJsModelerAdapter } from "../DiagramJsModelerAdapter";
 import { DEFAULT_DEBOUNCE_MS } from "../../../shared/infrastructure/debounce";
 
-/** The style node the adapter injects into a host container. */
 const ICON_STYLE_SELECTOR = "[data-egon-icons-css]";
 
 describe("DiagramJsModelerAdapter", () => {
@@ -181,11 +166,7 @@ describe("DiagramJsModelerAdapter", () => {
         });
     });
 
-    /**
-     * The debounce contract hosts actually observe. Fake timers are legal here
-     * and only here (ADR TST-2): this tier drives no real canvas, so freezing the
-     * clock stalls nothing but the debounce itself.
-     */
+    /** Fake timers are allowed here (ADR TST-2): no real canvas to stall. */
     describe("event debouncing", () => {
         beforeEach(() => {
             vi.useFakeTimers();
@@ -200,8 +181,6 @@ describe("DiagramJsModelerAdapter", () => {
             }
             vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
 
-            // Five before the fix: a debouncer built per event shares no timer
-            // with the previous one, so nothing coalesced.
             expect(storyChanged).toHaveBeenCalledTimes(1);
         });
 
@@ -260,11 +239,7 @@ describe("DiagramJsModelerAdapter", () => {
         });
     });
 
-    /**
-     * The one host event that is deliberately *not* debounced: an import fires
-     * it at most once and a host that shows "this file was damaged" must not
-     * learn about it a debounce window after `import()` returned (ADR DOC-2).
-     */
+    /** Undebounced: must arrive before `import()` returns (ADR DOC-2). */
     describe("import repair signalling", () => {
         const REPAIRED = {
             removedConnections: [
@@ -398,9 +373,7 @@ describe("DiagramJsModelerAdapter", () => {
 
             adapter.destroy();
 
-            // Identity, not `expect.any(Function)`: eventBus.off is a no-op when
-            // handed a different function, which is how a listener survives
-            // teardown and reaches a destroyed injector.
+            // Identity matters: `off` with a different function is a no-op.
             expect(services.mockEventBus.off.mock.calls).toEqual(subscribed);
             expect(services.mockEventBus.listenerCount()).toBe(0);
         });
@@ -430,8 +403,7 @@ describe("DiagramJsModelerAdapter", () => {
             adapter.onStoryChanged(storyChanged);
             services.mockEventBus.fire("commandStack.changed");
 
-            // Register again while delivery is pending. The original wrapper
-            // and timer must survive, without adding a second listener.
+            // Re-registering while pending must keep the original timer.
             adapter.onStoryChanged(storyChanged);
             expect(services.mockEventBus.listenerCount()).toBe(1);
             vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
@@ -516,10 +488,7 @@ describe("DiagramJsModelerAdapter", () => {
         });
 
         it("keeps one function's two subscriptions independent", () => {
-            // `EgonEventMap` types `story.changed` as `() => void`, which is
-            // assignable to the viewport signature too — so a host may pass one
-            // function to both. A single union-keyed registry lost the first
-            // handle on the second `on()`, leaving an uncancellable timer.
+            // A `() => void` callback fits both event signatures.
             const shared = vi.fn();
             adapter.onStoryChanged(shared);
             adapter.onViewportChanged(shared);
@@ -531,15 +500,13 @@ describe("DiagramJsModelerAdapter", () => {
             });
             vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
 
-            // Only the viewport subscription survived.
             expect(shared).toHaveBeenCalledTimes(1);
         });
     });
 
     describe("icon stylesheet wiring", () => {
         it("hands its style node and canvas scope to the icon stylesheet adapter", () => {
-            // Pins the DI key name from the producer side; IconCssInjector's
-            // `$inject` string is invisible to the compiler.
+            // Pins the DI key; IconCssInjector's `$inject` string is unchecked.
             const config = diagramOptions[0]!["domainStoryIconStyleSheet"];
             expect(config.styleElement).toBe(
                 container.querySelector(ICON_STYLE_SELECTOR),
@@ -572,8 +539,6 @@ describe("DiagramJsModelerAdapter", () => {
                 canvasContainers[1]!.getAttribute("data-egon-icon-scope"),
             ).toBe(diagramOptions[1]!["domainStoryIconStyleSheet"].scopeId);
 
-            // Destroying one must not take the other's sheet — the rules in it
-            // belong to a client that is still alive.
             adapter.destroy();
 
             expect(container.querySelectorAll(ICON_STYLE_SELECTOR).length).toBe(
@@ -589,9 +554,7 @@ describe("DiagramJsModelerAdapter", () => {
 
     describe("text renderer wiring", () => {
         it("passes the host's typography as the `textRenderer` config key", () => {
-            // Same producer-side pin as the icon stylesheet: the renderer's
-            // `$inject` string `config.textRenderer` is invisible to the
-            // compiler, so only the key name asserted here connects the two.
+            // Pins the DI key; the renderer's `config.textRenderer` is unchecked.
             const textRenderer = { defaultStyle: { fontSize: 18 } };
 
             const configured = new DiagramJsModelerAdapter(
@@ -608,9 +571,6 @@ describe("DiagramJsModelerAdapter", () => {
         });
 
         it("omits the key entirely when the host supplied nothing", () => {
-            // Not `{ textRenderer: undefined }`: didi would still resolve the
-            // dotted key to undefined, but leaving the key out keeps the boot
-            // options honest about what the host actually configured.
             expect(diagramOptions[0]).not.toHaveProperty("textRenderer");
         });
     });

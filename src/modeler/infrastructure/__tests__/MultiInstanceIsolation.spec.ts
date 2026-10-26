@@ -7,21 +7,11 @@ import { IconDictionaryService } from "../../../iconSet/service";
 import { Dictionary } from "../../../story/domain/dictionary";
 
 /**
- * The headline regression for issue #12: two EgonClient instances on one page
- * must not share mutable state. This resolves the previously module-global
- * offenders — the id factory's id list and the icon dictionary's custom-icon
- * pool — through two independent didi injectors and proves that mutating one
- * leaves the other pristine. (A third offender, the activity-number stash, was
- * covered here until #74 deleted the mechanism outright: the renderer that read
- * it back no longer writes to the model at all.)
+ * Two injectors must not share mutable state (ADR ARC-5): the id factory's ids
+ * and the custom-icon pool.
  *
- * This unit suite stops at the injector layer on purpose. A full two-client
- * boot/render test needs Chromium because jsdom has no SVG layout engine; the
- * live stylesheet and selector behavior is covered by
- * `IconCssIsolation.browser.spec.ts`. For the instance-owned service state
- * below, non-leakage is structural — rule H in architecture.spec.ts locks it
- * in — and neither module needs diagram-js primitives, so a bare injector plus
- * a `config` value resolves every service.
+ * Unit tier, stopping at the injector: no diagram-js primitives are needed. Live
+ * stylesheet behaviour is in `IconCssIsolation.browser.spec.ts`.
  */
 function makeInjector(
     styleElement?: HTMLStyleElement,
@@ -30,10 +20,7 @@ function makeInjector(
     return new Injector([
         IdFactoryModule,
         IconSetModule,
-        // IconCssInjector injects `config.domainStoryIconStyleSheet`; didi
-        // throws `No provider for "config"!` when the whole `config` provider
-        // is missing (a missing *key* on a present config is fine), so a bare
-        // injector must supply one.
+        // didi throws `No provider for "config"!` without a `config` provider.
         {
             config: [
                 "value",
@@ -99,7 +86,7 @@ function expectPristine(injector: Injector): void {
     ).toBe("actor_0001");
 }
 
-describe("multi-instance isolation (issue #12)", () => {
+describe("multi-instance isolation", () => {
     afterEach(() => {
         vi.restoreAllMocks();
         document
@@ -133,9 +120,6 @@ describe("multi-instance isolation (issue #12)", () => {
     });
 
     it("writes each injector's icon CSS into that injector's own sheet", () => {
-        // The stylesheet half of the same charter: before #69 both injectors
-        // resolved one document-global `<style id="iconsCss">`, so B's icon
-        // rules landed in A's sheet.
         const styleA = createAttachedStyleElement();
         const styleB = createAttachedStyleElement();
         const a = makeInjector(styleA, "scope-a");
@@ -153,9 +137,7 @@ describe("multi-instance isolation (issue #12)", () => {
     });
 
     it("leaves no residue after an injector is discarded", () => {
-        // Mutate and drop A entirely before B is even created. Module-level
-        // state would outlive A's injector and poison a later B; injector-owned
-        // state leaves nothing behind.
+        // Module-level state would outlive A's injector and poison B.
         vi.spyOn(Math, "random").mockReturnValue(0.0001);
         mutateAll(makeInjector());
 

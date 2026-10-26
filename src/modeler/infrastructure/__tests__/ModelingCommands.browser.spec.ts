@@ -15,19 +15,11 @@ import {
 import { ElementTypes } from "../../../story/domain/elementTypes";
 
 /**
- * The create/move/delete/resize half of issue #55: modeling commands driven
- * through a real commandStack, asserting business-object state and undo/redo.
+ * Create/move/delete/resize through a real commandStack, proving the
+ * `DomainStoryUpdater` wiring that mock-based specs cannot see.
  *
- * WHY this is not a mock-based spec: every existing modeling spec stubs the
- * collaborators, so none of them proves the *wiring* — that `DomainStoryUpdater`
- * actually writes `x`/`y` back onto the business object, that its
- * `reverted(["shape.move"])` branch restores them, or that deleting a shape
- * takes its connections with it. Those are the exact seams an upstream sync
- * breaks silently.
- *
- * WHY browser tier and not jsdom (ADR TST-2): `canvas.addShape` reaches tiny-svg
- * `translate()` → `SVGSVGElement.createSVGTransform`, which jsdom does not
- * implement, so no modeling command can execute there at all.
+ * Browser tier (ADR TST-2): `canvas.addShape` reaches
+ * `SVGSVGElement.createSVGTransform`, which jsdom does not implement.
  */
 describe("modeling commands (browser)", () => {
     let modeler: TestModeler | undefined;
@@ -70,10 +62,7 @@ describe("modeling commands (browser)", () => {
             const actor = addActor(modeler, { name: "Alice" });
 
             expect(modeler.elementRegistry.get(actor.id)).toBe(actor);
-            // The id is keyed on the *factory* type, not the element type:
-            // DomainStoryElementFactory calls `idFactory.getId(type)` with
-            // diagram-js' "shape"/"connection"/"root", so an actor is
-            // `shape_1234`, not `domainStory:actorPerson_1234`.
+            // Ids use diagram-js' factory type ("shape"), not the element type.
             expect(actor.id).toMatch(/^shape_\d{4}$/);
             expect({ width: actor.width, height: actor.height }).toEqual({
                 width: 75,
@@ -109,9 +98,7 @@ describe("modeling commands (browser)", () => {
         it("has DomainStoryUpdater write the coordinates onto the businessObject", () => {
             modeler = createTestModeler();
 
-            // diagram-js centres the shape on the requested point:
-            // CreateShapeHandler computes `x = position.x - round(width / 2)`,
-            // so a 75×75 actor asked for at (200, 200) lands at 200 - 38 = 162.
+            // CreateShapeHandler centres the shape: 200 - round(75 / 2) = 162.
             const actor = addActor(modeler, { point: { x: 200, y: 200 } });
 
             expect(actor.x).toBe(200 - Math.round(75 / 2));
@@ -155,9 +142,7 @@ describe("modeling commands (browser)", () => {
             expect(actor.businessObject.x).toBe(actor.x);
             expect(actor.businessObject.y).toBe(actor.y);
 
-            // The `reverted(["shape.move"])` branch of DomainStoryUpdater: without
-            // it the element snaps back but the business object keeps the moved
-            // coordinates, so the next export writes the wrong position.
+            // Without the updater's revert branch the export keeps the move.
             modeler.commandStack.undo();
 
             expect(actor.x).toBe(originalX);
@@ -179,8 +164,7 @@ describe("modeling commands (browser)", () => {
                 height: 260,
             });
 
-            // Only groups are resizable, and only for groups does
-            // DomainStoryUpdater copy width/height back onto the business object.
+            // Only groups are resizable, so only they persist width/height.
             expect(group.businessObject.width).toBe(400);
             expect(group.businessObject.height).toBe(260);
 
@@ -222,7 +206,6 @@ describe("modeling commands (browser)", () => {
                     y: point.y,
                 })),
             ).toEqual(waypointsBefore);
-            // …and the endpoints the updater mirrors onto the business object.
             expect(restored.businessObject.source).toBe(actor.id);
             expect(restored.businessObject.target).toBe(workObject.id);
         });
@@ -244,8 +227,6 @@ describe("modeling commands (browser)", () => {
             modeler = createTestModeler();
             const actor = addActor(modeler, { point: { x: 400, y: 300 } });
 
-            // A group created over existing shapes adopts them transactionally
-            // so the story exports the containment.
             const group = addGroup(modeler, { point: { x: 400, y: 300 } });
 
             expect(group.children).toContain(actor);
@@ -288,8 +269,6 @@ describe("modeling commands (browser)", () => {
             expect(exportedParent(modeler, actor)).toBe(group.id);
             expectGraphicsOwnedBy(modeler, actor, group);
 
-            // A second undo must leave the former child as an ordinary usable
-            // root shape, with a healthy command history.
             modeler.commandStack.undo();
             modeler.modeling.moveShape(actor, { x: 10, y: 5 }, modeler.root);
             modeler.modeling.removeShape(actor);
@@ -328,8 +307,6 @@ describe("modeling commands (browser)", () => {
             const nestedPosition = { x: nestedGroup.x, y: nestedGroup.y };
             const nestedActorPosition = { x: nestedActor.x, y: nestedActor.y };
 
-            // Selecting a parent and its child exercises MoveClosure's
-            // de-duplication as well as the updater's outermost-move queue.
             modeler.modeling.moveElements(
                 [group, existingChild],
                 { x: 300, y: 0 },
@@ -490,9 +467,7 @@ describe("modeling commands (browser)", () => {
         it("moves a shape back out of a group", () => {
             modeler = createTestModeler();
             const group = addGroup(modeler, { point: { x: 400, y: 300 } });
-            // Creating a plain shape over a group does *not* adopt it — adoption
-            // runs when the *group* is created, moved or resized. So move the
-            // actor in explicitly first.
+            // Adoption runs only when the group is created, moved or resized.
             const actor = addActor(modeler, { point: { x: 400, y: 300 } });
             modeler.modeling.moveElements([actor], { x: 0, y: 0 }, group);
             expect(actor.parent).toBe(group);
@@ -504,9 +479,6 @@ describe("modeling commands (browser)", () => {
             );
 
             expect(actor.parent).toBe(modeler.root);
-            // The persisted counterpart of the line above: leaving
-            // `businessObject.parent` set would export the shape as still
-            // belonging to a group it was moved out of.
             expect(actor.businessObject.parent).toBeUndefined();
         });
 
@@ -520,10 +492,8 @@ describe("modeling commands (browser)", () => {
             });
             const group = addGroup(modeler, { point: { x: 400, y: 300 } });
 
-            // Each group adopts only siblings that exist when it is drawn, so
-            // the actor stays the *inner* group's child. The nested move command
-            // reparents the inner group intact, leaving the actor in exactly one
-            // `children` array.
+            // A group adopts only siblings that exist when drawn, so the actor
+            // stays the inner group's child.
             expect(actor.parent).toBe(childGroup);
             expect(childGroup.parent).toBe(group);
             expect(modeler.root["children"]).not.toContain(actor);
@@ -544,17 +514,14 @@ describe("modeling commands (browser)", () => {
                 point: { x: 450, y: 200 },
             });
             connect(modeler, actor, workObject);
-            // `removeGroup` is the one call that fans out into several nested
-            // commands (a move per child, then the delete). They inherit the
-            // outer action id, so it must still cost exactly one undo — a
-            // regression here shows up as leftovers after the loop below.
+            // `removeGroup` fans out into nested commands sharing one action id,
+            // so it must still cost exactly one undo.
             const group = addGroup(modeler, { point: { x: 400, y: 500 } });
             modeler.modeling.removeGroup(group);
 
             expect(modeler.commandStack.canUndo()).toBe(true);
             expect(modeler.commandStack.canRedo()).toBe(false);
 
-            // Unwind everything; an empty canvas must be reachable by undo alone.
             while (modeler.commandStack.canUndo()) {
                 modeler.commandStack.undo();
             }

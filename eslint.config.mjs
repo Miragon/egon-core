@@ -2,14 +2,6 @@ import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
 
-/**
- * Standalone flat ESLint config.
- *
- * Flattens the fork's base + lib configs into one: recommended JS/TS rules,
- * Prettier compatibility (disables stylistic rules that conflict with the
- * formatter), a small set of project rule relaxations, and a Node-globals block
- * for CommonJS-style config/tooling files.
- */
 export default tseslint.config(
     {
         ignores: [
@@ -36,10 +28,9 @@ export default tseslint.config(
     {
         files: ["demo/**/*.ts", "demo/**/*.mts"],
         rules: {
-            // ADRs TST-3 and API-1: the demo is a consumer harness. It uses only
-            // the three
-            // package exports a real host needs, even though Vite resolves
-            // those exact specifiers to source during local development.
+            // ADRs TST-3 and API-1: the demo is a consumer harness, so it uses
+            // only the package exports a real host has, even though Vite
+            // resolves them to source in development.
             "no-restricted-imports": [
                 "error",
                 {

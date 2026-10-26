@@ -13,21 +13,12 @@ const reactColorfulCompat = fileURLToPath(
     ),
 );
 
-/**
- * Standalone Vite build for the egon-core library.
- *
- * Emits three rollup entries — the ESM library (`index`), optional icon data
- * (`icons`) and the compiled stylesheet (`style`) — plus a mirrored `.d.ts`
- * tree via vite-plugin-dts.
- * External deps are left unbundled so consumers dedupe diagram-js & friends.
- */
+/** Dependencies stay external so consumers dedupe diagram-js and friends. */
 export default defineConfig({
     cacheDir: "node_modules/.vite",
     resolve: {
-        // react-colorful is bundled, but its React imports target the
-        // React-compatible adapter backed by diagram-js's exact Preact runtime.
-        // The remaining aliases follow Preact's documented integration and
-        // apply equally to builds and Vitest.
+        // react-colorful is bundled; its React imports go to an adapter over
+        // the exact Preact runtime diagram-js uses.
         alias: [
             { find: "react-dom/test-utils", replacement: "preact/test-utils" },
             { find: "react-dom/client", replacement: "preact/compat" },
@@ -48,8 +39,6 @@ export default defineConfig({
     ],
     css: {
         preprocessorOptions: {
-            // Vite uses Sass's modern compiler API by default; the explicit
-            // `api` option was removed, so no scss options are needed here.
             scss: {},
         },
     },
@@ -64,8 +53,8 @@ export default defineConfig({
                 style: "src/styles.scss",
             },
             formats: ["es"],
-            // Vite names library CSS after the package by default; pin it back
-            // to `style.css` to preserve the published `./style.css` export.
+            // Vite names library CSS after the package; the `./style.css`
+            // export needs this name.
             cssFileName: "style",
         },
         rollupOptions: {
@@ -95,28 +84,22 @@ export default defineConfig({
             transformMixedEsModules: true,
         },
     },
-    // Two tiers, split by vitest projects (ADR TST-1). Root options are shared
-    // via `extends: true`; each project narrows environment and file set.
-    // - `unit`: fast jsdom suite; the default `yarn test` loop. Ports and
-    //   diagram-js are mocked here.
-    // - `browser`: real chromium via playwright, the only tier where a genuine
-    //   EgonClient boot renders (jsdom can't compute SVG getBBox).
-    // `yarn test:coverage` runs both and merges their coverage into one report.
+    // Two tiers (ADR TST-1): `unit` is jsdom with mocked ports; `browser` is
+    // chromium, the only tier where a real EgonClient boot renders (jsdom
+    // cannot compute SVG getBBox).
     test: {
         globals: true,
         environment: "jsdom",
         server: {
-            // Transform this dev-only source dependency so the React→Preact
-            // aliases above apply during Vitest just as they do in the build.
+            // Inlined so the React→Preact aliases above also apply in Vitest.
             deps: { inline: ["react-colorful"] },
         },
         coverage: {
             reportsDirectory: "coverage",
-            // Include untested production files as well as loaded modules (Vitest 4).
+            // Counts untested production files too, not only loaded modules.
             include: ["src/**/*.ts", "src/**/*.tsx"],
-            // Vitest's default exclude list is empty, so name every non-production
-            // path: test helpers and fixtures, ambient types, and the entry barrels
-            // that only re-export (ADR TST-1).
+            // Vitest's default exclude list is empty, so every non-production
+            // path is named, including the re-export-only barrels (ADR TST-1).
             exclude: [
                 "src/**/__tests__/**",
                 "src/**/*.d.ts",
@@ -124,13 +107,11 @@ export default defineConfig({
                 "src/icons.ts",
                 "src/index.ts",
             ],
-            // json-summary + json feed the PR coverage-report action; the v8
-            // default omits them, so name the reporters explicitly.
+            // The coverage-report action reads json-summary and json, which the
+            // v8 default omits.
             reporter: ["text", "json-summary", "json"],
-            // Coverage merges both projects, so every layer is gated at its
-            // measured value rounded down (ADR TST-1). Thresholds only ratchet up:
-            // `yarn test:coverage:ratchet` raises any layer that gained a whole
-            // point. Lowering one needs a decision in ADR TST-1.
+            // Merged coverage of both projects, gated per layer at the measured
+            // value rounded down. Thresholds only ratchet up (ADR TST-1).
             thresholds: {
                 "src/**/domain/**": {
                     statements: 99,

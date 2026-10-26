@@ -38,15 +38,13 @@ export class DomainStoryUpdater extends CommandInterceptor {
     ) {
         super(eventBus);
 
-        // A group dropped on a shape or connection must live beside that
-        // element, not underneath it. Do this before diagram-js snapshots the
-        // old/new parents so its own handlers can provide the inverse.
+        // A group dropped on an element becomes its sibling. Runs before
+        // diagram-js snapshots the parents, so its handlers provide the inverse.
         this.preExecute("shape.create", this.normalizeCreateParent());
         this.preExecute("shape.move", this.normalizeMoveParent());
         this.preExecute("elements.move", this.normalizeElementsMoveParent());
 
-        // A bulk create (notably paste) contains nested shape.create commands.
-        // Wait for all of them so adoption sees one stable sibling snapshot.
+        // Bulk creates (paste) nest shape.create; adopt once all have run.
         this.preExecute("elements.create", () => {
             this.creationDepth++;
         });
@@ -57,9 +55,8 @@ export class DomainStoryUpdater extends CommandInterceptor {
             this.adoptPendingGroupsWhenReady();
         });
 
-        // elements.move fans out into shape.move commands in its postExecute.
-        // Queue every moved group in first-seen order and adopt only after the
-        // outermost movement has finished, so selected descendants move once.
+        // elements.move fans out into shape.move; adopt after the outermost move
+        // so selected descendants move only once.
         this.preExecute("elements.move", this.beginElementsMove());
         this.preExecute("shape.move", this.beginShapeMove());
         this.postExecuted("shape.move", this.finishShapeMove());
@@ -72,8 +69,7 @@ export class DomainStoryUpdater extends CommandInterceptor {
             }
         });
 
-        // cropping must be done before updateElement
-        // do not change the order of these .executed calls
+        // Order matters: cropping must run before updateElement.
         this.executed(
             ["connection.layout", "connection.create"],
             this.cropConnection(),
@@ -128,16 +124,12 @@ export class DomainStoryUpdater extends CommandInterceptor {
                 return;
             }
             const businessObject = shape.businessObject;
-            // save element position
             assign(businessObject, pick(shape, ["x", "y"]));
 
             if (isGroup(shape)) {
-                // save element size if resizable
                 assign(businessObject, pick(shape, ["height", "width"]));
             }
-            // Group membership is persisted, so a shape lifted out of a group
-            // must have it cleared — otherwise the export keeps naming a group
-            // the shape left, or one that no longer exists.
+            // Clear on leaving a group, or the export names a stale group.
             if (shape.parent && isGroup(shape.parent)) {
                 assign(businessObject, {
                     parent: shape.parent.id,
@@ -413,14 +405,11 @@ export class DomainStoryUpdater extends CommandInterceptor {
                 connection: Connection = context.connection,
                 businessObject = connection.businessObject;
 
-            // Read the ends off the connection itself. A reconnect has already
-            // written them there by the time `executed`/`reverted` runs, and the
-            // `context.newSource`/`newTarget` the handler uses are on the
-            // context, never on the event.
+            // Read the ends off the connection: by `executed`/`reverted` the
+            // reconnect has already written them there.
             const source = connection.source,
                 target = connection.target;
 
-            // update waypoints
             assign(businessObject, {
                 waypoints: this.copyWaypoints(connection),
             });
@@ -442,7 +431,6 @@ export class DomainStoryUpdater extends CommandInterceptor {
         };
     }
 
-    // crop connection ends during create/update
     private cropConnection(): (event: any) => void {
         return (event: any) => {
             const context = event.context,

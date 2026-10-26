@@ -16,23 +16,17 @@ export function getBusinessObject(element: Element) {
 }
 
 export function isCustomIcon(icon: string) {
-    // default icons are provided as SVG
-    // custom icons are provided as "Data URL" with a base64-encoded image as payload
+    // Custom icons are data URLs; default icons are raw SVG.
     return icon.startsWith("data");
 }
 
 export function isCustomSvgIcon(icon: string) {
-    // default icons are provided as SVG
-    // custom icons are provided as "Data URL" with a base64-encoded image as payload
     return icon.startsWith("data:image/svg");
 }
 
 /**
- * Draws the left-bracket outline of a text annotation, scaled to `height`.
- * This is the only shape the former bpmn-js-derived getScaledPath ever
- * produced (always mx=my=0, scale 1), so it collapses to this one-liner: a
- * pen move to the origin, out and back to form the top serif, down the spine,
- * and out again for the bottom serif.
+ * The text-annotation bracket: top serif, a spine of `height`, bottom serif.
+ * Equals upstream's getScaledPath output for the only arguments it ever got.
  */
 export function getAnnotationBracketSvg(height: number) {
     return `m 0, 0 m 10,0 l -10,0 l 0,${height} l 10,0`;

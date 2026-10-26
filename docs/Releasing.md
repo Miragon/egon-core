@@ -94,7 +94,7 @@ the validated versioned archive URL, not a source deep import.
 
 Local and pull-request checks cannot prove GitHub App permissions or event
 delivery. After this configuration reaches `main`, maintainers must record the
-following in issue #125 or its release follow-up:
+following in the release-setup tracking issue:
 
 - the first release PR updated `package.json`, the manifest, and `CHANGELOG.md`
   to `0.1.0` and passed CI/title checks;

@@ -23,52 +23,26 @@ import type { DomainStoryDocument } from "../../../../story/domain/DomainStoryDo
 import type { DirtyFlagService } from "../../../service/DirtyFlagService";
 
 /**
- * Issues #65 and #74: drawing must not change the persisted model (ADR ARC-4).
+ * Drawing must not change the persisted model (ADR ARC-4). On the import path
+ * `element.waypoints` is `businessObject.waypoints`, so an in-place write during
+ * a repaint lands in the saved file; hence `createTestDiagram`, not the modeler.
  *
- * WHY this exists: `DomainStoryRenderer` used to write to the business objects
- * it was only asked to paint. For an *imported* story `element.waypoints` **is**
- * `businessObject.waypoints` (`DomainStoryImportService.addConnection` aliases
- * them and nothing on that path clones), so nudging an activity's start point
- * clear of its source's label persisted 5px into the saved file — and the next
- * open re-applied it. The fixture family records the creep: `connection_8174`'s
- * start `y` is 172 / 177 / 182 / 187 across v1.1.0→v1.4.0. The renderer also
- * stamped its default colour onto any element that carried none.
- *
- * #74 removed the five writes #65 left behind — the element type, the activity
- * number (minted *and* cleared), the annotation height, and the host's dirty
- * flag. The fixture-driven case above them passed **vacuously** for four of
- * those: no fixture carries an annotation, and every fixture activity already
- * holds exactly the number the renderer would have written. The cases in
- * "nothing else survives a repaint" build the states the fixtures cannot.
- *
- * WHY browser tier and not jsdom (ADRs TST-1/TST-2): the nudge is measured out of
- * the DOM — `getLineOffset` reads the source label's last `<tspan>`'s `y` — and
- * the drawn geometry is read back with `getPointAtLength`. jsdom has neither.
- *
- * WHY `createTestDiagram` and not `createTestModeler`: the aliasing only exists
- * on the **import** path. A command-created connection already gets a fresh
- * array from `DomainStoryUpdater.copyWaypoints`, which
- * `ActivityConnections.browser.spec.ts` asserts. The full boot also brings the
- * real default icon set, which these fixtures need.
+ * Browser tier (ADRs TST-1/TST-2): the nudge is measured from the rendered
+ * label's `<tspan>` and read back with `getPointAtLength`; jsdom has neither.
  */
 
 /** The activity whose start point sits over its source actor's label. */
 const NUDGED_ACTIVITY = "connection_8174";
 
-/** Its source: the actor whose label the start point has to clear. */
+/** The actor whose label that start point has to clear. */
 const NUDGED_SOURCE = "shape_2543";
 
 /** An activity of the same source that stays above the `source.y + 60` guard. */
 const UNNUDGED_ACTIVITY = "connection_5930";
 
 /**
- * Reaches the booted diagram's own `eventBus` and `elementRegistry`.
- *
- * `EgonClient` exposes neither — hosts drive the canvas through the public API —
- * but forcing a repaint and snapshotting every business object both need the
- * live injector. `additionalModules` is the supported extension point, so the
- * probe rides the production boot instead of a second diagram. Kept local to
- * this file on purpose; it is a test seam, not shared infrastructure.
+ * Captures `eventBus` and `elementRegistry` via `additionalModules`, since
+ * `EgonClient` exposes neither.
  */
 function injectorProbe(): {
     module: ModuleDeclaration;
@@ -102,14 +76,7 @@ function injectorProbe(): {
     };
 }
 
-/**
- * Parses a v1.x fixture's story, hands the business objects to `edit`, and
- * writes them back.
- *
- * v1.x smuggled the whole story in as a JSON *string* under `dst`, so a fixture
- * cannot be tweaked by touching the parsed object — it has to be re-serialized
- * before the importer sees it.
- */
+/** v1.x stores the story as a JSON string under `dst`, so edits must re-serialize it. */
 function editLegacyStory(fixture: any, edit: (elements: any[]) => void): any {
     const elements = JSON.parse(fixture.dst);
     edit(elements);
@@ -117,7 +84,6 @@ function editLegacyStory(fixture: any, edit: (elements: any[]) => void): any {
     return fixture;
 }
 
-/** The one business object with `id` out of a parsed legacy story. */
 function businessObject(elements: any[], id: string): any {
     const found = elements.find((element) => element.id === id);
     if (!found) {
@@ -126,7 +92,6 @@ function businessObject(elements: any[], id: string): any {
     return found;
 }
 
-/** The `.djs-visual` group the renderer drew `id` into. */
 function visualOf(container: HTMLElement, id: string): SVGElement {
     const visual = container.querySelector(
         `[data-element-id="${id}"] .djs-visual`,
@@ -137,25 +102,14 @@ function visualOf(container: HTMLElement, id: string): SVGElement {
     return visual as SVGElement;
 }
 
-/**
- * The activity's drawn line. `drawActivity` appends it before label and number,
- * so it is the visual's first child — read as geometry rather than by parsing
- * the `d` attribute, which would re-implement `createLine`.
- */
+/** `drawActivity` appends the line first, so it is the visual's first child. */
 function drawnLine(container: HTMLElement, id: string): SVGGeometryElement {
     return visualOf(container, id).firstElementChild as SVGGeometryElement;
 }
 
-/**
- * `DEFAULT_COLOR` (`#000000`) as the browser reports it back.
- *
- * tiny-svg routes `stroke` into the inline *style*, not an attribute, and the
- * CSSOM normalizes a hex literal to `rgb()` — so the drawn colour has to be read
- * through `getComputedStyle`, and this is what it reads as.
- */
+/** `DEFAULT_COLOR` as `getComputedStyle` reports it: tiny-svg puts `stroke` in the style, which normalizes hex to `rgb()`. */
 const DEFAULT_COLOR_COMPUTED = "rgb(0, 0, 0)";
 
-/** The id of the arrowhead the drawn line references, out of `marker-end`. */
 function markerIdOf(line: SVGElement): string {
     const reference = getComputedStyle(line).markerEnd;
     const id = /#([^"')]+)/.exec(reference);
@@ -165,18 +119,12 @@ function markerIdOf(line: SVGElement): string {
     return id[1];
 }
 
-/** Plain `{x, y}` so a measurement survives the diagram it was taken from. */
+/** Plain `{x, y}` so a measurement survives the diagram's cleanup. */
 function xy(point: DOMPoint): { x: number; y: number } {
     return { x: point.x, y: point.y };
 }
 
-/**
- * Where a rendered label or number actually sits.
- *
- * `setCoordinates` rewrites the `<tspan>`s of an activity's texts to absolute
- * coordinates, so the first one carries the position — the enclosing `<text>`
- * does not.
- */
+/** `setCoordinates` writes absolute positions onto the `<tspan>`s, not the `<text>`. */
 function firstTspanPosition(
     visual: SVGElement,
     selector: string,
@@ -189,14 +137,8 @@ function firstTspanPosition(
 }
 
 /**
- * Every business object in the registry, as JSON.
- *
- * Snapshots the *whole* object rather than `waypoints`/`pickedColor` alone, so
- * the next renderer write is caught for free. `JSON.stringify` and not
- * `structuredClone`: `DomainStoryElementFactory` attaches `get`/`set`
- * **functions** to every business object, which `structuredClone` refuses to
- * clone. Stringifying also makes a newly *appended* key a difference, since key
- * order is insertion order.
+ * Whole business objects, so any new renderer write is caught. `JSON.stringify`
+ * because `structuredClone` rejects the `get`/`set` functions the factory attaches.
  */
 function snapshotBusinessObjects(
     elementRegistry: ElementRegistry,
@@ -209,25 +151,10 @@ function snapshotBusinessObjects(
     return snapshot;
 }
 
-/**
- * Priority above `DomainStoryRenderer`'s own 2000.
- *
- * Necessary, not defensive: the renderer's `render.*` handler *returns* the SVG
- * element it drew, and diagram-js' EventBus stops propagating as soon as a
- * listener returns a value — so a default-priority witness would never be
- * called and would report zero renders on a canvas that painted fine.
- */
+/** Above the renderer's 2000: its `render.*` handler returns a value, which stops propagation. */
 const ABOVE_RENDERER = 3000;
 
-/**
- * Repaints `element` and proves it repainted.
- *
- * The render witness is the point: without it a purity assertion passes
- * vacuously — and would have passed *before* the fix too, because nothing was
- * drawn. `element.changed` is the event production code already uses to force a
- * repaint (`DomainStoryPasteRestore`, `DomainStoryNumberingRegistry`), and
- * `render.connection` / `render.shape` are `BaseRenderer`'s own hooks.
- */
+/** Repaints `element` and proves it repainted, so purity assertions cannot pass vacuously. */
 function forceRender(eventBus: EventBus, element: Element): void {
     let renders = 0;
     const countRender = () => {
@@ -256,14 +183,12 @@ describe("renderer model purity (browser)", () => {
     let diagram: TestDiagram | undefined;
     let probe: ReturnType<typeof injectorProbe>;
 
-    // One diagram per case, torn down here: leaked canvases are what makes this
-    // tier slow. Guarded because a failed boot leaves it unset.
+    // Leaked canvases make this tier slow. Guarded because a failed boot leaves it unset.
     afterEach(() => {
         diagram?.cleanup();
         diagram = undefined;
     });
 
-    /** Boots a diagram with the injector probe attached and imports `fixture`. */
     async function importIntoFreshDiagram(fixture: any): Promise<TestDiagram> {
         probe = injectorProbe();
         const booted = await createTestDiagram({}, [probe.module]);
@@ -281,10 +206,8 @@ describe("renderer model purity (browser)", () => {
                 NUDGED_ACTIVITY,
             ) as Connection;
 
-            // Preconditions, so the case cannot go green for the wrong reason:
-            // the first render already left the persisted point alone, and the
-            // element still shares the business object's array — the aliasing
-            // that made the old in-place nudge persist.
+            // Preconditions: the persisted point is untouched, and the element
+            // still shares the business object's array.
             expect(connection.businessObject.waypoints[0]).toEqual({
                 x: 185,
                 y: 172,
@@ -301,15 +224,7 @@ describe("renderer model purity (browser)", () => {
         });
     });
 
-    /**
-     * The four writes #74 removed that no fixture can reach.
-     *
-     * These drive a `createTestModeler` rather than an imported fixture: an
-     * annotation, a work-object-sourced activity carrying a number, the dirty
-     * flag and a paste are all states the eight historical files simply do not
-     * contain — which is why the byte-comparison above went green while four
-     * writes were still live.
-     */
+    /** States no fixture contains, so the byte-comparison above cannot reach them. */
     describe("nothing else survives a repaint", () => {
         let modeler: TestModeler | undefined;
 
@@ -329,12 +244,7 @@ describe("renderer model purity (browser)", () => {
 
             forceRender(modeler.eventBus, annotation);
 
-            // `drawAnnotation` used to mirror the height onto
-            // `businessObject.number` — "the keyword height is not exported",
-            // which stopped being true once the export pass wrote `height`
-            // itself. The field is retired: an annotation has no number.
             expect("number" in annotation.businessObject).toBe(false);
-            // …and the height it was mirroring survives the paint on its own.
             expect(annotation.height).toBe(80);
         });
 
@@ -345,15 +255,11 @@ describe("renderer model purity (browser)", () => {
             });
             const other = addWorkObject(modeler, { point: { x: 500, y: 200 } });
             const response = connect(modeler, workObject, other)!;
-            // A number this activity has no business carrying — the shape a
-            // hand-edited file or a future bug produces.
+            // A number this activity should not carry, as a hand-edited file might.
             response.businessObject.number = 9;
 
             forceRender(modeler.eventBus, response);
 
-            // `renderExternalNumber` used to overwrite it with `null` on sight.
-            // Silently correct-looking, and invisible to the fixture matrix only
-            // because every fixture already stores `null` here.
             expect(response.businessObject.number).toBe(9);
         });
 
@@ -363,17 +269,13 @@ describe("renderer model purity (browser)", () => {
             const dirtyFlagService = modeler.get<DirtyFlagService>(
                 "domainStoryDirtyFlagService",
             );
-            // `clear()` rather than `undo()`: undoing `shape.create` removes the
-            // actor, and `forceRender`'s witness would then correctly report zero
-            // repaints and fail. Clearing empties the stack — the state a freshly
-            // opened story is in — while leaving the shape on the canvas to paint.
+            // `clear()`, not `undo()`: undo would remove the actor and leave
+            // nothing to repaint.
             modeler.commandStack.clear();
             expect(dirtyFlagService.dirty).toBe(false);
 
             forceRender(modeler.eventBus, actor);
 
-            // `drawShape`/`drawConnection` each called `makeDirty()`, so a
-            // selection or a scroll-into-view reported unsaved changes.
             expect(dirtyFlagService.dirty).toBe(false);
         });
     });
@@ -391,9 +293,8 @@ describe("renderer model purity (browser)", () => {
             const start = line.getPointAtLength(0);
             const end = line.getPointAtLength(line.getTotalLength());
 
-            // One label line puts the source's last tspan at y=75, so the
-            // offset is 75 - 70 = 5. Only the start overlaps; the end must not
-            // move.
+            // One label line puts the last tspan at y=75: offset 75 - 70 = 5.
+            // Only the start overlaps.
             expect(start.y).toBeCloseTo(model[0].y + 5, 3);
             expect(start.x).toBeCloseTo(model[0].x, 3);
             expect(end.y).toBeCloseTo(model[1].y, 3);
@@ -408,8 +309,7 @@ describe("renderer model purity (browser)", () => {
                 probe.elementRegistry().get(UNNUDGED_ACTIVITY) as Connection
             ).businessObject.waypoints;
 
-            // Control case: this activity's start sits above `source.y + 60`, so
-            // the first guard rejects it and the drawn line is the model line.
+            // Control: the start sits above `source.y + 60`, so nothing is nudged.
             const start = drawnLine(
                 diagram.container,
                 UNNUDGED_ACTIVITY,
@@ -462,21 +362,12 @@ describe("renderer model purity (browser)", () => {
         }
 
         it("positions both from the nudged waypoints, not the element's own", async () => {
-            // The one case that cannot be asserted against a literal without
-            // re-implementing `labelPosition` and `numberBoxDefinitions`. Both
-            // depend *only* on the waypoints — never on the source shape — so
-            // two diagrams are compared instead:
-            //
-            //   A: the fixture. Start persisted at 172, drawn at 177.
-            //   B: start already at 177, and the source moved down so the
-            //      `source.y + 60` guard fails and nothing is nudged.
-            //
-            // Same drawn line, therefore the same label and number. If either
-            // consumer is ever handed `element.waypoints` again, A computes from
-            // 172 and B from 177 and this goes red. No coordinate is hand-written.
+            // Label and number depend only on waypoints, so compare two diagrams
+            // with the same drawn line instead of hand-writing coordinates:
+            //   A: start persisted at 172, nudged to 177.
+            //   B: start persisted at 177, source moved so nothing is nudged.
             const named = (elements: any[]) => {
-                // Fixture names are "" and `renderActivityLabel` draws nothing
-                // for an empty name, so the label needs one to exist at all.
+                // An empty name draws no label.
                 businessObject(elements, NUDGED_ACTIVITY).name = "picks up";
             };
 
@@ -513,8 +404,7 @@ describe("renderer model purity (browser)", () => {
                 importFixture("dst_export_version_1_0_0.json"),
             );
 
-            // The *live* model, not just the export: export serializes through
-            // JSON, which would drop an `undefined` and hide a write.
+            // The live model too: export's JSON would drop an `undefined` write.
             for (const element of probe.elementRegistry().getAll()) {
                 if (!element.businessObject) continue;
                 expect(
@@ -533,8 +423,6 @@ describe("renderer model purity (browser)", () => {
             );
             const container = diagram.container;
 
-            // Both former writers stamped a default and then read it back, so
-            // reading the constant directly has to render identically.
             const groupRect = visualOf(container, "shape_1683").querySelector(
                 "rect",
             )!;
@@ -545,12 +433,8 @@ describe("renderer model purity (browser)", () => {
             const line = drawnLine(container, UNNUDGED_ACTIVITY);
             expect(getComputedStyle(line).stroke).toBe(DEFAULT_COLOR_COMPUTED);
 
-            // The arrowhead must still resolve, and its id must stay a legal CSS
-            // identifier: diagram-js' `PreviewSupport` clones a drag preview's
-            // marker via `querySelector("marker#" + id)`, which throws outright
-            // on the `#` of a colour literal. The default colour is `#000000`
-            // since #65, so `markerId` folds it away — without that, every
-            // activity drag would break.
+            // The marker id must stay a legal CSS identifier: `PreviewSupport`
+            // runs `querySelector("marker#" + id)` on every activity drag.
             const markerId = markerIdOf(line);
             expect(markerId).not.toContain("#");
             expect(

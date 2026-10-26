@@ -6,11 +6,8 @@ export function sanitizeTextForSVGExport(str: string): string {
 }
 
 /**
- * Reverses the legacy substitutions made by `sanitizeTextForSVGExport`.
- *
- * This mapping is intentionally narrow and lossy: literal `&lt;`/`&gt;` entities
- * and literal en-dash pairs cannot be distinguished from sanitized text. It is
- * not a general-purpose XML decoder.
+ * Reverses `sanitizeTextForSVGExport`. Deliberately narrow and lossy: literal
+ * `&lt;`/`&gt;` and en-dash pairs are indistinguishable from sanitized text.
  */
 export function unsanitizeTextForSVGExport(str: string): string {
     return str
@@ -19,7 +16,6 @@ export function unsanitizeTextForSVGExport(str: string): string {
         .replaceAll("––", "--");
 }
 
-// sanitize user-Input to be Desktop-Filename safe
 export function sanitizeForDesktop(str: string): string {
     const map: { [key: string]: string } = {
         "/": "",
@@ -39,10 +35,10 @@ export function sanitizeForDesktop(str: string): string {
 }
 
 /**
- * Icon names become CSS class names for the palette/context-pad. Characters
- * with CSS meaning (".", ":", spaces, …) would break the selector, so every
- * char outside [a-zA-Z0-9_-] becomes "_", a leading digit (or "-<digit>")
- * gets a "_" prefix, and the result is lowercased for stable matching.
+ * Icon names become palette/context-pad class names, and characters with CSS
+ * meaning would break the selector: anything outside [a-zA-Z0-9_-] becomes "_",
+ * a leading digit (or "-<digit>") gets a "_" prefix, and the result is
+ * lowercased.
  */
 export function sanitizeForCss(name: string): string {
     return name

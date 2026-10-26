@@ -8,18 +8,13 @@ import { IconStyleSheetPort } from "../../domain/ports/IconStyleSheetPort";
 import { passThroughIconSanitizer } from "../../../__tests__/helpers/passThroughIconSanitizer";
 import { ElementTypes } from "../../../story/domain/elementTypes";
 
-// This suite exercises import/export, not CSS injection; a no-op port exactly
-// preserves what the real injector does with no style element configured — a
-// silent no-op.
+// This suite exercises import/export, not CSS injection.
 const noopStyleSheet: IconStyleSheetPort = { addIconStyle() {} };
 
 /**
- * Regression cover for issue #4 on the import/export side: dot-containing icon
- * names must survive createIconSetConfiguration → loadConfiguration → export
- * verbatim (they were previously truncated to "my.icon" and silently dropped
- * on import). Also pins the new replace-on-import semantics. The per-test
- * `beforeEach` builds a fresh IconDictionaryService, so its now instance-owned
- * `customIcons` pool starts empty for every case (issue #12).
+ * Dotted icon names must survive createIconSetConfiguration → loadConfiguration
+ * → export verbatim. Each case gets a fresh IconDictionaryService, so the icon
+ * pool starts empty.
  */
 function iconSet(
     actors: Record<string, string>,
@@ -100,10 +95,8 @@ describe("IconSetImportExportService dot-named icons", () => {
 });
 
 /**
- * A half-empty icon set is legal here — unlike upstream, which always has the
- * default set loaded. Requiring *both* halves made the export report nothing at
- * all, so the populated half was overwritten with EMPTY_ICON_SET on the next
- * save and `hasIcon()`/`getIcons()` denied icons that had just been added.
+ * A half-empty icon set is legal here, unlike upstream, which always has the
+ * default set loaded; the populated half must survive export.
  */
 describe("IconSetImportExportService half-empty icon sets", () => {
     let dictionaryService: IconDictionaryService;

@@ -8,12 +8,9 @@ import { DomainStoryImportService } from "../DomainStoryImportService";
 import { DomainStoryExportService } from "../DomainStoryExportService";
 
 /**
- * Guards the DI wiring that ties import and export together: both now inject the
- * `domainStoryPropertiesService` that carries story metadata across a round
- * trip. A mistyped `$inject` key or a missing module dependency would only
- * surface at runtime inside a live diagram, so this resolves the services
- * through a real didi injector — with the diagram-js primitives stubbed — to
- * fail fast in CI instead.
+ * A mistyped `$inject` key or a missing module dependency only surfaces at
+ * runtime in a live diagram, so this resolves the services through a real didi
+ * injector, with the diagram-js primitives stubbed.
  */
 const diagramPrimitives = {
     __init__: [],
@@ -21,9 +18,8 @@ const diagramPrimitives = {
     canvas: ["value", {}],
     elementRegistry: ["value", { getAll: () => [], find: () => undefined }],
     elementFactory: ["value", {}],
-    // Real diagram-js always registers `config`; IconCssInjector injects
-    // `config.domainStoryIconStyleSheet`, and didi throws outright when the
-    // `config` provider itself is absent.
+    // diagram-js always registers `config`, and didi throws when it is absent
+    // (IconCssInjector injects `config.domainStoryIconStyleSheet`).
     config: ["value", {}],
 };
 
@@ -48,10 +44,8 @@ describe("service DI wiring", () => {
     });
 
     /**
-     * A host composing a subset of the plugin gets only what `__depends__`
-     * declares. `ImportModule` injects the two icon-set services, so it has to
-     * pull `IconSetModule` in itself — note the module list below deliberately
-     * omits it.
+     * `ImportModule` injects the icon-set services, so it must pull in
+     * `IconSetModule` itself; the module list below omits it on purpose.
      */
     it("resolves the import service without the icon set module listed explicitly", () => {
         const injector = new Injector([ImportModule, diagramPrimitives]);

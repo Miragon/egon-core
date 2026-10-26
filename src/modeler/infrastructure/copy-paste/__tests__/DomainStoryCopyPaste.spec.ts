@@ -6,19 +6,9 @@ import { DomainStoryPropertyCopy } from "../DomainStoryPropertyCopy";
 import { ElementTypes } from "../../../../story/domain/elementTypes";
 
 /**
- * Issue #74: a pasted element must carry its `type` before anything paints it.
- *
- * Paste is the one path that mints a business object without one —
- * `copyElement` is called with no `propertyNames`, so it copies nothing. Every
- * other path already stamps it (the file carries it on import;
- * `DomainStoryElementFactory.create` sets it for palette create, context-pad
- * append and `shape.replace`). Until #74 the *renderer* patched it in while
- * drawing, which meant an unrendered paste had an untyped business object and
- * exported one too.
- *
- * Synthetic events on a real `EventBus`, the precedent of
- * `DomainStoryPasteRestore.spec.ts`: the two listeners under test are the whole
- * mechanism and neither needs a canvas.
+ * A pasted element must carry its `type` before anything paints it (ADR ARC-4).
+ * Synthetic events on a real `EventBus`: the two listeners under test are the
+ * whole mechanism and neither needs a canvas.
  */
 describe("DomainStoryCopyPaste", () => {
     let eventBus: EventBus;
@@ -51,14 +41,11 @@ describe("DomainStoryCopyPaste", () => {
             businessObject: { id: "shape_1", type, name: "Alice" },
         });
 
-        // The type, on the business object, with no render having happened.
         expect(descriptor.businessObject.type).toBe(type);
         expect(descriptor.businessObject.name).toBe("Alice");
     });
 
     it("carries an activity's type, the case the renderer used to patch", () => {
-        // `drawConnection`'s "fixes activities that were copy-pasted" comment
-        // named this one specifically.
         const descriptor = copyThenPaste({
             type: ElementTypes.ACTIVITY,
             businessObject: { id: "connection_1", type: ElementTypes.ACTIVITY },
@@ -68,10 +55,7 @@ describe("DomainStoryCopyPaste", () => {
     });
 
     it("copies name and type, and nothing else", () => {
-        // The narrow surface is deliberate — a pasted element is a *new* element
-        // and must not inherit the original's id, number or geometry. `type`
-        // joining `name` in #74 is the whole widening; anything more here would
-        // be a regression, not a feature.
+        // A pasted element is new and must not inherit id, number or geometry.
         const type = ElementTypes.ACTIVITY;
 
         const descriptor = copyThenPaste({

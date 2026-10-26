@@ -1,7 +1,7 @@
 # Infrastructure decision audit
 
 - Date: 2026-09-13
-- Scope: issue #70's six named infrastructure areas
+- Scope: six named infrastructure areas
 - Outcome: the pure geometry helper and four deferred notation-policy slices
   now live in domain; remaining adapter branches are classified below.
 

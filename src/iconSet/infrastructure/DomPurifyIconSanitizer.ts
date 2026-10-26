@@ -141,9 +141,8 @@ interface ParsedDataUrl {
 }
 
 /**
- * Browser infrastructure adapter implementing the static-SVG policy in ADR
- * 0023. Each didi injector constructs its own instance, including its own
- * DOMPurify object and hooks/configuration state.
+ * The static-SVG policy of ADR ICO-2. Each didi injector gets its own instance,
+ * DOMPurify object and hook state.
  */
 export class DomPurifyIconSanitizer implements IconSanitizerPort {
     static $inject: string[] = [];
@@ -244,9 +243,8 @@ export class DomPurifyIconSanitizer implements IconSanitizerPort {
             return undefined;
         }
 
-        // Standalone snippets commonly omit xmlns. They are unambiguously SVG
-        // at this API boundary; normalize the root through the XML serializer
-        // so the root and all unprefixed descendants acquire the SVG namespace.
+        // Standalone snippets often omit xmlns; reserializing gives the root
+        // and all unprefixed descendants the SVG namespace.
         if (parsed.documentElement.namespaceURI === null) {
             parsed.documentElement.setAttribute("xmlns", SVG_NAMESPACE);
             parsed = this.parser.parseFromString(

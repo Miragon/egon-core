@@ -19,22 +19,13 @@ import { ElementTypes } from "../../../story/domain/elementTypes";
 import { isForbiddenAnnotationEdge } from "../../../story/domain/modelingRules";
 
 /**
- * The connection half of issue #55: activities and annotation connections driven
- * through a real commandStack.
+ * Activities and annotation connections through a real commandStack.
+ * `DomainStoryRules.spec.ts` checks the verdicts; this checks that modeling and
+ * the updater honour them (endpoint ids, cropping, reconnect undo).
  *
- * WHY this exists next to `rules/__tests__/DomainStoryRules.spec.ts`: that spec
- * fires the rule events directly and asserts the *verdicts* of the grammar. It
- * cannot see whether `modeling` and the updater then honour them — that
- * `DomainStoryUpdater.updateConnection` mirrors the endpoint **ids** onto the
- * business object (the only place that mapping happens, so an export depends on
- * it), that `cropConnection` really docks the line at the shape borders, and that
- * a reconnect plus undo keeps element and business object in step. Those are the
- * seams an upstream sync breaks silently.
- *
- * WHY browser tier and not jsdom (ADR TST-2): creating a connection reaches
- * `canvas.addConnection` → tiny-svg `translate()` →
- * `SVGSVGElement.createSVGTransform`, which jsdom does not implement, and the
- * cropping asserted here needs real SVG geometry.
+ * Browser tier (ADR TST-2): `canvas.addConnection` reaches
+ * `SVGSVGElement.createSVGTransform`, which jsdom lacks, and cropping needs real
+ * SVG geometry.
  */
 describe("activity connections (browser)", () => {
     let modeler: TestModeler | undefined;
@@ -60,9 +51,7 @@ describe("activity connections (browser)", () => {
             modeler = createTestModeler();
             const { actor, workObject } = addHorizontalPair(modeler);
 
-            // The grammar decides the edge type; the interactive Connect feature
-            // reads it off the rule, so a spec that hard-codes the type would
-            // never notice the two disagreeing.
+            // Connect reads the edge type off the rule, so don't hard-code it.
             const verdict = typedVerdict(
                 modeler.rules.allowed("connection.create", {
                     source: actor,
@@ -75,9 +64,7 @@ describe("activity connections (browser)", () => {
 
             expect(activity["type"]).toBe(ElementTypes.ACTIVITY);
             expect(activity.businessObject.type).toBe(ElementTypes.ACTIVITY);
-            // Ids, not element references: `DomainStoryUpdater.updateConnection`
-            // is the single place that maps endpoints to ids, and the exporter
-            // reads only the business object.
+            // Ids, not element references: the exporter reads only these.
             expect(activity.businessObject.source).toBe(actor.id);
             expect(activity.businessObject.target).toBe(workObject.id);
             expect(actor.outgoing).toContain(activity);
@@ -127,16 +114,9 @@ describe("activity connections (browser)", () => {
                 }),
             ).toBe(false);
 
-            // …and nothing reached the canvas, because nothing consulted a
-            // forbidden verdict. NOTE: this asserts the rule, not `modeling`.
-            // `Modeling.connect` executes `connection.create` on the
-            // commandStack, and `CommandStack.execute` never calls its own
-            // `canExecute` — so a *direct* `modeling.connect(alice, bob)` does
-            // create an illegal edge. That is diagram-js' documented division of
-            // labour (rules guard the interaction layer: Connect, Bendpoints,
-            // CopyPaste), not a defect here; every UI path asks `rules.allowed`
-            // first. Pinning it as "modeling refuses" would test a fiction, so
-            // `storyBuilder.connect` says the same in its doc comment.
+            // Asserts the rule, not `modeling`: `CommandStack.execute` never
+            // checks `canExecute`, so a direct `modeling.connect(alice, bob)` would
+            // succeed. In diagram-js, rules guard only the interaction layer.
             expect(
                 modeler.elementRegistry
                     .getAll()
@@ -151,10 +131,8 @@ describe("activity connections (browser)", () => {
 
     describe("connection.reconnect", () => {
         /**
-         * Issue #66, half one: the rule now answers `false` rather than
-         * `undefined` (which `Rules.allowed` maps to `true`). Both orientations
-         * are asserted because `BendpointMove` retries a denied reconnect with
-         * the endpoints swapped.
+         * `false`, not `undefined` (which `Rules.allowed` maps to `true`). Both
+         * orientations, because `BendpointMove` retries a denied reconnect swapped.
          */
         it("refuses an activity→annotation reconnect in either orientation", () => {
             modeler = createTestModeler();
@@ -185,16 +163,8 @@ describe("activity connections (browser)", () => {
         });
 
         /**
-         * Issue #66, half two — **not** redundant with the rule-level case
-         * above. That one pins the *verdict*; this one proves the verdict is
-         * what actually governs the interaction, so the pair above cannot drift
-         * into asserting an answer no code path reads.
-         *
-         * It is the swap retry that makes the distinction load-bearing: `false`
-         * is what *enters* it, so with a target-only grammar clause the retry is
-         * allowed and this drag lands the same forbidden edge reversed
-         * (`annotation --ACTIVITY--> actor`) — verified by narrowing the clause
-         * and watching `activity.source` become the annotation.
+         * Proves the verdict above governs the real drag: with a target-only
+         * clause the swap retry would land `annotation --ACTIVITY--> actor`.
          */
         it("refuses a bendpoint drag of an activity's end onto an annotation", () => {
             modeler = createTestModeler();
@@ -230,8 +200,6 @@ describe("activity connections (browser)", () => {
             );
             (dragging.end as () => void)();
 
-            // Both orientations deny, so `bendpoint.move.end` bails before
-            // `modeling.reconnect` — the model is untouched.
             expect(activity.source).toBe(actor);
             expect(activity.target).toBe(workObject);
             expect(annotation.incoming).toHaveLength(0);
@@ -292,29 +260,20 @@ describe("activity connections (browser)", () => {
 
             const activity = connect(modeler, actor, workObject)!;
 
-            // A straight edge between two disjoint shapes: `BaseLayouter` lays it
-            // out centre-to-centre, then `DomainStoryUpdater.cropConnection`
-            // docks the ends. Two waypoints either way, so the count alone proves
-            // nothing — the *positions* do.
+            // Two waypoints cropped or not; only the positions prove the crop.
             expect(activity.waypoints).toHaveLength(2);
             const [start, end] = croppedWaypoints(activity.waypoints);
 
-            // The uncropped anchor is kept as `original`, so the crop is visible
-            // as a difference rather than having to be recomputed here.
             expect(start.original).toEqual({ x: 150, y: 200 });
             expect(start).not.toEqual(
                 expect.objectContaining({ x: 150, y: 200 }),
             );
 
-            // Exact pixels depend on the docking maths; what must hold is that
-            // each end was pulled outward, past its own shape's centre, onto that
-            // shape's outline.
             expectPointOnOutlineOf(start, actor);
             expectPointOnOutlineOf(end, workObject);
             expect(start.x).toBeGreaterThan(actor.x + actor.width / 2);
             expect(end.x).toBeLessThan(workObject.x + workObject.width / 2);
 
-            // Left-to-right story: x must increase monotonically along the line.
             expect(start.x).toBeLessThan(end.x);
         });
 
@@ -324,9 +283,7 @@ describe("activity connections (browser)", () => {
 
             const activity = connect(modeler, actor, workObject)!;
 
-            // `copyWaypoints` clones rather than aliases, so the exported story
-            // cannot be mutated from under the canvas — but it does carry the
-            // `original` anchor along, which the importer relies on.
+            // Cloned, not aliased, keeping the `original` anchor for the importer.
             expect(activity.businessObject.waypoints).not.toBe(
                 activity.waypoints,
             );
@@ -352,27 +309,18 @@ describe("activity connections (browser)", () => {
             const [start, end] = croppedWaypoints(activity.waypoints);
             expectPointOnOutlineOf(start, actor);
             expectPointOnOutlineOf(end, workObject);
-            // The line now runs down-right, so y must increase along it too.
             expect(start.y).toBeLessThan(end.y);
             expect(start.x).toBeLessThan(end.x);
         });
     });
 });
 
-/**
- * `Rules.allowed` is typed `boolean | null`, but the grammar answers a connection
- * question with the resulting element type. Narrowing it once here keeps the
- * double cast out of the test bodies.
- */
+/** `Rules.allowed` is typed `boolean | null`; connection rules return a type. */
 function typedVerdict(verdict: unknown): { type: ElementTypes } {
     return verdict as { type: ElementTypes };
 }
 
-/**
- * A cropped waypoint additionally carries the uncropped anchor as `original` —
- * diagram-js' own docking contract, which `DomainStoryUpdater.copyWaypoints`
- * preserves. diagram-js' `Point` type does not declare it.
- */
+/** diagram-js' `Point` type omits the `original` anchor that docking adds. */
 type CroppedPoint = Point & { original: Point };
 
 function croppedWaypoints(waypoints: readonly Point[]): CroppedPoint[] {
@@ -380,14 +328,9 @@ function croppedWaypoints(waypoints: readonly Point[]): CroppedPoint[] {
 }
 
 /**
- * Asserts a docking point lies on the shape's *rendered* outline rather than its
- * bounding box. `CroppingConnectionDocking` intersects the path that
- * `DomainStoryRenderer.getShapePath` hands it, and that path is deliberately
- * larger than the box: `getRectPath` uses `width / 2 + 5` per half-edge, so the
- * outline reaches 10 units past the box's right and bottom edges (it is anchored
- * at the top-left corner, not centred). That 5-unit offset is what keeps the
- * arrowhead clear of the icon, so a bounding-box assertion here would be wrong,
- * not merely stricter.
+ * Checks the rendered outline, not the bounding box: `getRectPath` uses
+ * `width / 2 + 5` per half-edge from the top-left, so the outline overshoots the
+ * right and bottom by 10 to keep the arrowhead clear of the icon.
  */
 function expectPointOnOutlineOf(point: Point, shape: Shape): void {
     const outlineOvershoot = 10;

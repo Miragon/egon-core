@@ -17,16 +17,14 @@ import type { DomainStoryTextRendererConfig } from "../../modeler/domain/model/T
 import { TEST_ICON_SET } from "./testIconSet";
 
 export interface TestModelerOptions {
-    /** Icon set to load before any shape is created. Defaults to TEST_ICON_SET. */
+    /** Defaults to TEST_ICON_SET. */
     icons?: Partial<IconSetData>;
     additionalModules?: ModuleDeclaration[];
-    /** Label typography overrides, as `EgonClientConfig.textRenderer` supplies them. */
     textRenderer?: DomainStoryTextRendererConfig;
-    /** Existing host to share between modelers. Owned by the caller when set. */
+    /** Shared between modelers; owned by the caller when set. */
     container?: HTMLElement;
 }
 
-/** A booted modeler plus the injector services canvas specs drive directly. */
 export interface TestModeler {
     diagram: Diagram;
     container: HTMLElement;
@@ -38,34 +36,19 @@ export interface TestModeler {
     eventBus: EventBus;
     modeling: DomainStoryModeling;
     rules: Rules;
-    /** Escape hatch for services this interface does not name. */
     get<T>(token: string): T;
     cleanup(): void;
 }
 
 /**
- * Boots a real diagram-js graph and hands back its injector, for specs that
- * drive the commandStack rather than the public API.
+ * For specs that drive the commandStack; public-API specs use
+ * `createTestDiagram`. Browser-tier only (ADR TST-2): jsdom lacks
+ * `createSVGTransform` and a non-zero `getBBox`.
  *
- * Browser-tier only — see ADR TST-2. Anything that reaches `canvas.addShape`
- * needs `SVGSVGElement.createSVGTransform` and a non-zero `getBBox`, neither of
- * which jsdom implements, so a canvas-driving spec cannot run in the unit tier.
- *
- * Built **on `DiagramJsModelerAdapter`**, not a hand-rolled `new Diagram(...)`:
- * the adapter owns the production bootstrap — the `canvas: { container, width,
- * height }` nesting (whose absence was a real bug, #59), the per-session
- * `[data-egon-icons-css]` node and scoped canvas attribute handed to the icon
- * stylesheet adapter, and realizing the implicit canvas root (which
- * `isBackground` depends on). A
- * harness that boots differently would test a fiction. Icons load through the
- * production `DiagramJsIconAdapter` for the same reason.
- *
- * Sits beside {@link ../helpers/createTestDiagram.createTestDiagram}; neither
- * wraps the other. Use `createTestDiagram` for `EgonClient` public-API specs and
- * `createTestModeler` for injector/commandStack specs.
- *
- * Create one per `it` and `cleanup()` in `afterEach` — leaked canvases, not file
- * count, are what makes the browser tier slow.
+ * Boots through the production adapters, which own the canvas nesting, the
+ * icon stylesheet node and the implicit root; any other boot would test a
+ * fiction. Create one per `it` and `cleanup()` in `afterEach`: leaked canvases
+ * are what make the browser tier slow.
  */
 export function createTestModeler(
     options: TestModelerOptions = {},
@@ -87,10 +70,8 @@ export function createTestModeler(
     );
     const diagram = adapter.getDiagram();
 
-    // Before any shape exists: the renderer resolves an actor's icon at draw
-    // time and tiny-svg throws InvalidCharacterError on the "" a miss returns.
-    // Held, not dropped: the adapter owns subscriptions and timers that
-    // cleanup() must be able to disarm.
+    // Before any shape exists: tiny-svg throws on the "" a missed icon returns.
+    // Kept so cleanup() can disarm the adapter's subscriptions and timers.
     const iconAdapter = new DiagramJsIconAdapter(diagram);
     iconAdapter.loadIcons(options.icons ?? TEST_ICON_SET);
 
@@ -100,8 +81,7 @@ export function createTestModeler(
     return {
         diagram,
         container,
-        // The adapter already realized the root; read it back rather than making
-        // a second one, so harness and production agree on which root is live.
+        // Read back, not created, so harness and production share the live root.
         root: canvas.getRootElement() as Root,
         canvas,
         commandStack: get<CommandStack>("commandStack"),

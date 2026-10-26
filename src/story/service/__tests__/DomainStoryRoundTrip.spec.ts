@@ -9,15 +9,12 @@ import { IconStyleSheetPort } from "../../../iconSet/domain/ports/IconStyleSheet
 import type { ElementRegistryService } from "../../../modeler/service/ElementRegistryService";
 import { passThroughIconSanitizer } from "../../../__tests__/helpers/passThroughIconSanitizer";
 
-// The round-trip proves metadata/icon-set-name survival, not CSS injection; a
-// no-op port matches the real injector with no style element configured.
+// This proves metadata survival, not CSS injection.
 const noopStyleSheet: IconStyleSheetPort = { addIconStyle() {} };
 
 /**
- * Open→save round-trip for the v4.0.0 format. Drives the *real* icon and
- * properties services on both the import and export sides — only the element
- * registry (which needs a live canvas) is stubbed — so it proves the metadata
- * and icon-set name actually survive the trip rather than merely being echoed.
+ * Drives the real icon and properties services on both sides and stubs only the
+ * element registry (it needs a live canvas), so metadata must actually survive.
  */
 describe("v4.0.0 open→save round-trip", () => {
     it("preserves title/description/scope and the icon-set name, converges on 4.0.0, and emits no trailer", () => {
@@ -44,7 +41,7 @@ describe("v4.0.0 open→save round-trip", () => {
             domainStory.version,
         );
 
-        // --- export side (registry stubbed; a live canvas is out of scope) ---
+        // --- export side ---
         const registry = {
             createObjectListForDSTDownload: () =>
                 domainStory.businessObjects.map((businessObject) => ({
@@ -81,10 +78,8 @@ describe("v4.0.0 open→save round-trip", () => {
         ).toBe(true);
     });
 
-    // Regression lock for issue #7: SVG-unsafe characters ("--", "<", ">") are a
-    // model concern only at export-to-SVG time, never at JSON export/import. A
-    // name carrying them must survive parse→import→export byte-for-byte — no
-    // "––", no "%3C"/"%3E" escaping creeping into the persisted model.
+    // SVG-unsafe characters are escaped only at export-to-SVG time; the JSON
+    // model must keep them verbatim.
     it("round-trips a label with '--', '<', '>' through JSON export/import verbatim", () => {
         const rawLabel = "a--b <c>";
         const fixture = importFixture<any>("egn_export_version_4_0_0.json");

@@ -1,6 +1,5 @@
-// react-colorful 5.8.1 needs this small React-compatible subset. Importing it
-// through diagram-js's UI barrel guarantees both widgets use that barrel's
-// exact Preact runtime even when a package manager virtualizes Preact peers.
+// The React subset react-colorful 5.8.1 needs, taken from diagram-js' UI barrel
+// so both widgets share one Preact runtime even with virtualized peers.
 import {
     createElement as preactCreateElement,
     useCallback,
@@ -26,10 +25,8 @@ function withNativeEvent(handler: EventHandler): EventHandler {
     };
 }
 
-// Preact passes the original DOM event to handlers, while react-colorful's
-// interactive controls expect React's SyntheticEvent.nativeEvent. Adapt only
-// picker-created DOM elements; component VNodes and diagram-js UI stay on the
-// unmodified diagram-js Preact runtime.
+// react-colorful reads React's `event.nativeEvent`, which Preact lacks. Only
+// picker-created DOM elements are adapted.
 export const createElement = ((
     type: any,
     props: any,
@@ -48,9 +45,8 @@ export const createElement = ((
 
 export { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState };
 
-// Memoization is only an optimization inside the pinned react-colorful build;
-// an identity adapter preserves component behavior without importing a second
-// Preact compatibility runtime.
+// Identity is enough: memo is only an optimization in react-colorful, and this
+// avoids a second Preact compat runtime.
 export function memo<T>(component: T): T {
     return component;
 }

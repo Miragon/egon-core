@@ -16,22 +16,11 @@ import { TEST_ICON_NAMES } from "../../../../__tests__/helpers/testIconSet";
 import { ElementTypes } from "../../../../story/domain/elementTypes";
 
 /**
- * "Change type" end to end: the `ds-replace` popup menu, `DomainStoryReplace`
- * and the `shape.replace` command, driven on a real graph.
+ * "Change type" end to end: popup menu, `DomainStoryReplace` and `shape.replace`
+ * on a real graph, because the seams between them fail silently.
  *
- * WHY it exists: the replace feature is assembled across four collaborators and
- * the seams are all silent when broken. The provider is registered from inside
- * `DomainStoryContextPadProvider`'s constructor, so deleting one line leaves
- * every unit test green and the menu permanently empty. And `DomainStoryReplace`
- * hands `modeling.replaceShape` a *centre* point computed as
- * `ceil(x + width / 2)` while `CreateShapeHandler` subtracts
- * `round(width / 2)` — the two conventions only cancel out by arithmetic
- * coincidence, so the position needs pinning rather than trusting.
- *
- * WHY browser tier (ADR TST-2): `shape.replace` runs `createShape`,
- * `moveElements`, `connection.reconnect` and `removeShape`, all of which reach
- * `canvas.addShape` → tiny-svg `translate()` → `SVGSVGElement.createSVGTransform`,
- * absent in jsdom. The popup menu also renders real DOM here.
+ * Browser tier (ADR TST-2): `shape.replace` reaches
+ * `SVGSVGElement.createSVGTransform`, absent in jsdom, and the popup renders DOM.
  */
 describe("replace element (browser)", () => {
     let modeler: TestModeler | undefined;
@@ -48,11 +37,7 @@ describe("replace element (browser)", () => {
         return modeler!.get<PopupMenu>("popupMenu");
     }
 
-    /**
-     * Opens the real popup for `target` and clicks the rendered entry, so the
-     * assertions cover the registration, the entry list and the action together
-     * rather than calling `DomainStoryReplace` directly.
-     */
+    /** Clicks the rendered entry, covering registration, entry list and action. */
     function triggerReplaceEntry(target: Shape, actionName: string) {
         popupMenu().open(target, "ds-replace", { x: 0, y: 0 });
 
@@ -79,10 +64,7 @@ describe("replace element (browser)", () => {
             modeler = createTestModeler();
             const actor = addActor(modeler);
 
-            // `isEmpty` returns true both when no provider is registered and
-            // when the registered one yields nothing, so `false` proves the
-            // registration in DomainStoryContextPadProvider's constructor ran
-            // *and* that the provider answered for an actor.
+            // `false` proves the provider is registered and answers for actors.
             expect(popupMenu().isEmpty(actor, "ds-replace")).toBe(false);
         });
 
@@ -107,8 +89,6 @@ describe("replace element (browser)", () => {
             modeler = createTestModeler();
             const group = addGroup(modeler, { point: { x: 400, y: 300 } });
 
-            // Only actors and work objects have interchangeable icons; a group
-            // must not open an empty menu over a "Change type" it never shows.
             expect(popupMenu().isEmpty(group, "ds-replace")).toBe(true);
         });
 
@@ -134,10 +114,8 @@ describe("replace element (browser)", () => {
 
             const replaced = onlyElementOfType(ACTOR_GROUP);
             expect(replaced.businessObject.name).toBe("Alice");
-            // The pin for the two clashing centre conventions: `DomainStoryReplace`
-            // passes `ceil(x + 75/2)` = x + 38 and `CreateShapeHandler` subtracts
-            // `round(75/2)` = 38, so the corner survives only because both round
-            // the same way. Changing either side moves every replaced element.
+            // `DomainStoryReplace` adds `ceil(75/2)` and `CreateShapeHandler`
+            // subtracts `round(75/2)`; both are 38 only by coincidence.
             expect({ x: replaced.x, y: replaced.y }).toEqual({ x, y });
             expect(replaced.businessObject.x).toBe(x);
             expect(replaced.businessObject.y).toBe(y);
@@ -162,7 +140,6 @@ describe("replace element (browser)", () => {
             const replaced = onlyElementOfType(ACTOR_GROUP);
             expect(outgoing.source).toBe(replaced);
             expect(incoming.target).toBe(replaced);
-            // The exported ids, which is what a host persists.
             expect(outgoing.businessObject.source).toBe(replaced.id);
             expect(incoming.businessObject.target).toBe(replaced.id);
         });
@@ -184,8 +161,6 @@ describe("replace element (browser)", () => {
             const replacedId = onlyElementOfType(ACTOR_GROUP).id;
             expect(replacedId).not.toBe(oldId);
 
-            // `shape.replace` nests createShape/reconnect/removeShape inside one
-            // commandStack action, so a single undo has to unwind all of it.
             modeler.commandStack.undo();
 
             const restored = modeler.elementRegistry.get(oldId) as Shape;
@@ -195,17 +170,8 @@ describe("replace element (browser)", () => {
             expect(outgoing.source).toBe(restored);
             expect(incoming.target).toBe(restored);
 
-            // The assertions that matter for the next export: a business object
-            // still pointing at the destroyed element's id writes a dangling
-            // reference, which the importer then prunes.
-            //
-            // These hold *despite* `DomainStoryReplace.replaceElement` writing
-            // `source`/`target` outside any command handler, because the ids are
-            // owned by `DomainStoryUpdater.updateConnection`, which is wired to
-            // both `executed` and `reverted` of `connection.reconnect`. Those
-            // out-of-command writes are therefore redundant, not dangerous — and
-            // this test is what keeps them that way if the updater's `reverted`
-            // registration is ever trimmed.
+            // `DomainStoryReplace` writes these ids outside a command; they are
+            // only safe because the updater also handles `reverted` reconnects.
             expect(outgoing.businessObject.source).toBe(oldId);
             expect(incoming.businessObject.target).toBe(oldId);
             expect(outgoing.businessObject.source).not.toBe(replacedId);

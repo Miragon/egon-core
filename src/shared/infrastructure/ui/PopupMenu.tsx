@@ -49,8 +49,7 @@ export default function PopupMenu(props: PopupProps) {
         setLabel(event.target.value);
     };
 
-    // Auto-focus the label input when it's created
-    const labelInputRef = (element: HTMLInputElement | null) => {
+    const focusLabelInputOnMount = (element: HTMLInputElement | null) => {
         if (element) {
             setTimeout(() => element.focus(), 0);
         }
@@ -127,7 +126,7 @@ export default function PopupMenu(props: PopupProps) {
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <label for="label" style="min-width: 80px;">Label:</label>
                     <input
-                        ref=${labelInputRef}
+                        ref=${focusLabelInputOnMount}
                         name="label"
                         type="text"
                         value=${label}

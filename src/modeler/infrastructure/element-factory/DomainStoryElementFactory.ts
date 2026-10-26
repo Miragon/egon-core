@@ -66,9 +66,9 @@ export class DomainStoryElementFactory extends ElementFactory<
             }
         };
 
-        // add width and height if shape
         if (type === "shape") {
-            const alreadyHasSize = attrs.height || attrs.width; // if a story is imported, groups and annotations already have dimensions; we must not overwrite them with default values
+            // Imported groups and annotations already have dimensions.
+            const alreadyHasSize = attrs.height || attrs.width;
 
             if (!alreadyHasSize) {
                 assign(attrs, this.getShapeSize(attrs["type"]));
@@ -76,7 +76,7 @@ export class DomainStoryElementFactory extends ElementFactory<
         }
 
         if (!("$instanceOf" in attrs.businessObject)) {
-            // ensure we can use ModelUtil#is for type checks
+            // For ModelUtil#is type checks.
             Object.defineProperty(attrs.businessObject, "$instanceOf", {
                 value: function (type: string) {
                     return this.type === type;

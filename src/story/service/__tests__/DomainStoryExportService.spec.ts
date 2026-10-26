@@ -4,7 +4,6 @@ import { DomainStoryPropertiesService } from "../../../modeler/service/DomainSto
 import type { ElementRegistryService } from "../../../modeler/service/ElementRegistryService";
 import type { IconSetImportExportService } from "../../../iconSet/service/IconSetImportExportService";
 
-/** A registry stub that yields the given business objects as canvas objects. */
 function makeRegistry(
     businessObjects: any[],
     usedIcons: { actors: string[]; workObjects: string[] } = {
@@ -19,7 +18,6 @@ function makeRegistry(
     } as unknown as ElementRegistryService;
 }
 
-/** An icon-service stub returning a fixed export configuration. */
 function makeIconService(config: any): IconSetImportExportService {
     return {
         getConfigurationForStoryExport: () => config,

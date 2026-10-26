@@ -8,8 +8,8 @@ import {
 import { importFixture } from "../../../__tests__/helpers/importFixture";
 
 /**
- * Legacy `.dst` fixtures. `stringPayload` marks the v1.x files whose `domain`
- * and `dst` are JSON *strings* — the shape that crashed the previous importer.
+ * `stringPayload` marks the v1.x files whose `domain` and `dst` are JSON
+ * strings.
  */
 const LEGACY_FIXTURES = [
     {
@@ -96,9 +96,8 @@ describe("import compatibility across historical formats", () => {
         expect(iconSetConfiguration!.name).toBe("default");
     });
 
-    // The hand-authored cinema story is shared harness fixture data; parsing it
-    // here is its executable contract — if the parser ever rejects it, the
-    // browser smoke test that imports it would fail for an unrelated reason.
+    // Shared harness fixture: if the parser rejected it, the browser smoke test
+    // would fail for an unrelated reason.
     it("accepts the hand-authored cinema story fixture", () => {
         const { domainStory, iconSetConfiguration } = parseExportFile(
             importFixture("egn_cinema_story.egn.json"),
@@ -244,9 +243,8 @@ describe("extractIconSetConfiguration", () => {
     });
 
     it("decodes the oldest key, a stringified `config`", () => {
-        // `{ config, dst }` is the original export shape. Ignoring `config`
-        // imported these files with no icons at all, and the next export wrote
-        // the empty set back over them.
+        // `{ config, dst }` is the original export shape; ignoring `config`
+        // would import, and re-export, an empty icon set.
         const parsed = {
             config: JSON.stringify({
                 name: "c",

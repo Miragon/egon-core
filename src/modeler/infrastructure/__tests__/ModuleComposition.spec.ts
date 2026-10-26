@@ -9,18 +9,11 @@ import PopupModule from "../popup";
 import UpdateHandlerModule from "../update-handler";
 
 /**
- * Regression lock for issue #83: every feature module must compose on its own.
+ * Every feature module must boot alone: `plugin.ts` loads them together, which
+ * hides an under-declared `__depends__` from hosts that compose a subset.
  *
- * WHY this can be missed by every other spec: `plugin.ts` lists all of them at
- * once, so a module whose `__depends__` under-declares its `$inject` tokens
- * still resolves — its dependencies happen to be in the injector because a
- * sibling pulled them in. The failure only appears for a host that composes a
- * subset (the WPS web app end goal), as a didi "No provider" throw. Booting each
- * module alone is the only thing that proves the declarations are complete.
- *
- * WHY unit tier despite driving a real `Diagram` (ADR TST-2): nothing here
- * reaches `canvas.addShape`, so jsdom is enough. `__init__` services and the
- * tokens read back via `diagram.get` are all constructed at boot.
+ * Unit tier despite a real `Diagram` (ADR TST-2): nothing reaches
+ * `canvas.addShape`, so jsdom is enough.
  */
 describe("standalone module composition", () => {
     let booted: Diagram[] = [];
@@ -33,12 +26,7 @@ describe("standalone module composition", () => {
         containers = [];
     });
 
-    /**
-     * Boots one module the way a host would — nothing else in the module list.
-     * `domainStoryIconStyleSheet` rides along because modules that transitively
-     * pull `IconCssInjector` take the host's `<style>` node through DI, exactly
-     * as `DiagramJsModelerAdapter` supplies it.
-     */
+    /** `domainStoryIconStyleSheet` is host config that `IconCssInjector` needs. */
     function bootStandalone(module: ModuleDeclaration): Diagram {
         const container = document.createElement("div");
         document.body.appendChild(container);
@@ -67,8 +55,6 @@ describe("standalone module composition", () => {
         const diagram = bootStandalone(EditorActionsModule);
 
         expect(diagram.get("domainStoryEditorActions")).toBeDefined();
-        // The five tokens `DomainStoryEditorActions.$inject` named while only
-        // `handTool`'s module was declared.
         expect(diagram.get("editorActions")).toBeDefined();
         expect(diagram.get("selection")).toBeDefined();
         expect(diagram.get("spaceTool")).toBeDefined();
@@ -81,7 +67,7 @@ describe("standalone module composition", () => {
 
         expect(diagram.get("domainStoryContextPadProvider")).toBeDefined();
         expect(diagram.get("contextPad")).toBeDefined();
-        // Provided by the popup module, which context-pad had not declared.
+        // Provided by the popup module.
         expect(diagram.get("domainStoryNumberingRegistry")).toBeDefined();
     });
 
@@ -89,10 +75,8 @@ describe("standalone module composition", () => {
         const diagram = bootStandalone(UpdateHandlerModule);
 
         expect(diagram.get("domainStoryUpdateHandler")).toBeDefined();
-        // `CommandStack.registerHandler` instantiates the handler class eagerly,
-        // so `ActivityChangedHandler`'s injection of this token runs inside
-        // `DomainStoryUpdateHandler`'s constructor — i.e. during `__init__`.
-        // Booting at all is therefore the proof that the provider is there.
+        // `registerHandler` instantiates handlers during `__init__`, so booting
+        // at all proves the provider is there.
         expect(diagram.get("domainStoryNumberingRegistry")).toBeDefined();
     });
 

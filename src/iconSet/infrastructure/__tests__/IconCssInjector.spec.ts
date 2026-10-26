@@ -18,13 +18,6 @@ function injectorFor(
     return new IconCssInjector({ styleElement, scopeId });
 }
 
-/**
- * Covers the DOM/CSSOM seam moved out of IconDictionaryService: the adapter
- * must write a rule whose icon class is exactly the class it was handed (the
- * issue-#4 contract, now enforced from the service side), scope that rule to
- * the configured editor session, strip an SVG's width/height before encoding
- * it, and write into the `<style>` node it was configured with.
- */
 describe("IconCssInjector", () => {
     const containers: HTMLElement[] = [];
 
@@ -33,10 +26,7 @@ describe("IconCssInjector", () => {
     });
 
     /**
-     * A container attached to the document, plus its own `<style>`.
-     *
-     * Attachment is not incidental for CSSOM assertions:
-     * `HTMLStyleElement.sheet` stays `null` while the node is outside a
+     * Attached because `HTMLStyleElement.sheet` stays `null` outside a
      * document. Detached-state cases inspect `textContent` before attaching.
      */
     function createStyleElement(): HTMLStyleElement {
@@ -255,9 +245,8 @@ describe("IconCssInjector", () => {
     });
 
     it("writes only into its own sheet when two injectors coexist", () => {
-        // The headline #69 case: before the fix both injectors resolved the
-        // single `#iconsCss` node, so B's rules landed in A's sheet — and
-        // removing either sheet on destroy took the other's rules with it.
+        // A shared node would put B's rules in A's sheet, and destroying either
+        // would remove the other's rules.
         const styleA = createStyleElement();
         const styleB = createStyleElement();
 

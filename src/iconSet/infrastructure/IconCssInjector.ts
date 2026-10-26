@@ -1,12 +1,8 @@
 import { IconStyleSheetPort } from "../domain/ports/IconStyleSheetPort";
 
 /**
- * The `<style>` node this injector writes into, handed in through diagram-js'
- * DI config (`config.domainStoryIconStyleSheet`).
- *
- * Declared here rather than in `iconSet/domain/` — `HTMLStyleElement` is a DOM
- * type and domain folders must stay framework-free — and not on the service
- * barrel, which would add a cross-feature edge for a single field.
+ * Declared here, not in the domain (it is a DOM type) nor on the service barrel
+ * (a cross-feature edge for a single field).
  */
 export interface IconStyleSheetConfig {
     styleElement?: HTMLStyleElement;
@@ -14,16 +10,9 @@ export interface IconStyleSheetConfig {
 }
 
 /**
- * Infrastructure adapter that turns an icon's CSS class + SVG into a live rule
- * on this instance's icon stylesheet. This is the DOM/CSSOM half the icon
- * service must not own: the browser-only `btoa`, the SVG attribute reshaping,
- * and publication through the owned `<style>` node live here, behind
- * {@link IconStyleSheetPort}.
- *
- * The node and selector scope are per editor session, created by
- * `EditorSessionOwner` and injected by reference. Every rule is anchored to
- * that session's `.djs-container`, so clients may safely reuse icon class names
- * even when their stylesheets share one host or document.
+ * The DOM/CSSOM half of {@link IconStyleSheetPort}. Node and scope are per
+ * editor session (from `EditorSessionOwner`) and every rule is scoped to it, so
+ * clients sharing one document may reuse icon class names.
  */
 export class IconCssInjector implements IconStyleSheetPort {
     static $inject = ["config.domainStoryIconStyleSheet"];
@@ -39,7 +28,7 @@ export class IconCssInjector implements IconStyleSheetPort {
             return;
         }
 
-        // Remove width and height attributes from SVG tag to ensure consistent scaling
+        // Without width/height the mask scales consistently.
         const scalableSvg = svgMarkup.replace(/<svg[^>]+>/, (match: string) => {
             return match.replace(/ (width|height)="[^"]*"/g, "");
         });
@@ -62,9 +51,8 @@ export class IconCssInjector implements IconStyleSheetPort {
         }
 
         this.rulesByClass.set(cssClassName, iconStyle);
-        // textContent is available while detached, unlike `.sheet`. Keeping the
-        // complete owned rule set on the node makes it live automatically when
-        // a host attaches or reattaches that node.
+        // `textContent`, unlike `.sheet`, works while detached, so the rules go
+        // live whenever a host attaches the node.
         styleElement.textContent = Array.from(this.rulesByClass.values()).join(
             "\n",
         );

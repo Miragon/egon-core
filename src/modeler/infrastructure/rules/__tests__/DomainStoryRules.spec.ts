@@ -5,13 +5,8 @@ import { DomainStoryRules } from "../DomainStoryRules";
 import { ElementTypes } from "../../../../story/domain/elementTypes";
 
 /**
- * Drives the rule provider through a real diagram-js EventBus (no diagram
- * bootstrap; precedent: copy-paste/__tests__/DomainStoryPasteRestore.spec.ts).
- * `RuleProvider` registers each rule on `commandStack.<action>.canExecute` and
- * `CommandInterceptor` unwraps `event.context` into the callback, so firing that
- * event with a `{ context }` payload returns exactly the rule's verdict. These
- * cases lock the two framework contracts the pure grammar can't express: the
- * in-place `newBounds` mutation and the `undefined` move tri-state.
+ * Unit tier with a real EventBus, no diagram: firing
+ * `commandStack.<action>.canExecute` with `{ context }` returns the rule's verdict.
  */
 
 const ACTOR = { type: ElementTypes.ACTOR, id: "actor-1" };
@@ -206,8 +201,6 @@ describe("DomainStoryRules", () => {
             ).toBe(false);
         });
 
-        // BendpointMove retries a denied reconnect with the endpoints swapped;
-        // this is the orientation that retry produces.
         it("denies the swapped orientation BendpointMove retries", () => {
             expect(
                 fireRule("connection.reconnect", {
@@ -218,9 +211,8 @@ describe("DomainStoryRules", () => {
             ).toBe(false);
         });
 
-        // `isForbiddenAnnotationEdge` does not catch an *annotation*-sourced
-        // annotation connection (its actor/work-object clause misses it), so
-        // this denial comes from `judgeConnection` — the reachable half of #72.
+        // `isForbiddenAnnotationEdge` misses an annotation-sourced connection,
+        // so this denial comes from `judgeConnection`.
         it("denies reconnecting an annotation connection out of an annotation", () => {
             expect(
                 fireRule("connection.reconnect", {

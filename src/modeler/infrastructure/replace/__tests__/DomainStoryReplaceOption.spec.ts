@@ -4,13 +4,6 @@ import { ElementTypes } from "../../../../story/domain/elementTypes";
 import { Dictionary } from "../../../../story/domain/dictionary";
 import { IconDictionaryService } from "../../../../iconSet/service";
 
-/**
- * Locks the two issue-#52 fixes: the options array is dense (built with `push`,
- * so filtering out the current type never leaves a hole that renders as an empty
- * menu slot), and work-object entries use the `replace-with-workobject-` action
- * prefix instead of the copied-over `replace-with-actor-`.
- */
-
 /** Stub icon service backed by a real Dictionary seeded with the given names. */
 function iconServiceWith(names: string[]): IconDictionaryService {
     const dictionary = new Dictionary<string>();
@@ -33,7 +26,7 @@ describe("DomainStoryReplaceOption", () => {
                 ElementTypes.ACTOR + "System",
             );
 
-            // "System" is the middle key: without push() this left a hole at [1]
+            // "System" is the middle key: index assignment leaves a hole at [1].
             expect(result).toHaveLength(2);
             expect(result).not.toContain(undefined);
             expect(result.map((entry) => entry.label)).toEqual([

@@ -2,13 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { DomainStoryTextRenderer } from "../DomainStoryTextRenderer";
 
-/**
- * Regression lock for the shared-default-style mutation (finding A2). The
- * external style was built with `assign(defaultStyle, …)` — min-dash `assign`
- * is `Object.assign`, so it wrote through to the default style and handed back
- * that same object. Both styles ended up at 11px, shrinking every label and
- * every annotation-height measurement by a point.
- */
+/** `assign(defaultStyle, …)` would alias both styles and shrink every label. */
 describe("DomainStoryTextRenderer styles", () => {
     it("keeps the default style at 12px and the external style one point smaller", () => {
         const renderer = new DomainStoryTextRenderer();
@@ -26,11 +20,6 @@ describe("DomainStoryTextRenderer styles", () => {
     });
 });
 
-/**
- * `config.textRenderer` was declared in `$inject` but never taken by the
- * constructor, so a host's typography was accepted and silently dropped. These
- * cases pin the merge order the injection restores.
- */
 describe("DomainStoryTextRenderer config", () => {
     it("merges a partial defaultStyle over the built-in defaults", () => {
         const renderer = new DomainStoryTextRenderer({
@@ -38,7 +27,6 @@ describe("DomainStoryTextRenderer config", () => {
         });
 
         expect(renderer.getDefaultStyle().fontFamily).toBe("Comic Sans MS");
-        // untouched keys survive — a host may override one property alone
         expect(renderer.getDefaultStyle().fontSize).toBe(12);
         expect(renderer.getDefaultStyle().fontWeight).toBe("normal");
     });

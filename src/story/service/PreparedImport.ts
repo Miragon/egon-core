@@ -12,7 +12,6 @@ export interface PreparedWaypoint {
     };
 }
 
-/** Story metadata after format normalization and validation. */
 export interface PreparedMetadata {
     readonly title: string;
     readonly description: string;
@@ -20,7 +19,6 @@ export interface PreparedMetadata {
     readonly scope?: Scope;
 }
 
-/** A shape and the explicit diagram-js attributes derived from it. */
 export interface PreparedShape {
     readonly businessObject: BusinessObject;
     readonly id: string;
@@ -32,7 +30,6 @@ export interface PreparedShape {
     readonly parentId?: string;
 }
 
-/** A connection and its validated endpoint/geometry attributes. */
 export interface PreparedConnection {
     readonly businessObject: BusinessObject;
     readonly id: string;

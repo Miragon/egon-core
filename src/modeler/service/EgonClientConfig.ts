@@ -3,9 +3,6 @@ import { DomainStoryTextRendererConfig } from "../domain/model/TextRendererConfi
 import type { ColorPickerProvider } from "./ColorPickerProvider";
 import type { IconSetData } from "../../iconSet/domain/IconTypes";
 
-/**
- * Configuration options for creating an EgonClient instance.
- */
 export interface EgonClientConfig {
     /** The HTML element to render the diagram into */
     readonly container: HTMLElement;

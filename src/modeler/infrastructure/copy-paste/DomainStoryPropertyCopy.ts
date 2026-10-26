@@ -30,13 +30,9 @@ export class DomainStoryPropertyCopy {
             });
         });
 
-        // default check whether property can be copied.
-        // Returns `false` to veto and *nothing* otherwise: on the event bus a
-        // returned value is the listener's answer, so answering `true` for an
-        // allowed property would make `copyProperty` hand back that `true`
-        // instead of the value (see the truthy branch there) — every copied
-        // property would become the boolean `true`, and the array/object/
-        // primitive copy paths below it would be unreachable.
+        // Returns `false` to veto and nothing otherwise: a returned `true` would
+        // become the event's answer, and `copyProperty` would copy `true` instead
+        // of the value.
         eventBus.on("propertyCopy.canCopyProperty", function (context: any) {
             const propertyName = context.propertyName;
 
@@ -76,7 +72,6 @@ export class DomainStoryPropertyCopy {
             propertyNames = canCopyProperties;
         }
 
-        // copy properties
         forEach(propertyNames, (propertyName) => {
             let sourceProperty;
 
@@ -116,7 +111,6 @@ export class DomainStoryPropertyCopy {
         parent: Record<string, any>,
         propertyName: string,
     ): CopiedProperty | undefined {
-        // allow others to copy property
         let copiedProperty: CopiedProperty | undefined = this.eventBus.fire(
             "propertyCopy.canCopyProperty",
             {
@@ -126,7 +120,6 @@ export class DomainStoryPropertyCopy {
             },
         );
 
-        // return if copying is NOT allowed
         if (typeof copiedProperty === "boolean" && !copiedProperty) {
             return undefined;
         }
@@ -136,18 +129,13 @@ export class DomainStoryPropertyCopy {
                 copiedProperty["$parent"] = parent;
             }
 
-            // if copiedProperty is a boolean and true, returns true
-            // if copiedProperty is an object, returns the object
-            // if copiedProperty is whatever, returns whatever
             return copiedProperty;
         }
 
-        // copy arrays
         if (isArray(property)) {
             return reduce(
                 property,
                 (childProperties: any, childProperty: any): any => {
-                    // recursion
                     copiedProperty = this.copyProperty(
                         childProperty,
                         parent,
@@ -167,19 +155,16 @@ export class DomainStoryPropertyCopy {
             );
         }
 
-        // copy model elements
         if (isObject(property)) {
             copiedProperty = {};
 
             copiedProperty["$parent"] = parent;
 
-            // recursion
             copiedProperty = this.copyElement(property, copiedProperty);
 
             return copiedProperty;
         }
 
-        // copy primitive properties
         return property;
     }
 }

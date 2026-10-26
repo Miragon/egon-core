@@ -11,13 +11,7 @@ import { DomainStoryPaletteProvider } from "../DomainStoryPalette";
 import { IconDictionaryService } from "../../../../iconSet/service";
 import { ElementTypes } from "../../../../story/domain/elementTypes";
 
-/**
- * Regression tests for issue #86: an icon assigned as *both* an actor and a work
- * object used to collapse into a single palette entry, because work-object
- * entries were keyed and grouped as `actor`. The provider takes all its
- * collaborators through the constructor, so no diagram-js bootstrap is needed —
- * mocks are enough to observe the entry record and the config-changed listener.
- */
+/** Unit tier: all collaborators come through the constructor, so mocks suffice. */
 
 /** The icon-set shape the provider consumes: a name list per element type. */
 function iconDictionaryService(iconsByType: {
@@ -54,8 +48,7 @@ function setup(
         },
     };
 
-    // createShape must hand back something carrying a businessObject, because the
-    // palette action stamps the shape id onto it before handing it to Create.
+    // The palette action stamps the shape id onto the businessObject.
     const createShape = vi.fn((attrs: { type: string }) => ({
         id: `shape_${attrs.type}`,
         type: attrs.type,
@@ -126,9 +119,7 @@ describe("DomainStoryPaletteProvider", () => {
     });
 
     it("falls back to the short type when an icon carries no name", () => {
-        // The only path that reaches the fallback: with a non-empty name the
-        // left-hand side is always truthy, which is how the original
-        // `"Create " + title || "Create " + shortType` stayed silently dead.
+        // The only path that reaches the fallback title.
         const { entries } = setup({ actors: [""], workObjects: [] });
 
         expect(entries["domainStory-actor"].title).toBe("Create actor");
@@ -139,8 +130,7 @@ describe("DomainStoryPaletteProvider", () => {
 
         listeners["dst.config.changed"]();
 
-        // _rebuild carries the init guards and re-queries the providers;
-        // _update only repaints what is already there.
+        // Only _rebuild re-queries the providers.
         expect(palette._rebuild).toHaveBeenCalledOnce();
         expect(palette._update).not.toHaveBeenCalled();
     });

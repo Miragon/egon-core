@@ -2,13 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_DEBOUNCE_MS, createDebouncedCallback } from "../debounce";
 
-/**
- * Locks the two properties the adapters rely on and issue #69 was filed over:
- * a burst really coalesces (the old per-event debouncer did not), and a pending
- * delivery can be cancelled (the old closure-private timer could not).
- *
- * Unit tier per ADR TST-2 — the only tier that may freeze the clock.
- */
+/** Unit tier per ADR TST-2, the only tier that may freeze the clock. */
 describe("createDebouncedCallback", () => {
     beforeEach(() => {
         vi.useFakeTimers();
@@ -105,8 +99,8 @@ describe("createDebouncedCallback", () => {
     });
 
     it("keeps two debouncers on independent timers", () => {
-        // The inverse of the fresh-debouncer-per-event bug: separate debouncers
-        // must not clear each other's timer, and must not share a window.
+        // Separate debouncers must not clear each other's timer or share a
+        // window.
         const first = vi.fn();
         const second = vi.fn();
         const debouncedFirst = createDebouncedCallback(first);

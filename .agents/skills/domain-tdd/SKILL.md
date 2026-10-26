@@ -8,8 +8,8 @@ description: >-
     behind an internal feature flag only when user-visible behaviour changes.
     Use this skill whenever you create, change, fix, or extract anything in a
     `domain/` folder. That includes moving notation policy or geometry out of
-    adapters, command interceptors, or renderers into domain objects (epic
-    #173 Phase 3: ElementType, ActivitySequence, GroupTree, IconCatalog,
+    adapters, command interceptors, or renderers into domain objects
+    (ElementType, ActivitySequence, GroupTree, IconCatalog,
     StoryGraph, label projection), fixing a modelingRules or activityNumbering
     bug, killing surviving mutants, running `yarn test:mutation`, adding or
     removing a feature flag, or splitting domain work into PRs. Use it even
@@ -35,7 +35,7 @@ Decisions behind this workflow:
 
 ## Tooling status
 
-The gate arrives with #175 and the flag registry with #207. Check that
+Neither the mutation gate nor the flag registry exists yet. Check that
 `yarn test:mutation` exists in `package.json` before relying on it.
 
 If it is missing, do the test-first loop anyway and tell the user that no
@@ -120,7 +120,8 @@ reach for one, say why the change cannot land atomically.
 - **Test boundaries on both sides.** Cover n − 1, n and n + 1 for every
   comparison, and the empty, one and many cases for collections.
 - **Cover rule matrices completely.** Write source × target × verdict tables
-  with `it.each`. Partial matrices are how #181 survived 99% coverage.
+  with `it.each`. Partial matrices let the group-as-activity-source bug survive 99%
+  coverage.
 - **Test through the object's public API.** Don't export helpers only to test
   them; an unreachable branch is dead code, so delete it.
 - **No mocks in domain specs.** If you need one, a dependency is in the wrong

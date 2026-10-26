@@ -1,41 +1,25 @@
 import { isActor } from "./elementPredicates";
 
 /**
- * Activity-numbering policy of Domain Storytelling.
- *
- * WHY: which activities carry sequence numbers, which number a new activity
- * receives, and how existing numbers shift when one is edited is core notation
- * policy — not a canvas concern. It used to live in the diagram-js adapter
- * (`DomainStoryNumberingRegistry`) entangled with EventBus/CommandStack, which
- * made the arithmetic testable only through mocks. These functions are pure:
- * they read plain data and return assignments; applying them (mutating business
- * objects, firing change events) stays in the infrastructure adapter.
+ * Activity-numbering policy: pure decisions that the infrastructure adapter
+ * applies.
  */
 
-/**
- * An activity as the numbering math sees it: an identity to address the
- * assignment to, and its current number. Structural so canvas objects, business
- * objects, and test literals all fit without importing framework types.
- */
+/** Structural so canvas objects, business objects and test literals all fit. */
 export interface NumberedActivity {
     id: string;
     number?: number | null;
 }
 
-/** A computed re-numbering: which activity must change to which number. */
 export interface NumberAssignment {
     id: string;
     newNumber: number;
 }
 
 /**
- * The edit the cascade has to make room for: which activity claims which
- * number, and whether that number may be shared. Passed as one descriptor so
- * the identity travels with the number — the cascade needs the id to exclude
- * the edited activity from its own renumbering.
- *
- * `number` is assumed positive; the falsy guard lives at the call site, which
- * can still tell a cleared input field apart from a real number.
+ * Carries the id so the cascade can exclude the edited activity. `number` is
+ * assumed positive; only the caller can tell a cleared input field from a
+ * number.
  */
 export interface ActivityNumberEdit {
     id: string;
@@ -43,17 +27,11 @@ export interface ActivityNumberEdit {
     multipleAllowed: boolean;
 }
 
-/** The adapter action required when an activity reverses direction. */
 export type DirectionChangeNumberingDecision = "clear" | "generate";
 
 /**
- * Decide what happens to an activity's number when its direction is reversed.
- *
- * The decision deliberately reads the current source, not the target: an
- * actor-sourced activity becomes a response after reversal and loses its
- * number; every other source becomes an actor-sourced story step and receives
- * an automatically generated number. Prefix classification preserves icon-
- * suffixed actor types.
+ * Reads the current source: an actor-sourced activity becomes a response after
+ * reversal and loses its number; any other becomes a story step and gets one.
  */
 export function numberingOnDirectionChange(
     currentSource: { type?: string; [key: string]: unknown } | null | undefined,
@@ -62,14 +40,8 @@ export function numberingOnDirectionChange(
 }
 
 /**
- * The smallest positive integer not yet used as an activity number — deleted
- * activities leave gaps, and the story reads best when those gaps are refilled
- * before the sequence grows.
- *
- * Falsy entries (activities without a number) are ignored. Behavior-equivalent
- * to the historical gap-search loop (seed `[0]`, scan up to the list length,
- * fall back to the length): by pigeonhole that loop always found exactly the
- * smallest unused positive integer.
+ * The smallest unused positive number, so gaps left by deleted activities are
+ * refilled before the sequence grows. Falsy entries are ignored.
  */
 export function nextAvailableActivityNumber(
     usedNumbers: readonly (number | null | undefined)[],
@@ -89,31 +61,14 @@ export function nextAvailableActivityNumber(
 }
 
 /**
- * Cascade renumbering when an activity is (re-)assigned `edit.number`: every
- * occupied number ≥ `edit.number` moves up to the next consecutive slot, so the
- * edited activity claims its number without duplicating it. Gaps above the
- * edited number are compacted as a side effect — occupied numbers are packed
- * consecutively from `edit.number + 1` upward, preserving their order.
- *
- * Four things a future reader would otherwise undo:
- *
- * 1. `activities` **may** contain the edited activity; it is excluded here by
- *    `edit.id`. The predecessor asked the caller to exclude it, and the caller
- *    did so with `splice(indexOf(...), 1)` — which removes the *last* entry on
- *    a miss. Filtering by id cannot miss.
- * 2. No assignment is returned for the edited activity. It may be sourced from
- *    a work object and so absent from `activities` altogether; the caller owns
- *    writing its number either way.
- * 3. `edit.multipleAllowed` suppresses the cascade entirely — sharing a number
- *    is the whole point of the allowance, so nothing must move out of the way.
- * 4. `multipleAllowedByNumber` is read **pre-edit**: slot `edit.number` still
- *    holds the *previous* occupant's flag, and that flag travels upward with
- *    them. The edit's own allowance is emitted separately (always first, and
- *    every cascade slot is `> edit.number`, so the two cannot collide).
- *
- * Activities sharing one number move together, and each number's "may occur
- * multiple times" flag travels with it: the returned updates re-index
- * `multipleAllowedByNumber` from old to new slots.
+ * Moves every occupied number ≥ `edit.number` up to the next consecutive slot
+ * (compacting gaps above it), so the edited activity claims its number alone.
+ * - `activities` may contain the edited activity; it is excluded by id.
+ * - No assignment is returned for the edited activity: it may be work-object
+ *   sourced and absent from `activities`, so the caller writes its number.
+ * - `edit.multipleAllowed` skips the cascade, since sharing is the point.
+ * - `multipleAllowedByNumber` is read pre-edit, so each flag moves up with the
+ *   activities that held the number before.
  */
 export function renumberOnNumberEdit(
     activities: readonly NumberedActivity[],
@@ -163,14 +118,8 @@ export function renumberOnNumberEdit(
 }
 
 /**
- * Which snapshot numbers to restore on undo: match snapshot entries to the
- * currently live activities by exact id and hand back each live activity its
- * recorded number (possibly `undefined`, meaning "had none").
- *
- * Matches by strict equality and consumes each snapshot entry at most once —
- * the historical implementation matched with substring `includes` and spliced
- * a hard-coded negative index, so undo could restore the wrong bookkeeping
- * entry whenever one id prefixed another (e.g. `activity_1` / `activity_12`).
+ * Matches snapshot entries by exact id and consumes each once, so `activity_1`
+ * never picks up `activity_12`'s entry. An `undefined` number means "had none".
  */
 export function restoredNumberAssignments(
     snapshot: readonly { id: string; number?: number }[],
@@ -191,13 +140,8 @@ export function restoredNumberAssignments(
 }
 
 /**
- * The activities that participate in numbering, in story order: only an
- * activity whose source is an actor gets a sequence number (work-object →
- * actor arrows are responses, not story steps), sorted ascending by number.
- * This is the rule the renderer and the element registry both rely on.
- *
- * Generic over the activity shape so `ActivityCanvasObject` (or any structural
- * equivalent) passes through unchanged; the input array is not mutated.
+ * Only actor-sourced activities are story steps (work-object → actor arrows are
+ * responses), sorted by number. The input array is not mutated.
  */
 export function activitiesFromActors<
     T extends {

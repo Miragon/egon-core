@@ -9,10 +9,8 @@ import { Element, Shape } from "diagram-js/lib/model/Types";
 import { Rect } from "diagram-js/lib/util/Types";
 
 export class DomainStoryModeling extends Modeling {
-    // No `domainStoryRules` here even though the rules must exist: didi passes
-    // $inject positionally, so a fourth token would be handed to a three-param
-    // constructor and silently dropped. The rules are instantiated by
-    // `modeling/index.ts`'s `__depends__` plus `rules/index.ts`'s `__init__`.
+    // No `domainStoryRules` token: `$inject` is positional and the constructor
+    // takes three. The rules come in via `__depends__` and `__init__`.
     static override $inject: string[] = [
         "eventBus",
         "elementFactory",
@@ -58,11 +56,7 @@ export class DomainStoryModeling extends Modeling {
         }
     }
 
-    /**
-     * Removes a group but keeps its contents. The deletion lives inside the
-     * command's `preExecute`, so lifting the children out and dropping the frame
-     * are one commandStack entry — one Ctrl+Z, not two.
-     */
+    /** Removes a group but keeps its contents, as a single undo entry. */
     removeGroup(element: Element) {
         this.commandStack.execute("shape.removeGroupWithoutChildren", {
             element: element,

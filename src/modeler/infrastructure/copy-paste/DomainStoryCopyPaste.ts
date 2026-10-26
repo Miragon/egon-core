@@ -39,7 +39,7 @@ export class DomainStoryCopyPaste {
                 oldBusinessObject = descriptor.oldBusinessObject,
                 newBusinessObject: Record<string, any> = {};
 
-            // do NOT copy a business object if an external label
+            // An external label shares its target's business object.
             if (isLabel(descriptor)) {
                 descriptor.businessObject = getBusinessObject(
                     cache[descriptor.labelTarget],
@@ -54,15 +54,8 @@ export class DomainStoryCopyPaste {
                     newBusinessObject,
                 );
 
-            // Paste is the one path that mints a business object without a
-            // `type`: `copyElement` is called with no `propertyNames`, so it
-            // copies nothing. Every other path is covered — the import carries
-            // `type` in the file, and `DomainStoryElementFactory.create` stamps
-            // it whenever it creates a fresh business object (palette, context-pad
-            // append, `shape.replace`). Until #74 the *renderer* patched it in
-            // while drawing; carrying the descriptor's own `type` (set by the
-            // `copyPaste.copyElement` listener above) does it here instead, so a
-            // pasted element is complete before anything paints it.
+            // `copyElement` without `propertyNames` copies nothing, so paste must
+            // set `type` itself; the renderer must not patch it in (ADR ARC-4).
             newBusinessObject["type"] = descriptor.type;
 
             copyProperties(descriptor, newBusinessObject, ["name"]);

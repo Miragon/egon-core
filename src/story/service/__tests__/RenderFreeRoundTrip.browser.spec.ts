@@ -11,26 +11,19 @@ import type { DomainStoryDocument } from "../../domain/DomainStoryDocument";
 import { ElementTypes } from "../../domain/elementTypes";
 
 /**
- * What survives a save/open round trip now that drawing writes nothing (#74).
+ * What survives a save/open round trip, given that drawing writes nothing to
+ * the model. The format-matrix fixtures contain no text annotation and every
+ * activity there is already numbered, so these cases build those states
+ * instead.
  *
- * WHY the matrix is not enough: `FormatCompatibilityMatrix.browser.spec.ts`
- * covers eight historical files byte-for-byte, but **none of them contains a
- * text annotation** and every activity in them already carries the number the
- * old renderer would have minted. So the two things #74 moved off the draw pass
- * — the annotation height and the activity sequence — are exactly the two the
- * matrix cannot see. These cases build those states instead of reading them.
- *
- * WHY browser tier (ADR TST-2): both go through `client.import`, hence
- * `canvas.addShape`, hence `SVGSVGElement.createSVGTransform`.
+ * Browser tier (ADR TST-2): `client.import` reaches `canvas.addShape`, hence
+ * `SVGSVGElement.createSVGTransform`.
  */
 
 /**
- * Reaches the booted diagram's injector, which `EgonClient` deliberately hides.
- *
- * `additionalModules` is the supported extension point, so the probe rides the
- * production boot rather than a second diagram — the same seam
- * `RendererModelPurity.browser.spec.ts` uses. Kept local to this file: it is a
- * test seam, not shared infrastructure.
+ * Reaches the injector `EgonClient` hides, through the supported
+ * `additionalModules` extension point (as
+ * `RendererModelPurity.browser.spec.ts`).
  */
 function injectorProbe(): {
     module: ModuleDeclaration;
@@ -89,8 +82,7 @@ function exported(story: any, id: string): any {
 /** A deliberately unsorted nested-group document with every shape family. */
 function storyWithGroupMembership(): DomainStoryDocument {
     return {
-        // Reuse a complete icon set: imported actors and work objects render
-        // through the production renderer during this browser-tier test.
+        // A complete icon set: imported shapes go through the real renderer.
         iconSet: importFixture<any>("egn_export_version_4_0_0.json").iconSet,
         domainStory: {
             version: "4.0.0",
@@ -164,10 +156,7 @@ describe("render-free round trip (browser)", () => {
     });
 
     describe("annotation height", () => {
-        /**
-         * A story with one sized text annotation, built through the *import*
-         * path so no command is needed to place it.
-         */
+        /** Built through import, so no command is needed to place it. */
         function storyWithAnnotation(height: number, extra = {}) {
             return {
                 domainStory: {
@@ -202,15 +191,13 @@ describe("render-free round trip (browser)", () => {
 
             const annotation = exported(story, "shape_note");
             expect(annotation.height).toBe(80);
-            // The format narrows here: `drawAnnotation` used to mirror the
-            // height onto `number` on every paint, so an exported annotation
-            // carried a meaningless sequence number. Nothing writes it now.
+            // Older versions also wrote the height to `number`.
             expect("number" in annotation).toBe(false);
         });
 
         it("survives a second round trip byte-identically", async () => {
-            // The creep #65 was about: a per-paint write shows up as a *drift*
-            // between two consecutive saves, not as a single wrong value.
+            // A per-paint write shows up as drift between two saves, not as one
+            // wrong value.
             diagram = await createTestDiagram();
 
             diagram.client.import(
@@ -224,12 +211,9 @@ describe("render-free round trip (browser)", () => {
             expect(second).toBe(first);
         });
 
-        it("reads a pre-#74 file's height out of its legacy `number`", async () => {
-            // The one place allowed to know the old hack existed:
-            // `useLegacyAnnotationNumberAsHeight`. Such a file has the height in
-            // `number` and, because the export pass wrote it too, usually in
-            // `height` as well — so the case that actually needs repairing is
-            // the one where only `number` is present.
+        it("reads a legacy file's annotation height out of `number`", async () => {
+            // Legacy files usually carry the height in both fields; the case
+            // that needs repair is `number` alone.
             diagram = await createTestDiagram();
             const legacy = storyWithAnnotation(0, { number: 65 });
             delete (legacy.domainStory.businessObjects[0] as any).height;
@@ -245,10 +229,8 @@ describe("render-free round trip (browser)", () => {
 
     describe("activity numbering", () => {
         it("does not renumber an imported story by opening it", async () => {
-            // Numbering left the draw pass, so nothing runs on import except the
-            // repair — and the repair must only fill gaps. The fixture's
-            // sequence is 1/2/3 on the actor-sourced activities and `null` on
-            // the responses; every one of those must come back untouched.
+            // The import repair only fills gaps: 1/2/3 on the actor-sourced
+            // activities and `null` on the responses must come back untouched.
             const probe = injectorProbe();
             diagram = await createTestDiagram({}, [probe.module]);
             const fixture = importFixture<any>("egn_export_version_4_0_0.json");
@@ -281,14 +263,9 @@ describe("render-free round trip (browser)", () => {
         });
 
         it("completes a hand-made file's sequence on import, once", async () => {
-            // The behaviour the repair preserves: before #74 a repaint minted
-            // the missing number, so a hand-written file looked complete as soon
-            // as it was drawn. It happens at import now — and the numbers the
-            // file *does* carry are reserved, not reassigned.
             diagram = await createTestDiagram();
-            // The real default icon set, off a fixture: an empty one leaves the
-            // actor's icon unresolved and `svgCreate("")` throws before any
-            // assertion is reached.
+            // A real icon set: an unresolved actor icon makes `svgCreate("")`
+            // throw before any assertion.
             const iconSet = importFixture<any>(
                 "egn_export_version_4_0_0.json",
             ).iconSet;
@@ -343,8 +320,7 @@ describe("render-free round trip (browser)", () => {
             diagram.client.import(handMade as unknown as DomainStoryDocument);
             const story: any = diagram.client.export();
 
-            // 2 is taken, so the gap at 1 is filled rather than the sequence
-            // grown — `nextAvailableActivityNumber`'s rule, applied once.
+            // 2 is taken, so the gap at 1 is filled first.
             expect(exported(story, "connection_numbered").number).toBe(2);
             expect(exported(story, "connection_bare").number).toBe(1);
         });
@@ -496,20 +472,14 @@ describe("render-free round trip (browser)", () => {
         });
     });
     /**
-     * The whole lifecycle in one case, ending in a byte comparison.
-     *
-     * WHY it earns its place next to the focused cases above: each of those
-     * pins one owner in isolation, and the failure mode #65/#74 are about is a
-     * *drift* that only shows up when a story is edited, saved, opened and saved
-     * again. Byte-identical is the bar; anything the draw pass writes shows up
-     * here as a diff no matter which owner leaked it.
+     * The cases above pin one owner each; drift only shows up after edit, save,
+     * open and save again, whichever owner leaked it.
      */
     describe("a full editing session", () => {
         it("re-exports byte-identically after a save/open cycle", async () => {
             const probe = injectorProbe();
             diagram = await createTestDiagram({}, [probe.module]);
-            // A real icon set: an unresolved actor icon makes `svgCreate("")`
-            // throw long before anything is asserted.
+            // A real icon set, or `svgCreate("")` throws.
             diagram.client.import(
                 importFixture<any>(
                     "egn_export_version_4_0_0.json",
@@ -564,8 +534,7 @@ describe("render-free round trip (browser)", () => {
             const second = JSON.stringify(diagram.client.export());
 
             expect(second).toBe(first);
-            // Not vacuous: the story really does contain the two things the
-            // fixtures cannot, so a leak would have somewhere to show up.
+            // Not vacuous: the story contains what the fixtures cannot.
             expect(first).toContain('"height":120');
             expect(first).toContain('"number":4');
         });

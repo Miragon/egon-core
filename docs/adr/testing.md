@@ -8,7 +8,7 @@ is validated.
 - Status: accepted
 - History: 2026-07-24 decided (ADR 0013); 2026-09-14 Vitest 4 provider and
   explicit coverage inputs (ADR 0036); 2026-10-26 coverage merges both tiers
-  and gates each layer, the exclusions are explicit (#174)
+  and gates each layer, the exclusions are explicit
 - Enforced by: `coverage.thresholds` in `vite.config.mts`, checked by the CI
   `test` job
 
@@ -89,9 +89,9 @@ empty, so test helpers and fixtures counted as production code.
 
 - Status: accepted
 - History: 2026-07-26 decided (ADR 0014); 2026-10-26 adapter specs may move
-  to the browser tier without losing coverage (#174)
+  to the browser tier without losing coverage
 
-**Context.** The modeling-command suite (#55) was meant to use a real
+**Context.** The modeling-command suite was meant to use a real
 `Diagram` in jsdom, but jsdom cannot support it:
 
 - `canvas.addShape` reaches tiny-svg's `translate()` and then
@@ -137,7 +137,7 @@ comment explains why the spec is in its tier.
   Leaked canvases slow the tier down far more than the number of spec files.
 - Browser specs wait on observable state, never on diagram-js timers. For
   example, the post-drag click trap expires after 400 ms, so a step that
-  relies on it fails under load (#174).
+  relies on it fails under load.
 
 ## <a id="tst-3"></a>TST-3 — Public journeys run against the installed package
 
@@ -210,16 +210,14 @@ also pass while the package itself is broken, for example through:
 ## <a id="tst-4"></a>TST-4 — Gate domain code on per-file mutation scores
 
 - Status: accepted
-- History: 2026-10-26 decided (ADR 0041); Stryker setup and rollout tracked in
-  #175
+- History: 2026-10-26 decided (ADR 0041); Stryker setup and rollout pending
 - Enforced by: the per-file gate script and a raw-source rule for disable
-  comments in `src/architecture.spec.ts`. Both arrive with #175 and are not in
-  the repository yet.
+  comments in `src/architecture.spec.ts`. Neither is in the repository yet.
 
 **Context.** At `32075e3` the domain layers had 99.1% statement coverage but
 an 85.1% Stryker mutation score: 124 surviving mutants, 52 of which pointed at
 missing assertions. Coverage cannot detect a missing rule. The
-group-as-activity-source bug (#181) sat in a domain function with 99% branch
+group-as-activity-source bug sat in a domain function with 99% branch
 coverage.
 
 Stryker's `thresholds.break` applies to a whole run only. A global threshold
@@ -270,7 +268,8 @@ is the quality gate for `src/**/domain/**` only.
 **Rejected alternatives.**
 
 - **Coverage thresholds only:** they measure execution, not assertions. The
-  domain already had 99% coverage and still contained #181.
+  domain already had 99% coverage and still contained the
+  group-as-activity-source bug.
 - **Only a global `break` threshold:** new files can hide behind the average,
   and a global threshold cannot require new code to reach 100%.
 - **Mutate service and infrastructure code on every PR:** rejected for now.

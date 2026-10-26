@@ -8,32 +8,24 @@ import type { IconCategory } from "../domain/IconTypes";
 
 export const ICON_CSS_CLASS_PREFIX = "icon-domain-story-";
 
-/**
- * The dictionaries hold icons (as SVG) and icon names as key-value pairs:
- */
 export class IconDictionaryService {
     static $inject: string[] = [
         "domainStoryIconStyleSheet",
         "domainStoryIconSanitizer",
     ];
 
-    // these dictionaries make up the current icon set:
     private selectedActorsDictionary = new Dictionary<string>();
     private selectedWorkObjectsDictionary = new Dictionary<string>();
 
-    // The pool of all known custom icons. Instance-owned (not module scope) so
-    // two EgonClient instances on one page don't share one icon pool — a shared
-    // pool cross-contaminated their icon sets (issue #12).
+    // Instance-owned so two EgonClient instances on one page never share icons
+    // (ADR ARC-5).
     private readonly customIcons = new Dictionary<string>();
 
-    // the imported icon set's name, kept here (next to the dictionaries it
-    // belongs to) so export can round-trip it — the element registry holds no
-    // icon-set metadata. Defaults to "" until an icon set is loaded.
+    // Kept here so export can round-trip it; the element registry holds no
+    // icon-set metadata.
     private iconSetName = "";
 
-    // Required (no default): a defaulted port would let a caller silently smuggle
-    // DOM coupling back into this service. The stylesheet is injected from
-    // outside so the service stays free of DOM/CSSOM detail.
+    // Required: a defaulted port would let DOM coupling back into this service.
     constructor(
         private readonly iconStyleSheet: IconStyleSheetPort,
         private readonly iconSanitizer: IconSanitizerPort,
@@ -51,13 +43,9 @@ export class IconDictionaryService {
     }
 
     /**
-     * Add or replace one icon while preserving Dictionary's general
-     * first-write-wins contract.
-     *
-     * Artwork is shared by name: if the other category already selects the
-     * same name, refresh its source too, but do not add that membership when it
-     * was absent. Validation and sanitization finish before the first mutation
-     * so a rejected update leaves every dictionary untouched.
+     * Artwork is shared by name: the other category's entry of the same name is
+     * refreshed too, but never added. Sanitizing finishes before the first
+     * mutation, so a rejected update changes nothing.
      */
     upsertIconForType(type: ElementTypes, name: string, src: string): string {
         const selected = this.getSelectedDictionary(type);
@@ -95,19 +83,16 @@ export class IconDictionaryService {
         currentIcons.appendDict(sanitizedConfig.actors);
         currentIcons.appendDict(sanitizedConfig.workObjects);
 
-        // Imports refresh names already present in the historical pool. Keep
-        // entries absent from this import, but replace every incoming value
-        // explicitly because Dictionary.set() never overwrites.
+        // Replace incoming values explicitly (Dictionary.set() never
+        // overwrites) and keep pool entries this import lacks.
         currentIcons.keysArray().forEach((key) => {
             this.customIcons.delete(key);
             this.customIcons.set(key, currentIcons.get(key));
         });
 
-        // Generate CSS for ALL custom icons in the current story's config
         this.addIconsToCss(currentIcons);
 
-        // Import replaces (rather than merges into) the selected icon set:
-        // hard-swap the selected dictionaries + name to the imported config.
+        // Import replaces the selection rather than merging (ADR ICO-3).
         this.setIconSet(sanitizedConfig);
     }
 
@@ -118,9 +103,6 @@ export class IconDictionaryService {
     }
 
     addIconsToCss(icons: Dictionary<string>) {
-        // The service owns *which* class an icon maps to (getCSSClassOfIcon —
-        // the issue-#4 regression pins class == published rule); the injected
-        // port owns *how* that class becomes a live stylesheet rule.
         icons.keysArray().forEach((key) => {
             this.iconStyleSheet.addIconStyle(
                 this.getCSSClassOfIcon(key),
@@ -128,8 +110,6 @@ export class IconDictionaryService {
             );
         });
     }
-
-    /** Getter & Setter **/
 
     getFullDictionary(): Dictionary<string> {
         const fullDictionary = new Dictionary<string>();
@@ -161,12 +141,9 @@ export class IconDictionaryService {
     }
 
     /**
-     * Resolves an icon by name through a single fallback order: the full custom
-     * pool first, then the two selected dictionaries as a safety net for any
-     * future registration path that bypasses the pool. Returns "" on a miss (not
-     * a throw) so callers can keep their falsy guards live — a story element
-     * whose icon is absent from the current set renders empty instead of
-     * crashing the render pass.
+     * The pool first, then the selected dictionaries for registrations that
+     * bypass it. Returns "" on a miss, so an element whose icon is absent
+     * renders empty instead of crashing the render pass.
      */
     getIconSource(name: string): string {
         return (

@@ -1,12 +1,8 @@
 import { CanvasObject } from "../../../story/domain/canvasObject";
 
 /**
- * Read access to the elements currently present on the canvas, seen through
- * domain eyes. This port exists so domain services can query canvas state
- * without importing diagram-js: at runtime didi injects diagram-js's
- * `ElementRegistry` (service name `elementRegistry`), which satisfies this
- * interface structurally. Only the two operations the domain actually needs
- * are exposed — widening it would just re-couple the domain to the framework.
+ * Lets domain code query canvas elements without importing diagram-js; didi
+ * injects `elementRegistry`, which satisfies it structurally. Keep it narrow.
  */
 export interface ElementRegistryPort {
     find(

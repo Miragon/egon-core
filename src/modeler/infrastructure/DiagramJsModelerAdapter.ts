@@ -57,10 +57,6 @@ function projectViewport(viewbox: ViewportData): ViewportData {
     };
 }
 
-/**
- * Infrastructure adapter that implements ModelerPort using diagram-js.
- * This adapter isolates all diagram-js framework dependencies.
- */
 export class DiagramJsModelerAdapter implements ModelerPort {
     private readonly sessionOwner: EditorSessionOwner;
     private importInProgress = false;
@@ -69,21 +65,16 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     private readonly replayCallbacks = new Set<(state: ReplayState) => void>();
     private readonly pendingExports = new Set<ExportCancellation>();
 
-    // Two maps, not one union-keyed map: `EgonEventMap` makes a zero-arg
-    // callback assignable to both events, so `on("story.changed", f)` followed
-    // by `on("viewport.changed", f)` typechecks — with a single map the second
-    // registration would overwrite the first handle, leaving an uncancellable
-    // timer alive past destroy(). That is the very defect #69 removes.
+    // Separate maps: one zero-arg callback may subscribe to both events, and a
+    // shared map would lose the first handle, leaving a timer alive past destroy().
     private readonly storyCallbacks: Map<() => void, DebouncedCallback> =
         new Map();
     private readonly viewportCallbacks: Map<
         (viewport: ViewportData) => void,
         DebouncedCallback
     > = new Map();
-    // Undebounced, so the map holds the wrapper itself: an import is one
-    // discrete host-triggered action that fires this at most once, and delaying
-    // "your file was lossy" past the import returning would be a regression, not
-    // a coalescing win.
+    // Undebounced: fires at most once per import, and must not arrive after the
+    // import returns.
     private readonly importRepairCallbacks: Map<
         (repair: ImportRepairData) => void,
         (event: any) => void
@@ -149,9 +140,8 @@ export class DiagramJsModelerAdapter implements ModelerPort {
             const previous = this.sessionOwner.promote(candidate);
             committed = true;
             this.abortPendingExports();
-            // The old request remains valid throughout candidate staging. Only
-            // a successful promotion expires it, while its old-bus callbacks
-            // are still attached and can synchronously dismiss the host UI.
+            // Only a successful promotion expires the open request, while its
+            // old-bus callbacks can still dismiss the host UI.
             try {
                 this.getColorPickerCoordinator(previous).cancelActive();
             } catch (error) {
@@ -167,8 +157,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
             }
             this.replaceReplayController(candidate.diagram);
 
-            // Candidate-local events prepared its palette/banner while hidden.
-            // Repeat only the public notifications after listeners have moved.
+            // Re-fire the public notifications now that listeners have moved.
             this.publishCommittedImport(candidate, prepared.removedConnections);
 
             try {
@@ -310,9 +299,8 @@ export class DiagramJsModelerAdapter implements ModelerPort {
 
     fitToScreen(): void {
         this.alignToOrigin();
-        // Public equivalent of upstream fitStoryToScreen's
-        // canvas._fitViewport({ x: 0, y: 0 }): in diagram-js, zoom
-        // "fit-viewport" delegates directly to _fitViewport(center).
+        // upstream: fitStoryToScreen calls canvas._fitViewport({ x: 0, y: 0 });
+        // zoom("fit-viewport", center) is its public equivalent.
         this.getCanvas().zoom("fit-viewport", { x: 0, y: 0 });
     }
 
@@ -320,9 +308,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         if (this.storyCallbacks.has(callback)) {
             return;
         }
-        // Built once and reused for every event: a debouncer created per event
-        // shares no timer with the previous one, so nothing coalesces and each
-        // command reaches the host a full window late.
+        // One debouncer per subscription; one per event would never coalesce.
         const wrapped = createDebouncedCallback(() => {
             try {
                 callback();
@@ -353,8 +339,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         if (this.importRepairCallbacks.has(callback)) {
             return;
         }
-        // The internal event carries the dropped business objects; only their
-        // ids cross the port, so the model stays on this side of it.
+        // Only ids cross the port, never the business objects.
         const wrapped = (event: any) => {
             try {
                 callback({
@@ -374,8 +359,7 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         const wrapped = this.storyCallbacks.get(callback);
         if (wrapped) {
             (this.getEventBus().off as any)("commandStack.changed", wrapped);
-            // Cancel too, or unsubscribing drops the only handle to an armed
-            // timer and the host is still called ~100 ms after off().
+            // Cancel too, or an armed timer still calls the host after off().
             wrapped.cancel();
             this.storyCallbacks.delete(callback);
         }
@@ -516,11 +500,8 @@ export class DiagramJsModelerAdapter implements ModelerPort {
     }
 
     /**
-     * Teardown order is deliberate: unsubscribe (and disarm) first, so no event
-     * raised by diagram-js' own teardown — `diagram.destroy` fires
-     * `canvas.destroy` on a still-live bus — can reach a host handler; then drop
-     * the diagram; then remove the <style> node, which lives in the *host's*
-     * container and so survives `diagram.destroy()`.
+     * Unsubscribes before destroying the diagram, so `canvas.destroy` on the
+     * still-live bus cannot reach a host handler.
      */
     destroy(): void {
         if (this.destroyed) return;
@@ -531,17 +512,14 @@ export class DiagramJsModelerAdapter implements ModelerPort {
         this.sessionOwner.destroy();
     }
 
-    /** Expose diagram instance for IconAdapter to access services */
     getDiagram(): Diagram {
         return this.sessionOwner.getActiveDiagram();
     }
 
-    /** Internal active-session provider used by the icon adapter. */
     getSessionOwner(): EditorSessionOwner {
         return this.sessionOwner;
     }
 
-    /** Detaches and disarms every host subscription. */
     private unsubscribeAll(): void {
         this.storyCallbacks.forEach((wrapped) => {
             (this.getEventBus().off as any)("commandStack.changed", wrapped);

@@ -10,13 +10,8 @@ import { ElementTypes } from "../../../../story/domain/elementTypes";
 import { DomainStoryNumberingRegistry } from "../../popup/DomainStoryNumberingRegistry";
 
 /**
- * Regression tests for the replace ("Change type") popup positioning (issue #6,
- * upstream #265). `computeReplaceMenuPosition` replaced the deprecated
- * `ContextPad#getPad()` lookup — which warned and could spawn a stray pad DOM
- * element — with a scoped `.djs-context-pad.open` DOM query. jsdom (the global
- * test environment) supplies the DOM these functions read; because it returns
- * all-zero `getBoundingClientRect()` by default, both rects are stubbed so the
- * pad-relative offset math is observable.
+ * Unit tier on jsdom. jsdom returns all-zero `getBoundingClientRect()`, so the
+ * rects are stubbed to make the offset math observable.
  */
 
 /** A DOMRect stub carrying only the fields the position math consumes. */
@@ -31,11 +26,7 @@ function rect(values: Partial<DOMRect>): () => DOMRect {
         }) as DOMRect;
 }
 
-/**
- * Build a diagram container with an optional context pad child. The pad's class
- * list is caller-controlled so tests can prove the `open` class is what gates
- * the match — the stray-pad case the deprecation was steering away from.
- */
+/** The pad's class list is caller-controlled to prove `open` gates the match. */
 function setup(
     options: {
         padClassName?: string;
@@ -64,7 +55,6 @@ describe("computeReplaceMenuPosition", () => {
             padRect: { left: 130, top: 90, height: 40 },
         });
 
-        // x = padLeft - containerLeft; y = padTop - containerTop + height + 5
         expect(computeReplaceMenuPosition(container)).toEqual({
             x: 30,
             y: 90 - 50 + 40 + 5,
@@ -76,8 +66,7 @@ describe("computeReplaceMenuPosition", () => {
     });
 
     it("ignores a pad that is not open, guarding the stray-pad case", () => {
-        // A pad element without the `open` class must not be matched — this is
-        // exactly the stray pad the deprecated getPad() could create.
+        // The deprecated getPad() could leave such a stray pad behind.
         const container = setup({ padClassName: "djs-context-pad" });
         expect(computeReplaceMenuPosition(container)).toBeNull();
     });
@@ -111,26 +100,13 @@ describe("computeColorPickerAnchor", () => {
     });
 });
 
-/**
- * The context-pad half of the client-scoped picker contract (ADR EDT-2). This
- * provider owns no request or async response state; it only hands the exact pad
- * target to the session coordinator when the user clicks the color entry.
- */
+/** The provider only hands the pad target to the coordinator (ADR EDT-2). */
 
-/** A minimal element carrying only what the color-change path reads. */
 function element(id: string, type: ElementTypes, pickedColor?: string): any {
     return { id, type, businessObject: { pickedColor } };
 }
 
-/**
- * Construct a provider with just enough mocks to reach the color-change path,
- * returning the spies the tests assert on. `rules.allowed` defaults to a spy
- * answering `true`, so every entry is offered; pass an override to drive the
- * delete-rule cases.
- *
- * The event bus is the real diagram-js one because ctrl-drop behavior depends
- * on when its listener runs relative to diagram-js' own selection listener.
- */
+/** A real event bus: ctrl-drop depends on listener priority order. */
 function provider(
     rulesOverride?: { allowed: (...args: any[]) => unknown },
     colorPickerEnabled = true,
@@ -165,12 +141,10 @@ function provider(
         {} as any, // elementFactory
         {} as any, // modeling
         {} as any, // replaceMenuProvider
-        // The real registry against an empty canvas, so number generation stays
-        // pure and "does anything write before the command" is observable.
+        // Real registry on an empty canvas, so writes before the command show.
         numberingRegistry,
         dirtyFlagService as any,
-        // iconDictionaryService: no icons, so the append-actor/work-object
-        // entries stay empty and do not obscure the entries under test.
+        // iconDictionaryService: no icons, so no append entries.
         {
             getIconsAssignedAs: () => ({ keysArray: () => [] }),
             getCSSClassOfIcon: () => "",
@@ -274,13 +248,7 @@ describe("DomainStoryContextPadProvider color change", () => {
     });
 });
 
-/**
- * The delete entry is rule-gated (issue #85). A denied delete must *omit* the
- * entry — the provider used to `throw`, and `getContextPadEntries` has no catch,
- * so a single denying `elements.delete` rule would have taken down the entire
- * context pad. The rule is also queried with the canonical flat `{ elements }`
- * context, so host rules written against bpmn-js conventions actually match.
- */
+/** A denied delete must omit only its entry, never break the whole pad. */
 describe("DomainStoryContextPadProvider delete entry", () => {
     it("omits delete but keeps the rest of the pad when the rule denies", () => {
         const { instance } = provider({ allowed: () => false });
@@ -344,7 +312,6 @@ describe("DomainStoryContextPadProvider delete entry", () => {
         const el1 = element("Actor_1", ElementTypes.ACTOR);
         const el2 = element("Annotation_1", ElementTypes.TEXTANNOTATION);
 
-        // A partial verdict must not offer an entry that would delete both.
         expect(
             provider({
                 allowed: () => [el1],
@@ -368,9 +335,6 @@ describe("DomainStoryContextPadProvider delete entry", () => {
     });
 });
 
-/**
- * Legacy global events must no longer provide an unowned response path.
- */
 describe("DomainStoryContextPadProvider legacy picker events", () => {
     it("ignores pickedColor, openColorPicker, and defaultColor events", () => {
         const { instance, commandStack, colorPickerCoordinator } = provider();
@@ -388,11 +352,7 @@ describe("DomainStoryContextPadProvider legacy picker events", () => {
     });
 });
 
-/**
- * Changing an activity's direction has to reach the model through the command,
- * not before it: `ActivityDirectionChangedHandler.preExecute` snapshots the
- * activity's current number so an undo can put it back.
- */
+/** The number must reach the model only via the command, so undo works. */
 describe("DomainStoryContextPadProvider change direction", () => {
     /** A work-object-sourced activity: after the swap it starts at an actor. */
     function workObjectSourcedActivity() {
@@ -471,18 +431,12 @@ describe("DomainStoryContextPadProvider connect entry", () => {
         const entries = instance.getContextPadEntries(el);
         (entries["connect"].action as any).click({}, el, true);
 
-        // Connect#start reads a non-object third argument *as* autoActivate; a
-        // fourth argument is only consulted when the third is a Point.
+        // Connect#start reads a non-object third argument as autoActivate.
         expect(connect.start).toHaveBeenCalledWith({}, el, true);
     });
 });
 
-/**
- * Ctrl/cmd-dropping a new element is meant to open the replace ("Change type")
- * menu straight away. That only works if the listener runs *after* the shape has
- * been selected, because it is the selection that opens the context pad —
- * diagram-js' SelectionBehavior does it at priority 500.
- */
+/** The listener must run after SelectionBehavior (500), which opens the pad. */
 describe("DomainStoryContextPadProvider ctrl-drop replace menu", () => {
     it("opens the replace menu after selection has opened the pad", () => {
         const { eventBus, replaceEntryClick, openPadOnSelection } = provider();

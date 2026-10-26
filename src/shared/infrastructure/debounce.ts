@@ -1,26 +1,16 @@
 /** Window every adapter collapses host-facing event bursts into. */
 export const DEFAULT_DEBOUNCE_MS = 100;
 
-/**
- * A debounced function that can be disarmed again.
- *
- * `cancel()` is the reason this type exists: without it a pending timer is
- * unreachable closure state, so teardown cannot stop a callback that is already
- * in flight — the defect issue #69 removes.
- */
+/** `cancel()` lets teardown stop a pending delivery. */
 export interface DebouncedCallback {
     (event?: unknown): void;
     cancel(): void;
 }
 
 /**
- * Wraps `callback` so a burst of calls delivers once, `delayMs` after the last
- * one, carrying that last call's payload.
- *
- * Shared by the diagram-js adapters (each had its own private copy) so the
- * cancel-on-teardown guarantee is implemented once. Build the debouncer *once*
- * per subscription and reuse it — building a fresh one per event coalesces
- * nothing and only adds latency.
+ * Delivers a burst once, `delayMs` after the last call, with that call's
+ * payload. Build it once per subscription: a fresh debouncer per event
+ * coalesces nothing.
  */
 export function createDebouncedCallback(
     callback: (event?: unknown) => void,

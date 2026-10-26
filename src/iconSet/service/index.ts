@@ -4,11 +4,9 @@ import { IconCssInjector } from "../infrastructure/IconCssInjector";
 import { DomPurifyIconSanitizer } from "../infrastructure/DomPurifyIconSanitizer";
 
 /**
- * Public surface of the iconSet feature. Sibling features import the icon
- * services from this barrel (never their concrete files) so the feature keeps a
- * single, stable entry point. The DOM-owning `IconCssInjector` stays behind the
- * default didi module — it is wired here as the composition root and never
- * re-exported, so no sibling can reach the infrastructure layer.
+ * Siblings import the icon services only from this barrel. The DOM-owning
+ * adapters are wired here but never re-exported, so no sibling reaches
+ * infrastructure.
  */
 export { IconDictionaryService } from "./IconDictionaryService";
 export {
@@ -23,10 +21,8 @@ export default {
     ],
     domainStoryIconDictionaryService: ["type", IconDictionaryService],
     domainStoryIconSetImportExportService: ["type", IconSetImportExportService],
-    // Not in __init__: didi resolves it lazily via IconDictionaryService's
-    // $inject. Implements IconStyleSheetPort so the service stays DOM-free.
+    // IconStyleSheetPort adapter, so the service stays DOM-free.
     domainStoryIconStyleSheet: ["type", IconCssInjector],
-    // One DOMPurify-backed adapter per diagram injector. Both storage and the
-    // final renderer boundary use this same policy without exposing it publicly.
+    // One adapter per injector, shared by storage and the render boundary.
     domainStoryIconSanitizer: ["type", DomPurifyIconSanitizer],
 };

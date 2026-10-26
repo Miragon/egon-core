@@ -9,16 +9,9 @@ import type { ActivityCanvasObject } from "../../../../story/domain/canvasObject
 import { ElementTypes } from "../../../../story/domain/elementTypes";
 
 /**
- * The popup's whole contract (issue #68): translate the form into exactly one
- * `activity.changed` action and touch nothing else. It used to mutate the
- * business object before executing and run the renumbering cascade after it,
- * which put three quarters of the edit outside the undo stack.
- *
- * WHY it is driven through the real preact render rather than by calling
- * `handleUpdate`: the mapping under test spans `PopupMenu`'s state (an empty
- * number field becomes `0`, the checkbox has to open pre-ticked) and the
- * service's translation of it. Calling the private method would skip exactly
- * the half that was wrong. Unit tier — no canvas, no SVG (ADR TST-2).
+ * The popup's contract: translate the form into exactly one `activity.changed`
+ * and touch nothing else. Driven through the real preact render because the
+ * mapping spans `PopupMenu`'s state too. Unit tier: no canvas, no SVG (ADR TST-2).
  */
 describe("DomainStoryPopupService", () => {
     const liveListeners: Map<string, (event: unknown) => void>[] = [];
@@ -73,11 +66,7 @@ describe("DomainStoryPopupService", () => {
         return { commandStack, container, listeners };
     }
 
-    /**
-     * Opens the popup the way a user does — the service only ever opens from its
-     * own `element.dblclick` listener — and waits for the timer that installs the
-     * outside-click handler, so the rendered DOM is in its steady state.
-     */
+    /** Opens via `element.dblclick` and waits for the outside-click handler's timer. */
     async function openPopup(
         listeners: Map<string, (event: unknown) => void>,
         container: HTMLElement,
@@ -305,7 +294,6 @@ describe("DomainStoryPopupService", () => {
     });
 
     describe("handleUpdate", () => {
-        // T4.1
         it("executes exactly one activity.changed carrying the form values", async () => {
             const { commandStack, container, listeners } = makeSut();
             const element = makeActivity({
@@ -333,8 +321,7 @@ describe("DomainStoryPopupService", () => {
             );
         });
 
-        // T4.2 — the "popup must not touch the model" lock. Module code is strict
-        // mode, so a write to a frozen object throws rather than failing silently.
+        // Module code is strict mode, so a write to a frozen object throws.
         it("does not write to the model", async () => {
             const { container, listeners } = makeSut();
             const element = makeActivity({
@@ -352,8 +339,7 @@ describe("DomainStoryPopupService", () => {
             expect(element.businessObject.number).toBe(3);
         });
 
-        // T4.3 — `PopupMenu` maps an empty number field to 0; the handler must
-        // see "no number", not a number to cascade from.
+        // `PopupMenu` maps an empty number field to 0; the handler must see "no number".
         it("submits undefined for an empty number field", async () => {
             const { commandStack, container, listeners } = makeSut();
             const element = makeActivity({
@@ -373,8 +359,7 @@ describe("DomainStoryPopupService", () => {
             );
         });
 
-        // T4.4 — the checkbox used to open unchecked regardless, so re-saving an
-        // already-multiple activity silently cleared its allowance.
+        // An unchecked box would clear the allowance on a plain re-save.
         it("opens an already-multiple activity checked and submits true", async () => {
             const { commandStack, container, listeners } = makeSut();
             const element = makeActivity({

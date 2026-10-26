@@ -5,34 +5,21 @@ import {
     IconCategory,
 } from "../../../iconSet/domain/IconTypes";
 
-/**
- * Port interface for icon management operations.
- * Infrastructure layer provides the concrete implementation.
- */
 export interface IconPort {
     /**
-     * Load a set of icons into the modeler, **replacing** the current icon set.
-     * A category left out of `icons` becomes empty; to merge, spread
-     * {@link getIcons} into the new set.
+     * **Replaces** the current icon set: an omitted category becomes empty.
+     * To merge, spread {@link getIcons} into the new set.
      */
     loadIcons(icons: Partial<IconSetData>): void;
 
     /**
-     * Add a single icon. An existing name is replaced and matching live shapes
-     * repaint immediately. Artwork is shared by name across categories: an
-     * already-selected same-name entry in the other category is refreshed too,
-     * without adding new membership there.
+     * Replaces an existing name and repaints matching shapes. Artwork is shared
+     * by name, so a selected same-name entry in the other category refreshes too.
      */
     addIcon(category: IconCategory, name: string, svg: string): void;
 
-    /**
-     * Remove an icon.
-     */
     removeIcon(category: IconCategory, name: string): void;
 
-    /**
-     * Get all currently registered icons.
-     */
     getIcons(): IconSet;
 
     /** Returns the retained catalog, selection order, set name, and usage. */
@@ -41,24 +28,13 @@ export interface IconPort {
     /** Reorders one selected category using an exact permutation. */
     setIconOrder(category: IconCategory, names: readonly string[]): void;
 
-    /**
-     * Check if an icon exists.
-     */
     hasIcon(category: IconCategory, name: string): boolean;
 
-    /**
-     * Subscribe to icon changes. Duplicate registration of the same callback
-     * is ignored; one matching {@link offIconsChanged} fully removes it.
-     */
+    /** Idempotent per callback; one matching {@link offIconsChanged} removes it. */
     onIconsChanged(callback: (icons: IconSet) => void): void;
 
-    /**
-     * Unsubscribe from icon changes, including any pending debounced delivery.
-     */
+    /** Also cancels a pending debounced delivery. */
     offIconsChanged(callback: (icons: IconSet) => void): void;
 
-    /**
-     * Clean up resources.
-     */
     destroy(): void;
 }

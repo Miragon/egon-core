@@ -5,10 +5,9 @@ import ElementRegistryService from "../../service";
 import { DomainStoryUpdateHandler } from "./DomainStoryUpdateHandler";
 
 export default {
-    // `DomainStoryPopup` provides `domainStoryNumberingRegistry`, which
-    // `ActivityChangedHandler` injects. didi instantiates registered command
-    // handlers lazily, so a missing provider surfaced only at the first
-    // `activity.changed` — long after boot, as a throw inside the command stack.
+    // `DomainStoryPopup` provides `domainStoryNumberingRegistry` for
+    // `ActivityChangedHandler`; command handlers are created lazily, so a missing
+    // provider would only throw at the first `activity.changed`.
     __depends__: [
         DomainStoryModeling,
         DomainStoryPopup,

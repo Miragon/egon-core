@@ -18,9 +18,6 @@ import { ElementTypes } from "../../../story/domain/elementTypes";
 import { DEFAULT_DEBOUNCE_MS } from "../../../shared/infrastructure/debounce";
 import { createRecordingEventBus } from "./helpers/createRecordingEventBus";
 
-/**
- * Creates mock diagram-js services for testing DiagramJsIconAdapter.
- */
 function createMockDiagramServices() {
     const mockEventBus = createRecordingEventBus();
 
@@ -411,10 +408,7 @@ describe("DiagramJsIconAdapter", () => {
         });
     });
 
-    /**
-     * Timer-level teardown (#69). Fake timers are legal in this tier only
-     * (ADR TST-2); nothing here drives a real canvas.
-     */
+    /** Fake timers are allowed here (ADR TST-2): no real canvas to stall. */
     describe("debouncing and teardown", () => {
         beforeEach(() => {
             vi.useFakeTimers();
@@ -429,7 +423,6 @@ describe("DiagramJsIconAdapter", () => {
             }
             vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);
 
-            // Five before the fix: the debouncer was rebuilt per event.
             expect(iconsChanged).toHaveBeenCalledTimes(1);
         });
 
@@ -473,8 +466,7 @@ describe("DiagramJsIconAdapter", () => {
             adapter.onIconsChanged(iconsChanged);
             mocks.mockEventBus.fire("dst.config.changed");
 
-            // A duplicate while the timer is armed must neither replace and
-            // orphan that timer nor attach another listener.
+            // A duplicate while armed must not orphan the timer or add a listener.
             adapter.onIconsChanged(iconsChanged);
             expect(mocks.mockEventBus.listenerCount()).toBe(1);
             vi.advanceTimersByTime(DEFAULT_DEBOUNCE_MS);

@@ -92,8 +92,7 @@ jobs:
                   json-summary-compare-path: ${{ steps.baseline.outputs.summary }}
                   file-coverage-mode: changes
 
-    # Source-based public-consumer browser journeys: resolve the public package
-    # specifiers through exact development aliases and drive only the UI.
+    # Public-consumer journeys against source, through exact package aliases.
     test-e2e:
         runs-on: ubuntu-latest
         steps:
@@ -113,9 +112,8 @@ jobs:
                   if-no-files-found: ignore
                   retention-days: 7
 
-    # Installed-package browser journeys: pack egon-core, create an isolated
-    # consumer outside the checkout, and run the shared Playwright suite against
-    # that consumer's production build.
+    # The same journeys against a packed egon-core, installed by an isolated
+    # consumer outside the checkout.
     test-package:
         runs-on: ubuntu-latest
         steps:
@@ -141,9 +139,8 @@ jobs:
             - uses: ./.github/actions/setup
             - run: yarn build
 
-    # Fails the build if any dependency in package.json uses a `^`/`~` range.
-    # Exact pins make installs reproducible and force upgrades through a
-    # reviewed PR (via Dependabot) instead of resolving silently in CI.
+    # Exact pins keep installs reproducible and force upgrades through
+    # reviewed Dependabot PRs.
     pin-check:
         runs-on: ubuntu-latest
         steps:
@@ -157,8 +154,7 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
 
-    # Scans the whole dependency tree for known high-severity advisories on every
-    # run; complements dependency-review, which only inspects deps added in a PR.
+    # The whole tree on every run; dependency-review only sees added deps.
     audit:
         runs-on: ubuntu-latest
         steps:

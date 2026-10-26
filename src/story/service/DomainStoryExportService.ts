@@ -9,10 +9,8 @@ import { EgnExportFile } from "../domain/egnExportFile";
 import type { CanvasObject } from "../domain/canvasObject";
 import { isAnnotation } from "../domain/elementPredicates";
 
-/** The format version this library converges every export on. */
 const EGN_EXPORT_VERSION = "4.0.0";
 
-/** An empty icon set, emitted when the canvas has no icons yet. */
 const EMPTY_ICON_SET: IconSetExportConfiguration = {
     name: "",
     actors: {},
@@ -20,12 +18,8 @@ const EMPTY_ICON_SET: IconSetExportConfiguration = {
 };
 
 /**
- * Serializes the current diagram to the EGN v4.0.0 file format.
- *
- * The diagram elements come from the element registry; the story-level metadata
- * (title/description/scope) and the icon-set name do not live there, so they
- * are read back from the properties service and the icon service — both
- * populated on import — to keep them intact across an open→save round-trip.
+ * Story metadata and the icon-set name are not in the element registry, so they
+ * are read back from the services import populated.
  */
 export class DomainStoryExportService {
     static $inject: string[] = [
@@ -46,12 +40,7 @@ export class DomainStoryExportService {
         return JSON.stringify(exportFile, null, 2);
     }
 
-    /**
-     * Collects the diagram's business objects sorted by id. Sorting keeps the
-     * output stable so diffs between saves stay meaningful. Unlike the legacy
-     * exporter, no `{info}`/`{version}` trailer is appended — that metadata now
-     * lives on the `domainStory` object.
-     */
+    /** Sorted by id so diffs between saves stay meaningful. */
     private getStory(): BusinessObject[] {
         return this.elementRegistryService
             .createObjectListForDSTDownload()
@@ -81,9 +70,8 @@ export class DomainStoryExportService {
 }
 
 /**
- * Export-time geometry is projected into a detached record. In particular,
- * annotation height belongs to the live shape and must never be written into
- * its business object merely because a document was serialized (ADR ARC-4).
+ * Annotation size belongs to the live shape, so it goes into a detached copy
+ * and serializing never writes it into the business object (ADR ARC-4).
  */
 function projectBusinessObject(canvasObject: CanvasObject): BusinessObject {
     const businessObject = { ...canvasObject.businessObject };

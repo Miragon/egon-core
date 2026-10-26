@@ -2,18 +2,11 @@ import { assign } from "min-dash";
 import { DomainStoryModeling } from "../modeling/DomainStoryModeling";
 import { Shape } from "diagram-js/lib/model/Types";
 
-/**
- * service that allow replacing of elements.
- */
 export class DomainStoryReplace {
     static $inject: string[] = ["modeling"];
 
     constructor(private readonly modeling: DomainStoryModeling) {}
 
-    /**
-     * @param oldShape - element to be replaced
-     * @param newShapeData - containing information about the new Element, for example height, width, type.
-     */
     replaceElement(oldShape: Shape, newShapeData: Partial<Shape>) {
         const newElement = this.setCenterOfElement(newShapeData, oldShape);
         const outgoingActivities = newElement.outgoing;

@@ -18,10 +18,6 @@ import {
     ViewportData,
 } from "../../domain";
 
-/**
- * Creates mock ports for testing EgonClient.
- * Uses constructor injection to bypass real adapter creation.
- */
 function createMockPorts() {
     const mockModelerPort: ModelerPort = {
         import: vi.fn(),
@@ -102,7 +98,6 @@ describe("EgonClient (Application Service)", () => {
             colorPicker: false,
         };
 
-        // Use constructor injection to provide mock ports
         client = await EgonClient.create(config, [], {
             modelerPort: mockModelerPort,
             iconPort: mockIconPort,
@@ -695,7 +690,7 @@ describe("EgonClient (Application Service)", () => {
             client.destroy();
 
             // Both, not just the modeler: the icon port owns its own
-            // subscriptions and debounce timers (#69).
+            // subscriptions and debounce timers.
             expect(mockIconPort.destroy).toHaveBeenCalledTimes(1);
             expect(mockModelerPort.destroy).toHaveBeenCalledTimes(1);
         });

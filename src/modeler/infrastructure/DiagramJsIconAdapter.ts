@@ -24,10 +24,6 @@ import {
     IconSetData,
 } from "../../iconSet/domain/IconTypes";
 
-/**
- * Infrastructure adapter that implements IconPort using diagram-js icon services.
- * This adapter isolates all diagram-js icon-related dependencies.
- */
 export class DiagramJsIconAdapter implements IconPort {
     private readonly sessionOwner?: EditorSessionOwner;
     private readonly fixedDiagram?: Diagram;
@@ -52,9 +48,8 @@ export class DiagramJsIconAdapter implements IconPort {
     loadIcons(icons: Partial<IconSetData>): void {
         const iconSetConfig =
             this.iconSetImportExportService().createIconSetConfiguration({
-                // fall back to the currently loaded name so reloading icons
-                // after an import does not strip the icon-set name from the
-                // next export
+                // Fall back to the loaded name, or reloading icons after an
+                // import strips the icon-set name from the next export.
                 name:
                     icons.name ?? this.iconDictionaryService().getIconSetName(),
                 actors: icons.actors ?? {},
@@ -147,20 +142,13 @@ export class DiagramJsIconAdapter implements IconPort {
         const wrapped = this.callbackRegistry.get(callback);
         if (wrapped) {
             (this.eventBus().off as any)("dst.config.changed", wrapped);
-            // Cancel too: dropping the registry entry would otherwise leave an
-            // armed timer nobody can reach, firing ~100 ms after off().
+            // Cancel too, or an armed timer still fires after off().
             wrapped.cancel();
             this.callbackRegistry.delete(callback);
         }
     }
 
-    /**
-     * Detaches and disarms every subscription.
-     *
-     * Must run before the modeler port tears the injector down: this adapter's
-     * callback reads `getIcons()` off injector-owned services, so a timer that
-     * survives teardown queries a destroyed injector.
-     */
+    /** Must run before the injector is destroyed: callbacks read its services. */
     destroy(): void {
         this.callbackRegistry.forEach((wrapped) => {
             (this.eventBus().off as any)("dst.config.changed", wrapped);

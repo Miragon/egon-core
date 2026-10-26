@@ -1,11 +1,8 @@
 import type { Element } from "diagram-js/lib/model/Types";
 
 /**
- * Session-local, non-persistent color overrides consumed by the renderer.
- *
- * This service deliberately knows nothing about events, commands, selection,
- * or business objects. The coordinator owns all writes and repaint requests;
- * rendering only asks for the current override (ADR EDT-2).
+ * Non-persistent color overrides for the renderer. The coordinator owns all
+ * writes and repaints; rendering only reads (ADR EDT-2).
  */
 export class ColorPickerPreviewState {
     private readonly colors = new Map<Element, string>();

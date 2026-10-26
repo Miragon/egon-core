@@ -31,11 +31,9 @@ export interface ReplayStartOptions {
 }
 
 /**
- * Builds replay steps without touching diagram-js or the DOM.
- *
- * Actor-originating activities are grouped by numeric sequence number. Each
- * root traces through downstream work objects, stopping at actors and guarding
- * every visited id so malformed cycles cannot hang replay.
+ * Groups actor-sourced activities by number and traces each through downstream
+ * work objects, stopping at actors. Visited ids are guarded so malformed cycles
+ * cannot hang replay.
  */
 export function createReplayStory(
     elements: readonly CanvasObject[],

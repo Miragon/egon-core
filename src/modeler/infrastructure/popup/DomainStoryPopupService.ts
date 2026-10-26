@@ -44,9 +44,8 @@ export class DomainStoryPopupService {
     }
 
     open(element: ActivityCanvasObject) {
-        // Closing first is important: close clears the callback belonging to the
-        // old popup, so assigning the new one before this would make reopening
-        // lose its outside-click update.
+        // Close first: it clears the old popup's callback, which would otherwise
+        // wipe the new one.
         this.close();
 
         const position = this.calculatePosition(element);
@@ -61,7 +60,6 @@ export class DomainStoryPopupService {
             this.close();
         };
 
-        // Store the update callback for outside click handling
         this.currentUpdateCallback = (
             label: string,
             index: number | undefined,
@@ -131,13 +129,7 @@ export class DomainStoryPopupService {
         this.close();
     };
 
-    /**
-     * Translates the popup's form values into one `activity.changed` action and
-     * nothing else. **The popup must not touch the model**: every mutation it
-     * used to make ahead of the command (the number, the allowance, the registry
-     * flag) and the cascade it ran after it were invisible to undo and to redo.
-     * The handler owns the whole transaction now.
-     */
+    /** Only executes `activity.changed`; any direct model write would escape undo. */
     private handleUpdate = (
         element: ActivityCanvasObject,
         label: string,
@@ -165,7 +157,6 @@ export class DomainStoryPopupService {
             target instanceof Node && this.popupElement.contains(target);
 
         if (!clickedInsidePopup && this.currentUpdateCallback) {
-            // Get current values from the popup inputs
             const labelInput = this.popupElement.querySelector(
                 'input[name="label"]',
             ) as HTMLInputElement;
@@ -180,7 +171,6 @@ export class DomainStoryPopupService {
             const index = indexInput ? Number(indexInput.value) : undefined;
             const isMultiple = multipleInput?.checked || false;
 
-            // Trigger the update before closing
             this.currentUpdateCallback(label, index, isMultiple);
             this.currentUpdateCallback = null;
             this.close();

@@ -70,8 +70,8 @@ describe("renumberOnNumberEdit", () => {
         );
 
         expect(result.assignments).toEqual([]);
-        // T1.3: nothing moves, but the edit's own allowance is still recorded —
-        // it is the caller's only channel for the flag.
+        // The edit's own allowance is still recorded: it is the caller's only
+        // channel for the flag.
         expect(result.multipleAllowedUpdates).toEqual([
             { number: 3, allowed: false },
         ]);
@@ -174,9 +174,6 @@ describe("renumberOnNumberEdit", () => {
         ]);
     });
 
-    // T1.1 — death certificate of the `splice(indexOf(...) === -1, 1)` defect:
-    // the caller no longer has to remove the edited activity from the list, so
-    // it can no longer remove the wrong one.
     it("excludes the edited activity from its own cascade", () => {
         const result = renumberOnNumberEdit(
             [activity("edited", 3), activity("a", 1), activity("b", 2)],
@@ -184,15 +181,12 @@ describe("renumberOnNumberEdit", () => {
             [],
         );
 
-        // Only a and b move; "edited" is not told to shift away from the number
-        // it is claiming.
         expect(result.assignments).toEqual([
             { id: "a", newNumber: 2 },
             { id: "b", newNumber: 3 },
         ]);
     });
 
-    // T1.2
     it("suppresses the cascade entirely when the number may be shared", () => {
         const result = renumberOnNumberEdit(
             [activity("a", 1), activity("b", 2)],
@@ -206,7 +200,6 @@ describe("renumberOnNumberEdit", () => {
         ]);
     });
 
-    // T1.4
     it("emits the edited number's allowance before the shifted ones", () => {
         const result = renumberOnNumberEdit([activity("a", 1)], edit(1), [
             false,
@@ -219,10 +212,8 @@ describe("renumberOnNumberEdit", () => {
         });
     });
 
-    // T1.5 — `multipleAllowedByNumber` is read pre-edit, so slot 1 still holds
-    // the *previous* occupant's flag and that flag moves up with them. The popup
-    // used to overwrite the slot before the cascade read it, so a shifted
-    // activity silently lost its allowance. Deliberate behaviour fix.
+    // `multipleAllowedByNumber` is read pre-edit, so slot 1 still holds the
+    // previous occupant's flag, which moves up with it.
     it("carries the previous occupant's flag upward, not the edit's", () => {
         const multipleAllowed: boolean[] = [];
         multipleAllowed[1] = true;
@@ -257,8 +248,6 @@ describe("restoredNumberAssignments", () => {
     });
 
     it("matches ids exactly, not by substring", () => {
-        // regression: the former `includes` matching let `activity_1` claim
-        // `activity_12`'s snapshot entry, restoring the wrong number on undo
         const assignments = restoredNumberAssignments(
             [
                 { id: "activity_12", number: 12 },

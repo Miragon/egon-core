@@ -16,24 +16,12 @@ import {
 import { ElementTypes } from "../../../../story/domain/elementTypes";
 
 /**
- * Copy-paste driven through a real interaction — issue #55 checkbox 5.
+ * Copy-paste through a real interaction, proving the event ordering the
+ * synthetic `DomainStoryPasteRestore.spec.ts` cannot.
  *
- * WHY the existing `DomainStoryPasteRestore.spec.ts` is not enough: it fires
- * synthetic events at a bare `EventBus`, so it can prove the listeners' logic
- * but not the ordering the real flow imposes. The one case it structurally
- * cannot reach is a **mixed multi-select paste**: `createEnd` indexes colours by
- * `parseInt(key)` but consumes text/height with FIFO `shift()`, and only a real
- * paste of annotation + actor + work object proves those two orderings agree.
- *
- * WHY browser tier (ADR TST-2): every assertion here goes through
- * `canvas.addShape`, which needs `SVGSVGElement.createSVGTransform` — absent in
- * jsdom.
- *
- * WHY a real drag rather than `copyPaste.paste({ element, point })`: the direct
- * path never fires `create.end`, which is exactly where the colour/text/height
- * restore runs (documented in `DomainStoryPasteRestore`). So each paste runs
- * `dragging.setOptions({ manual: true })` + `hover`/`move`/`end`, the same
- * sequence a user's mouse produces.
+ * Browser tier (ADR TST-2): `canvas.addShape` needs
+ * `SVGSVGElement.createSVGTransform`, absent in jsdom. A real drag because
+ * `copyPaste.paste({ element, point })` never fires `create.end`.
  */
 describe("copy-paste integration (browser)", () => {
     let modeler: TestModeler | undefined;
@@ -50,11 +38,7 @@ describe("copy-paste integration (browser)", () => {
         return booted;
     }
 
-    /**
-     * Copies `elements`, then places the paste at `point` by driving the drag
-     * diagram-js would otherwise get from the mouse. `hover` on the root is
-     * required: `Create` rejects a placement with no hover target.
-     */
+    /** `hover` on the root is required: `Create` rejects a placement with no hover target. */
     function copyAndPaste(
         booted: TestModeler,
         elements: unknown[],
@@ -77,17 +61,8 @@ describe("copy-paste integration (browser)", () => {
     }
 
     /**
-     * A text annotation as the app produces one: sized, given text, then
-     * redrawn.
-     *
-     * The redraw used to be load-bearing — `drawAnnotation` stamped the height
-     * onto `businessObject.number`, the only place a live story kept it. Since
-     * #74 drawing writes nothing, and `element.height` is the single source of
-     * truth; the repaint is kept only because it is what the app does.
-     *
-     * Both dimensions are passed because `DomainStoryElementFactory`'s
-     * `alreadyHasSize` guard is `attrs.height || attrs.width`: supplying one
-     * suppresses *both* defaults and diagram-js then rejects the shape.
+     * Both dimensions are passed: the factory's `alreadyHasSize` guard is
+     * `height || width`, so supplying one suppresses both defaults.
      */
     function annotationWithText(
         booted: TestModeler,
@@ -136,10 +111,8 @@ describe("copy-paste integration (browser)", () => {
             x: 150,
             y: 150,
         });
-        // Preconditions, inverted by #74 and the reason this case needs a real
-        // canvas: a *drawn* annotation's height lives on the element alone. The
-        // business object carries neither `number` (the renderer's retired
-        // height hack) nor `height` (written by the export pass alone).
+        // A drawn annotation's height lives on the element alone; the export
+        // pass writes `businessObject.height`.
         expect(annotation.height).toBe(80);
         expect("number" in annotation.businessObject).toBe(false);
         expect(annotation.businessObject.height).toBeUndefined();
@@ -152,18 +125,12 @@ describe("copy-paste integration (browser)", () => {
         ).find((element) => element.id !== annotation.id);
         expect(pasted.businessObject.text).toBe("a note");
         expect(pasted.height).toBe(80);
-        // The retired field must not come back on the copy either.
         expect("number" in pasted.businessObject).toBe(false);
     });
 
     it("carries a height the annotation grew into after it was created", () => {
-        // The case that decides whether the paste needs a height stash at all:
-        // here `element.height` did *not* come from the create attrs but from a
-        // later `shape.resize` — which is how a real annotation gets its height
-        // (`DomainStoryUpdateLabelHandler.postExecute` resizes to fit the text).
-        // diagram-js copies the live `element.height` onto the descriptor, and
-        // the element factory honours a supplied height, so the copy arrives
-        // correctly sized on its own.
+        // Proves no height stash is needed: this height comes from a later
+        // `shape.resize`, as the label handler does, not from create attrs.
         modeler = bootWithManualDragging();
         const annotation = annotationWithText(modeler, "a note", 80, {
             x: 150,
@@ -187,9 +154,8 @@ describe("copy-paste integration (browser)", () => {
     });
 
     it("lands colours on the right elements in a mixed multi-select paste", () => {
-        // The case the mock spec cannot reach: colours are indexed by position
-        // while annotation text/height is consumed FIFO, so a paste containing an
-        // annotation *and* coloured shapes is the only proof the orderings agree.
+        // Colours are indexed by position while annotation text is consumed
+        // FIFO; only a mixed paste proves the orderings agree.
         modeler = bootWithManualDragging();
         const annotation = annotationWithText(modeler, "note", 60, {
             x: 120,
@@ -243,10 +209,6 @@ describe("copy-paste integration (browser)", () => {
             (element) => element.id !== activity.id,
         )!;
         expect(pasted.type).toBe(ElementTypes.ACTIVITY);
-        // On the *business object* too — the half the renderer used to patch in
-        // while drawing ("fixes activities that were copy-pasted"), and so the
-        // half an unrendered paste used to export untyped. `DomainStoryCopyPaste`
-        // owns it since #74; its unit spec proves no render is involved.
         expect(pasted.businessObject.type).toBe(ElementTypes.ACTIVITY);
         // Fresh endpoints: the copy must not reference the originals.
         expect(pasted.source.id).not.toBe(actor.id);
@@ -277,9 +239,8 @@ describe("copy-paste integration (browser)", () => {
     });
 
     it("a cancelled paste leaves no residue and does not poison the next one", () => {
-        // Locks the documented deviation from upstream: the stash is cleared on
-        // `copyPaste.pasteElements`, so an Escaped paste cannot bleed its colour
-        // into whatever is created next.
+        // Deviation from upstream: an Escaped paste must not bleed its colour
+        // into the next create.
         modeler = bootWithManualDragging();
         const coloured = addActor(modeler, {
             point: { x: 150, y: 150 },

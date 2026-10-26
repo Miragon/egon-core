@@ -1,34 +1,16 @@
 import { ElementTypes } from "./elementTypes";
 
 /**
- * The answer the Domain Storytelling grammar gives when asked to judge a
- * modeling action.
- *
- * WHY: the grammar and its diagram-js adapter used to speak three different
- * ad-hoc dialects (`boolean`, `false | { type }`, `null | false`), and the
- * adapter was free to return whatever it liked into diagram-js' four-valued rule
- * protocol with no compiler check that the two agreed. That gap is how issue #66
- * happened: the grammar said "forbidden", the adapter returned `undefined`, and
- * `Rules.allowed` reads `undefined` as "nobody objected" — so a forbidden
- * activity↔annotation edge was accepted. Naming the *outcome* here, and
- * translating it to wire values at exactly one place
- * (`rules/ruleVerdictAdapter`), turns an unhandled case into a compile error.
- *
- * The union has four members because diagram-js distinguishes four answers, and
- * `null` is not `undefined`: `null` means "ignore this interaction entirely"
- * (a consumer skips its OK/NOT_OK marker), while `undefined` means "no opinion,
- * ask lower-priority providers" and ultimately default-allows. This module never
- * names those wire values — see ADR ARC-3.
- *
- * No rule this plugin registers currently answers `ignored`; the kind stays
- * because the wire protocol has it, so `toRuleResult` keeps mapping all four and
- * a future rule cannot re-collapse `null` onto `undefined` by accident (#84).
+ * The grammar's answer to a modeling action. diagram-js has four rule answers,
+ * and `null` ("ignore entirely") is not `undefined` ("no opinion", which
+ * default-allows). Naming the outcome and mapping it to wire values in one
+ * adapter (`ruleVerdictAdapter`) turns a missed case into a compile error
+ * (ADR ARC-3). No rule answers `ignored` yet; it stays so `null` cannot
+ * collapse onto `undefined`.
  */
 
 /**
- * The only situations in which deferring to lower-priority providers is
- * legitimate. Enumerating them is the point: an adapter can no longer defer
- * "just because", it must name a situation the grammar already recognises.
+ * Enumerated so an adapter can only defer for a situation the grammar names.
  */
 export type NoOpinionReason = "noHoverTarget" | "noShapesSelected";
 
@@ -41,16 +23,13 @@ export type RuleVerdict =
     | { readonly kind: "noOpinion"; readonly reason: NoOpinionReason }
     | { readonly kind: "ignored"; readonly reason: IgnoredReason };
 
-/** Allowed without further qualification. */
 export const ALLOWED: RuleVerdict = { kind: "allowed" };
 
-/** Denied — the grammar forbids this action outright. */
 export const DENIED: RuleVerdict = { kind: "denied" };
 
 /**
- * Allowed, and the resulting connection is of `connectionType`. diagram-js
- * carries the attributes object straight into the created connection, which is
- * why the type travels with the verdict rather than being looked up again.
+ * diagram-js carries the attributes straight into the created connection, so
+ * the type travels with the verdict.
  */
 export function allowedAs(connectionType: ElementTypes): RuleVerdict {
     return { kind: "allowed", connectionType };

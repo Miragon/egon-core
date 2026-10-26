@@ -40,10 +40,7 @@ export class DomainStoryEditorActions {
         editorActions.register(actions);
     }
 
-    /**
-     * select all elements except for the invisible root element
-     * @private
-     */
+    /** Excludes the invisible root element. */
     private selectAll(): () => void {
         return () => {
             const rootElement = this.canvas.getRootElement();

@@ -8,16 +8,9 @@ import type { ElementRegistryService } from "../../../modeler/service";
 import { passThroughIconSanitizer } from "../../../__tests__/helpers/passThroughIconSanitizer";
 
 /**
- * The dictionary is a current projection over the canvas, so every rule that
- * decides what lands in it — dedup, the empty-name filter, case-insensitive
- * ordering, optional representative artwork, and detached snapshots — is
- * behavior a host depends on.
- *
- * No canvas is booted: the service only ever reads `ElementRegistryService`,
- * so a duck-typed stub is enough (same style as
- * `popup/__tests__/DomainStoryNumberingRegistry.spec.ts`). The
- * `IconDictionaryService` is real, because the `data:image/svg+xml,` prefixing
- * depends on its "" -on-miss contract.
+ * No canvas: the service only reads `ElementRegistryService`, so a stub is
+ * enough. `IconDictionaryService` is real because the `data:image/svg+xml,`
+ * prefixing depends on its ""-on-miss contract.
  */
 
 /** The style-sheet port is irrelevant here; icons are only ever read back. */
@@ -26,9 +19,7 @@ class NoopStyleSheetPort implements IconStyleSheetPort {
 }
 
 /**
- * The subset of a canvas element the dictionary reads. Cast rather than built
- * in full: `CanvasObject` demands a dozen geometry fields the service never
- * touches, and spelling them out would hide which two actually matter.
+ * Cast rather than built in full, so the two fields that matter stay visible.
  */
 function canvasObject(type: string, name?: string): CanvasObject {
     return { type, businessObject: { name } } as unknown as CanvasObject;
@@ -40,11 +31,7 @@ const workObject = (icon: string, name?: string) =>
     canvasObject(ElementTypes.WORKOBJECT + icon, name);
 const activity = (name?: string) => canvasObject(ElementTypes.ACTIVITY, name);
 
-/**
- * Builds the service over a fixed canvas. `getAllWorkObjects` mirrors the real
- * registry's own filter so `getUniqueWorkObjectNames` is exercised against the
- * same list the production service would derive.
- */
+/** `getAllWorkObjects` mirrors the real registry's filter. */
 function makeSut(canvasObjects: CanvasObject[]) {
     const iconDictionaryService = new IconDictionaryService(
         new NoopStyleSheetPort(),

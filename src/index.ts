@@ -1,8 +1,3 @@
-// =============================================================================
-// Client API (primary exports)
-// =============================================================================
-
-// Application Layer - Main entry point
 export {
     EgonClient,
     type EgonEventMap,
@@ -17,7 +12,7 @@ export type {
     ColorPickerRequest,
 } from "./modeler/service/ColorPickerProvider";
 
-// Port interfaces (for testing via constructor injection)
+// Ports, for injecting test doubles into EgonClient.create.
 export type {
     ModelerPort,
     // Payload of the `import.repaired` event (ADR DOC-2).
@@ -25,7 +20,6 @@ export type {
 } from "./modeler/domain/ports/ModelerPort";
 export type { IconPort } from "./modeler/domain/ports/IconPort";
 
-// Domain Layer - Value Objects & Types (for consumers who need type information)
 export type {
     DomainStoryDocument,
     DomainStoryContent,
@@ -70,9 +64,5 @@ export type {
 } from "./labelDictionary/domain/LabelDictionary";
 export type { ReplayStartOptions, ReplayState } from "./story/domain/replay";
 
-// The public API is deliberately frozen to EgonClient plus the types above
-// (locked by architecture.spec.ts, rule G / ADR API-1). EgonPlugin and the
-// former internal service exports are gone: EgonClient.create(config,
-// additionalModules) is the advanced-integration escape hatch, and re-adding a
-// named export later is non-breaking. Deep imports here are intentional so this
-// barrel never pulls a feature's didi default module into the package entry.
+// The public API is frozen to EgonClient plus these types (rule G, ADR API-1).
+// Deep imports keep each feature's didi default module out of the package entry.

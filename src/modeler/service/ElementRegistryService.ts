@@ -53,9 +53,7 @@ export class ElementRegistryService {
 
         this.checkChildForGroup(groupObjects, allObjects);
 
-        // for each memorized group, remove it from the group-array and check its children, whether they are groups or not
-        // if a child is a group, memorize it in the group-array
-        // other children should already be in the allObjects list
+        // Non-group children are already in allObjects: the registry lists every element.
         while (groupObjects.length >= 1) {
             const currentGroup = groupObjects.pop();
             currentGroup?.children?.forEach((child: CanvasObject) => {
@@ -67,7 +65,6 @@ export class ElementRegistryService {
         return allObjects;
     }
 
-    // returns all groups on the canvas and inside other groups
     getAllGroups(): GroupCanvasObject[] {
         const groupObjects: GroupCanvasObject[] = [];
         const allObjects: CanvasObject[] = [];
@@ -93,7 +90,6 @@ export class ElementRegistryService {
         });
     }
 
-    // get a list of activities, that originate from an actor-type
     getActivitiesFromActors(): ActivityCanvasObject[] {
         return activitiesFromActors(this.getAllActivities());
     }
@@ -150,7 +146,6 @@ export class ElementRegistryService {
             if (entry.businessObject) {
                 const type = entry["type"];
                 if (isGroup(entry)) {
-                    // if it is a group, memorize this for later
                     groupObjects.push(<GroupCanvasObject>entry);
                 } else if (type) {
                     allObjects.push(<CanvasObject>entry);

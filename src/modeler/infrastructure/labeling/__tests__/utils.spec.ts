@@ -10,19 +10,9 @@ import {
 } from "../utils";
 import { ElementTypes } from "../../../../story/domain/elementTypes";
 
-/**
- * Regression tests for the upstream autocomplete port (issue #5). The port
- * fixes dead keyboard navigation and brings in listener cleanup,
- * click-to-select, no-autocomplete-on-actors, and Shift+Enter linebreaks —
- * behaviours the earlier local TS conversion had silently broken. jsdom (the
- * global test environment) supplies the DOM these handlers manipulate.
- */
+/** Unit tier: jsdom supplies the DOM these handlers manipulate; no canvas needed. */
 
-/**
- * Fake business element. The autocomplete only reads `type` (to gate on
- * work objects) and writes `businessObject.name` on selection, so a minimal
- * stand-in is enough — cast to diagram-js's `Element` at the call site.
- */
+/** The autocomplete gates on `type` alone. */
 function makeElement(type: string): Element {
     return {
         type,
@@ -40,13 +30,8 @@ interface Harness {
 }
 
 /**
- * Build the DOM the provider hands to the autocomplete: a container holding a
- * contenteditable-like editing box. The container is attached to document.body
- * so the handlers' `getElementById("autocomplete-list")` lookups resolve.
- *
- * The event bus is the real diagram-js one, because the autocomplete now ends
- * its session on `directEditing.complete`/`cancel` — a stub that only records
- * `fire` could not drive that teardown.
+ * A real EventBus, because the session ends on `directEditing.complete`/`cancel`.
+ * Attached to document.body so `getElementById("autocomplete-list")` resolves.
  */
 function setup(type: string, editingBox = makeEditingBox()): Harness {
     const eventBus = new EventBus();
@@ -120,9 +105,8 @@ const SPECIAL_CHARACTER_LABELS = [
     ATTRIBUTE_BREAKOUT_LABEL,
 ];
 
-// Each createAutocompleteForEdit call registers a document-level click listener
-// that survives DOM resets. Left in place they leak across tests and interfere
-// with one another, so record and detach them per test for isolation.
+// Each call registers a document click listener that survives DOM resets, so
+// detach them per test.
 const originalAddEventListener = document.addEventListener.bind(document);
 const registeredClickListeners: EventListener[] = [];
 
@@ -166,8 +150,6 @@ describe("approximateArialSize11TextWidthInPixel", () => {
     });
 
     it("reproduces the old calculateTextWidth via the renderer's /2 + 20 offset", () => {
-        // The renderer moved the `/2 + 20` layout offset to its call site; the
-        // combined result must still match the pre-refactor calculateTextWidth.
         const name = "Order";
         const rendererOffset =
             approximateArialSize11TextWidthInPixel(name) / 2 + 20;
@@ -403,9 +385,7 @@ describe("createAutocompleteForEdit", () => {
                 setup(WORKOBJECT_TYPE);
             const committedValues: string[] = [];
 
-            // DirectEditing owns the normal bubbling keydown handler. Register
-            // its stand-in first, as production does, to lock the ordering that
-            // exposed the bug.
+            // DirectEditing's bubbling keydown handler registers first, as in production.
             editingBox.addEventListener("keydown", (event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                     committedValues.push(editingBox.innerText);

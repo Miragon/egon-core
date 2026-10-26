@@ -1,18 +1,15 @@
 /**
- * Internal boundary for treating imported icon markup as untrusted input.
- *
- * The service layer uses {@link sanitize} before retaining or publishing an
- * icon. The renderer uses {@link prepareForRendering} after all presentation
- * transforms; implementations must sanitize that final markup again before it
- * is parsed into the live canvas DOM.
+ * Imported icon markup is untrusted. Services call {@link sanitize} before
+ * retaining or publishing an icon. The renderer calls
+ * {@link prepareForRendering} after all transforms, and it must sanitize again
+ * before DOM insertion.
  */
 export interface IconSanitizerPort {
     /** Return a safe, self-contained icon source or a known inert SVG. */
     sanitize(source: string): string;
 
     /**
-     * Recolour/wrap an icon without string interpolation, then apply the final
-     * safety policy to the SVG markup returned for DOM insertion.
+     * Recolours/wraps without string interpolation, then sanitizes the result.
      */
     prepareForRendering(source: string, color: string): string;
 }

@@ -69,10 +69,8 @@ export class DomainStoryLabelEditingPreview {
                 translate(this.gfx, this.element.x, this.element.y);
             }
 
-            // Hiding the edited text is every element type's concern, not just
-            // the annotation's — nested in the branch above, the
-            // MARKER_LABEL_HIDDEN arm was unreachable and an actor's SVG label
-            // stayed visible behind the edit box.
+            // Outside the annotation branch: every element type hides its text
+            // behind the edit box.
             if (
                 is(this.element, ElementTypes.TEXTANNOTATION) ||
                 this.element["labelTarget"]

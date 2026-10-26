@@ -13,12 +13,8 @@ import {
 import { ALLOWED, DENIED, RuleVerdict, allowedAs } from "../ruleVerdict";
 
 /**
- * Exhaustive grammar tests. `judgeConnection` is pinned as a full source/target
- * matrix (including the historical quirk that a group *source* is allowed and
- * yields an activity), and `clampGroupBounds` is pinned per corner plus its
- * purity contract — these are the two rules most likely to regress under the
- * domain extraction. The verdicts are asserted as whole objects so a kind
- * silently changing to another kind (the #66 failure mode) cannot pass.
+ * Verdicts are asserted as whole objects, so one kind silently turning into
+ * another (a deferral read as "allowed") cannot pass.
  */
 
 const ELEMENTS = {
@@ -44,22 +40,17 @@ describe("modelingRules", () => {
             keyof typeof ELEMENTS,
             RuleVerdict,
         ][] = [
-            // background either end is always denied
             ["background", "workObject", DENIED],
             ["workObject", "background", DENIED],
-            // group as target is denied…
             ["workObject", "group", DENIED],
-            // …but group as source is allowed and yields an activity (pinned)
+            // A group *source* is allowed: a pinned quirk.
             ["group", "workObject", allowedAs(ElementTypes.ACTIVITY)],
             ["group", "annotation", allowedAs(ElementTypes.CONNECTION)],
-            // actor↔actor denied
             ["actor", "secondActor", DENIED],
-            // activity/connection can never be an endpoint
             ["activity", "workObject", DENIED],
             ["workObject", "activity", DENIED],
             ["connection", "workObject", DENIED],
             ["workObject", "connection", DENIED],
-            // annotation target ⇒ annotation connection
             ["actor", "annotation", allowedAs(ElementTypes.CONNECTION)],
             ["workObject", "annotation", allowedAs(ElementTypes.CONNECTION)],
             [
@@ -67,11 +58,8 @@ describe("modelingRules", () => {
                 "secondAnnotation",
                 allowedAs(ElementTypes.CONNECTION),
             ],
-            // an annotation is only ever an edge target, never a source…
             ["annotation", "actor", DENIED],
             ["annotation", "workObject", DENIED],
-            // …but an annotation *target* is unaffected (pinned above and here)
-            // ordinary pairs ⇒ activity
             ["actor", "workObject", allowedAs(ElementTypes.ACTIVITY)],
             ["workObject", "actor", allowedAs(ElementTypes.ACTIVITY)],
             [
@@ -93,8 +81,8 @@ describe("modelingRules", () => {
             ).toEqual(DENIED);
         });
 
-        // The grammar never defers: a "no opinion" would reach diagram-js as
-        // `undefined`, which `Rules.allowed` reads as *allowed* (issue #66).
+        // A deferral reaches diagram-js as `undefined`, which `Rules.allowed`
+        // reads as allowed.
         it("never answers with a deferral", () => {
             const kinds = new Set(
                 cases.map(
@@ -179,8 +167,8 @@ describe("modelingRules", () => {
     });
 
     describe("judgeReconnect", () => {
-        // A forbidden edge must be `denied`, never `noOpinion` — the whole point
-        // of issue #66 was that a deferral here reaches diagram-js as *allowed*.
+        // Must be `denied`, never `noOpinion`: a deferral reaches diagram-js as
+        // allowed.
         it("denies a forbidden annotation edge in both orientations", () => {
             expect(
                 judgeReconnect(
@@ -246,8 +234,7 @@ describe("modelingRules", () => {
             );
         });
 
-        // The deferral the adapter used to invent for itself now belongs to the
-        // grammar; denying here would forbid dragging any non-group over canvas.
+        // Denying here would forbid dragging any non-group across the canvas.
         it("defers with no hover target, unless the shape is a group", () => {
             expect(judgeCreation(ELEMENTS.workObject, undefined)).toEqual({
                 kind: "noOpinion",

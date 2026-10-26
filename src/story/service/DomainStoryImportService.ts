@@ -45,10 +45,8 @@ export class DomainStoryImportService {
         private readonly eventBus: EventBus,
         private readonly canvas: Canvas,
         private readonly elementRegistry: ElementRegistry,
-        // Base diagram-js type, not the concrete DomainStoryElementFactory: didi
-        // still injects the concrete factory, but typing against the base keeps
-        // this service (story) from statically depending on modeler's
-        // infrastructure — a hexagon violation the architecture tests forbid.
+        // Typed as the base diagram-js factory so story does not depend on
+        // modeler infrastructure, which the architecture tests forbid.
         private readonly elementFactory: ElementFactory<
             Connection,
             Label,
@@ -61,22 +59,14 @@ export class DomainStoryImportService {
         private readonly versionBanner: VersionBannerPort,
     ) {}
 
-    /**
-     * Imports a serialized EGN file (any historical shape) onto the canvas.
-     * The parser normalizes v4/legacy/string payloads up front so this method
-     * only ever deals with a clean `{ iconSet, businessObjects, metadata }`.
-     *
-     * @throws Error if import fails
-     * @param story serialized `{ iconSet, domainStory }` (or a legacy shape)
-     */
+    /** Accepts any historical EGN shape, as an object or a JSON string. */
     import(story: unknown): void {
         const prepared = this.prepare(story);
         this.materialize(prepared);
     }
 
     /**
-     * Normalize, validate, and repair an untrusted import without touching any
-     * editor-owned service. The returned value is safe to materialize in an
+     * Touches no editor-owned service, so the result can be materialized in an
      * isolated candidate session.
      */
     prepare(story: unknown): PreparedImport {
@@ -114,10 +104,7 @@ export class DomainStoryImportService {
                 );
         }
 
-        // Two repairs the *renderer* used to perform on every paint (#74).
-        // Drawing is a read now, so they happen here — once, before the canvas
-        // sees the story. Order matters only in that both run after the type
-        // rename above, so they classify against today's type names.
+        // After the type rename, so these classify against today's type names.
         this.importRepairService.restoreAnnotationHeights(domainStoryElements);
         this.importRepairService.numberUnnumberedActivitiesFromActors(
             domainStoryElements,
@@ -154,7 +141,6 @@ export class DomainStoryImportService {
         };
     }
 
-    /** Materialize a prepared import into this service's editor session. */
     materialize(prepared: PreparedImport): void {
         const iconSet: IconSet =
             this.iconSetImportExportService.createIconSetConfiguration(
@@ -165,9 +151,8 @@ export class DomainStoryImportService {
         this.iconSetImportExportService.loadConfiguration(iconSet);
         this.eventBus.fire("dst.config.changed", { iconSet });
 
-        // Add groups in parent-before-child order, then the remaining shapes,
-        // then connections. This lets nested groups retain their persisted
-        // membership even when a stable id-sorted export puts a child first.
+        // Groups parent-before-child, then shapes, then connections, so nested
+        // groups keep their membership even when an export lists a child first.
         this.addGroupsInDependencyOrder(prepared.groups, groupElements);
         prepared.shapes.forEach((shape) =>
             this.createShape(shape, groupElements),
@@ -178,20 +163,16 @@ export class DomainStoryImportService {
 
         this.versionBanner.show(prepared.metadata.version);
 
-        // Surface the repair so a host can tell the user the file was lossy.
-        // This is the internal half of the public `import.repaired` event
-        // (ADR DOC-2): `DiagramJsModelerAdapter` listens here and re-emits the
-        // dropped ids through `ModelerPort`. Fired only when something was
-        // actually dropped, so a host handler doubles as "the file was damaged".
+        // Internal half of the public `import.repaired` event (ADR DOC-2), so a
+        // host can tell the user the file was lossy.
         if (prepared.removedConnections.length > 0) {
             this.eventBus.fire("dst.import.repaired", {
                 removedConnections: prepared.removedConnections,
             });
         }
 
-        // Persist story-level metadata: the element registry keeps only diagram
-        // elements, so without this the title/description/scope would be lost
-        // on the next export.
+        // The element registry holds only diagram elements, so story metadata
+        // would otherwise be lost on the next export.
         this.propertiesService.setProperties(
             prepared.metadata.title,
             prepared.metadata.description,
@@ -234,11 +215,8 @@ export class DomainStoryImportService {
             const parentShape = groupElements.get(prepared.parentId);
 
             if (isOfTypeGroup(parentShape)) {
-                // No `parentIndex`: diagram-js appends when it is omitted, which
-                // is the intent. Passing `Number(parentShape.id)` — as this did —
-                // yields NaN for ids like "shape_1683"; diagram-js normalizes only
-                // non-numbers to -1 and `typeof NaN === "number"` slips through to
-                // `splice(NaN, …)`, i.e. index 0, prepending children in reverse.
+                // No `parentIndex`, so diagram-js appends. A NaN index (from an
+                // id like "shape_1683") would splice at 0 and reverse children.
                 const addedShape = this.canvas.addShape(shape, parentShape);
                 // diagram-js needs the live shape reference above; EGN persists
                 // the corresponding group's id on the business object instead.
@@ -250,11 +228,9 @@ export class DomainStoryImportService {
     }
 
     /**
-     * Add nested groups only after their parent is live on the canvas. Input
-     * order is retained wherever it does not conflict with that dependency.
-     * Malformed references and cycles cannot be resolved, so those groups fall
-     * back to the root without retaining a parent id that would not match the
-     * live diagram.
+     * Adds a nested group only after its parent is live, otherwise keeping
+     * input order. Groups with a missing or cyclic parent fall back to the
+     * root.
      */
     private addGroupsInDependencyOrder(
         groups: PreparedShape[],
@@ -282,9 +258,8 @@ export class DomainStoryImportService {
                 continue;
             }
 
-            // No remaining group can become resolvable: every parent is either
-            // missing, not a group, or part of a cycle. Keep these shapes, but
-            // make their persisted state accurately describe their root home.
+            // Every remaining parent is missing, not a group, or cyclic: keep
+            // the groups at the root and drop their stale parent id.
             unresolved.forEach((group) => {
                 delete (
                     group.businessObject as unknown as Record<string, unknown>

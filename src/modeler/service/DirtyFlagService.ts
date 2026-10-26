@@ -1,11 +1,6 @@
 /**
- * Tracks whether the domain story has unsaved changes.
- *
- * Exists so features (renderer, context-pad, …) can flag edits and consumers
- * can react to the dirty state. Uses a dependency-free listener API instead of
- * an rxjs observable: `onDirtyChange` invokes the listener immediately with the
- * current value to mirror a BehaviorSubject's replay semantics, keeping the
- * package free of a runtime rxjs dependency.
+ * Tracks whether the domain story has unsaved changes. A plain listener API
+ * instead of an rxjs BehaviorSubject avoids a runtime rxjs dependency.
  */
 export class DirtyFlagService {
     static $inject: string[] = [];
@@ -17,11 +12,7 @@ export class DirtyFlagService {
         return this.isDirty;
     }
 
-    /**
-     * Registers a listener for dirty-state changes and returns an unsubscribe
-     * function. Fires immediately with the current value so subscribers do not
-     * miss the initial state.
-     */
+    /** Fires immediately with the current value, like a BehaviorSubject. */
     onDirtyChange(listener: (dirty: boolean) => void): () => void {
         this.listeners.add(listener);
         listener(this.isDirty);

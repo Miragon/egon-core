@@ -14,9 +14,8 @@ interface ContextPadInternal extends ContextPad {
 }
 
 /**
- * Custom ContextPad that uses element model bounds instead of SVG graphics bounds
- * for positioning. This ensures the context pad is positioned correctly relative
- * to the element's logical position rather than its rendered SVG bounds.
+ * Positions the pad from model bounds, not SVG bounds, which labels and
+ * invisible parts inflate.
  */
 export class DomainStoryContextPad extends ContextPad {
     static override $inject: string[] = [
@@ -34,37 +33,26 @@ export class DomainStoryContextPad extends ContextPad {
     ) {
         super(canvas, elementRegistry, eventBus, scheduler);
 
-        // Override the prototype method to use element model bounds
         const self = this as unknown as ContextPadInternal;
         self._getTargetBounds = this.getTargetBoundsFromModel.bind(this);
     }
 
     /**
-     * Calculate target bounds from element model coordinates instead of SVG graphics bounds.
-     * This fixes positioning issues where the SVG bounding box differs from the element's
-     * logical bounds (e.g., due to labels, invisible elements, or viewBox differences).
-     *
-     * Connections keep the stock treatment: their model has waypoints, not a
-     * box, so there is nothing to read x/y/width/height off. Skipping them
-     * entirely is not an option — activities *are* connections, and a
-     * connection-only selection would leave the accumulator at its Infinity
-     * seed, which renders the pad at the canvas origin.
+     * Connections have no model box, so they use their rendered bounds. They
+     * cannot be skipped: a connection-only selection would leave the Infinity
+     * seed and put the pad at the canvas origin.
      */
     private getTargetBoundsFromModel(target: ContextPadTarget): DOMRect {
         const self = this as unknown as ContextPadInternal;
         const elements = isArray(target) ? target : [target];
 
-        // Get the canvas viewbox to transform element coordinates to screen coordinates
         const viewbox = self._canvas.viewbox();
         const container = self._canvas.getContainer();
         const containerBounds = container.getBoundingClientRect();
 
-        // Calculate the combined bounds of all elements using their model coordinates
         const bounds = elements.reduce(
             (acc, element) => {
-                // A connection has no model box; measure its rendered graphics,
-                // which the stock implementation uses for everything and which
-                // are already in screen coordinates.
+                // Graphics bounds are already in screen coordinates.
                 if (isConnection(element)) {
                     const gfxBounds = self._canvas
                         .getGraphics(element as Connection)
@@ -80,7 +68,6 @@ export class DomainStoryContextPad extends ContextPad {
 
                 const shape = element as Shape;
 
-                // Transform element model coordinates to screen coordinates
                 const x =
                     (shape["x"] - viewbox.x) * viewbox.scale +
                     containerBounds.left;
@@ -105,7 +92,6 @@ export class DomainStoryContextPad extends ContextPad {
             },
         );
 
-        // Create a DOMRect-like object
         return {
             top: bounds.top,
             left: bounds.left,

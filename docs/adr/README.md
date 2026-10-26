@@ -4,17 +4,17 @@ The decisions that shape egon-core, grouped by topic. Each topic file holds
 the decisions **currently in force** for its area. Read the relevant topic
 before making a structural change.
 
-| Topic                                                   | Covers                                                             | Decisions     |
-| ------------------------------------------------------- | ------------------------------------------------------------------ | ------------- |
-| [Foundations](foundations.md)                           | Scope, license, relationship to upstream egon.io                   | FND-1 – FND-3 |
-| [Architecture](architecture.md)                         | Code layout, dependency rules, runtime invariants, domain objects  | ARC-1 – ARC-7 |
-| [Public API](public-api.md)                             | The `EgonClient` contract: surface, events, side effects           | API-1 – API-3 |
-| [Story documents](documents.md)                         | EGN format, import, export, visual export                          | DOC-1 – DOC-3 |
-| [Icons](icons.md)                                       | Icon names, content safety, selection, artwork, starters           | ICO-1 – ICO-5 |
-| [Editor features](editor-features.md)                   | Alignment, color picking, label renames, replay                    | EDT-1 – EDT-4 |
-| [Testing](testing.md)                                   | Test tiers, coverage, installed-package journeys, mutation gate    | TST-1 – TST-4 |
-| [Engineering practices](engineering-practices.md)       | Toolchain, formatting, Node and demo routing, trunk-based delivery | ENG-1 – ENG-4 |
-| [Release and distribution](release-and-distribution.md) | Package contents, release process                                  | REL-1 – REL-2 |
+| Topic                                                   | Covers                                                                       | Decisions     |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------- |
+| [Foundations](foundations.md)                           | Scope, license, relationship to upstream egon.io                             | FND-1 – FND-3 |
+| [Architecture](architecture.md)                         | Code layout, dependency rules, runtime invariants, domain objects            | ARC-1 – ARC-7 |
+| [Public API](public-api.md)                             | The `EgonClient` contract: surface, events, side effects                     | API-1 – API-3 |
+| [Story documents](documents.md)                         | EGN format, import, export, visual export                                    | DOC-1 – DOC-3 |
+| [Icons](icons.md)                                       | Icon names, content safety, selection, artwork, starters                     | ICO-1 – ICO-5 |
+| [Editor features](editor-features.md)                   | Alignment, color picking, label renames, replay                              | EDT-1 – EDT-4 |
+| [Testing](testing.md)                                   | Test tiers, coverage, installed-package journeys, mutation gate              | TST-1 – TST-4 |
+| [Engineering practices](engineering-practices.md)       | Toolchain, formatting, Node and demo routing, trunk-based delivery, comments | ENG-1 – ENG-5 |
+| [Release and distribution](release-and-distribution.md) | Package contents, release process                                            | REL-1 – REL-2 |
 
 ## How this log works
 
@@ -38,7 +38,7 @@ takes the next free number in its topic.
 ## <a id="arc-4"></a>ARC-4 — Rendering is read-only
 
 - Status: accepted
-- History: 2026-07-27 decided (#74); 2026-11-02 <what changed and why> (#123)
+- History: 2026-07-27 decided; 2026-11-02 <what changed and why>
 - Enforced by: <architecture rule, test, or lint rule>, if any
 
 **Context.** The forces at play, stated as neutral facts.
