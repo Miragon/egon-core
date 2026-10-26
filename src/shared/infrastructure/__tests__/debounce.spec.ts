@@ -7,7 +7,7 @@ import { DEFAULT_DEBOUNCE_MS, createDebouncedCallback } from "../debounce";
  * a burst really coalesces (the old per-event debouncer did not), and a pending
  * delivery can be cancelled (the old closure-private timer could not).
  *
- * Unit tier per ADR 0014 — the only tier that may freeze the clock.
+ * Unit tier per ADR TST-2 — the only tier that may freeze the clock.
  */
 describe("createDebouncedCallback", () => {
     beforeEach(() => {

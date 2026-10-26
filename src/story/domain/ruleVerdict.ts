@@ -18,7 +18,7 @@ import { ElementTypes } from "./elementTypes";
  * `null` is not `undefined`: `null` means "ignore this interaction entirely"
  * (a consumer skips its OK/NOT_OK marker), while `undefined` means "no opinion,
  * ask lower-priority providers" and ultimately default-allows. This module never
- * names those wire values — see ADR 0015.
+ * names those wire values — see ADR ARC-3.
  *
  * No rule this plugin registers currently answers `ignored`; the kind stays
  * because the wire protocol has it, so `toRuleResult` keeps mapping all four and

@@ -20,7 +20,7 @@ updates:
           semver-patch-days: 3
       ignore:
           # Preact must stay on the major diagram-js depends on: the color
-          # picker shares diagram-js's Preact runtime (ADR 0038), so a lone
+          # picker shares diagram-js's Preact runtime (ADR EDT-2), so a lone
           # bump would install two runtimes. Lift once diagram-js moves.
           - dependency-name: "preact"
             update-types:

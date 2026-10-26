@@ -22,16 +22,16 @@ description: >-
 The domain folders import nothing but other domain files; `architecture.spec.ts`
 enforces this. That makes them cheap to test exhaustively, so the bar is high
 there and nowhere else. This skill applies only to domain code. Service and
-infrastructure code get ordinary unit or browser tests (ADR 0013, ADR 0014).
+infrastructure code get ordinary unit or browser tests (ADR TST-1, ADR TST-2).
 
 Decisions behind this workflow:
 
-| ADR  | Decision                                                                                   |
-| ---- | ------------------------------------------------------------------------------------------ |
-| 0040 | Domain objects own invariants and return decisions; diagram-js stays the system of record. |
-| 0041 | Per-file mutation gate and the rules for annotating equivalent mutants.                    |
-| 0042 | Trunk-based delivery; feature flags only outside the domain.                               |
-| 0020 | Which conditionals belong in the domain at all.                                            |
+| ADR                                                       | Decision                                                                                   |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| [ARC-7](../../../docs/adr/architecture.md#arc-7)          | Domain objects own invariants and return decisions; diagram-js stays the system of record. |
+| [TST-4](../../../docs/adr/testing.md#tst-4)               | Per-file mutation gate and the rules for annotating equivalent mutants.                    |
+| [ENG-4](../../../docs/adr/engineering-practices.md#eng-4) | Trunk-based delivery; feature flags only outside the domain.                               |
+| [ARC-3](../../../docs/adr/architecture.md#arc-3)          | Which conditionals belong in the domain at all.                                            |
 
 ## Tooling status
 
@@ -46,18 +46,18 @@ mutation score could be measured. Never report a score you did not run.
 The class decides how the work is delivered, and whether a flag is involved at
 all.
 
-| Change                                                        | Delivery                                                                                               | Flag? |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----- |
-| New domain object, not yet called                             | Merge it unwired (inert code).                                                                         | No    |
-| Moving logic out of an adapter or interceptor, same behaviour | Branch by abstraction: write characterization tests, then swap the call site.                          | No    |
-| Bug in domain logic                                           | Write the regression test first, then fix it directly.                                                 | Never |
-| User-visible behaviour change too big for one small PR        | Wire the new path behind an internal flag.                                                             | Yes   |
-| Only service or infrastructure code                           | Outside this skill. If the logic is pure policy or geometry, move it into the domain first (ADR 0020). | —     |
+| Change                                                        | Delivery                                                                                                | Flag? |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ----- |
+| New domain object, not yet called                             | Merge it unwired (inert code).                                                                          | No    |
+| Moving logic out of an adapter or interceptor, same behaviour | Branch by abstraction: write characterization tests, then swap the call site.                           | No    |
+| Bug in domain logic                                           | Write the regression test first, then fix it directly.                                                  | Never |
+| User-visible behaviour change too big for one small PR        | Wire the new path behind an internal flag.                                                              | Yes   |
+| Only service or infrastructure code                           | Outside this skill. If the logic is pure policy or geometry, move it into the domain first (ADR ARC-3). | —     |
 
 Most Phase 3 work is extraction or new objects, and needs no flag. When you
 reach for one, say why the change cannot land atomically.
 
-## 2. Shape of a domain object (ADR 0040)
+## 2. Shape of a domain object (ADR ARC-7)
 
 - **Own an invariant.** If nothing needs protecting, a pure function is fine;
   don't wrap functions in classes for style.
@@ -126,7 +126,7 @@ reach for one, say why the change cannot land atomically.
 - **No mocks in domain specs.** If you need one, a dependency is in the wrong
   layer; it belongs behind a port.
 
-## 4. Slicing into trunk-based PRs (ADR 0042)
+## 4. Slicing into trunk-based PRs (ADR ENG-4)
 
 Each PR stays small, merges within about two days, and passes the full CI gate
 on its own.

@@ -25,7 +25,7 @@ import { ElementTypes } from "../../../../story/domain/elementTypes";
  * `parseInt(key)` but consumes text/height with FIFO `shift()`, and only a real
  * paste of annotation + actor + work object proves those two orderings agree.
  *
- * WHY browser tier (ADR 0014): every assertion here goes through
+ * WHY browser tier (ADR TST-2): every assertion here goes through
  * `canvas.addShape`, which needs `SVGSVGElement.createSVGTransform` — absent in
  * jsdom.
  *

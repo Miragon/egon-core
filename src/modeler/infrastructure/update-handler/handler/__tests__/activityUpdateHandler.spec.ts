@@ -18,7 +18,7 @@ import { DomainStoryNumberingRegistry } from "../../../popup/DomainStoryNumberin
  * the thing under test. A mocked registry would only prove the handler calls a
  * method — the defects this spec locks (a snapshot taken after the edit, a redo
  * that skips the cascade, an aliased flag snapshot) all live in the interaction
- * between the two. No canvas is involved, so this stays unit tier (ADR 0014).
+ * between the two. No canvas is involved, so this stays unit tier (ADR TST-2).
  */
 const activity = (
     id: string,

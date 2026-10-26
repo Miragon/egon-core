@@ -25,7 +25,7 @@ import { ElementTypes } from "../../../story/domain/elementTypes";
  * takes its connections with it. Those are the exact seams an upstream sync
  * breaks silently.
  *
- * WHY browser tier and not jsdom (ADR 0014): `canvas.addShape` reaches tiny-svg
+ * WHY browser tier and not jsdom (ADR TST-2): `canvas.addShape` reaches tiny-svg
  * `translate()` → `SVGSVGElement.createSVGTransform`, which jsdom does not
  * implement, so no modeling command can execute there at all.
  */

@@ -28,7 +28,7 @@ import { ElementTypes } from "../../../../story/domain/elementTypes";
  * `round(width / 2)` — the two conventions only cancel out by arithmetic
  * coincidence, so the position needs pinning rather than trusting.
  *
- * WHY browser tier (ADR 0014): `shape.replace` runs `createShape`,
+ * WHY browser tier (ADR TST-2): `shape.replace` runs `createShape`,
  * `moveElements`, `connection.reconnect` and `removeShape`, all of which reach
  * `canvas.addShape` → tiny-svg `translate()` → `SVGSVGElement.createSVGTransform`,
  * absent in jsdom. The popup menu also renders real DOM here.

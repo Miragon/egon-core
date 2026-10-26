@@ -20,19 +20,23 @@ only from `src/index.ts`.
 
 ## Architecture (enforced, not just documented)
 
-- ADRs in `docs/adr/` are the source of truth — read the relevant ones before
-  structural changes; record new lasting decisions as ADRs (`docs/adr/README.md`).
+- ADRs in `docs/adr/` are the source of truth. They are grouped into topic
+  files (`architecture.md`, `public-api.md`, `testing.md`, …), and each
+  decision has a stable ID such as `ARC-4`. Read the relevant topic before
+  structural changes. Record new lasting decisions in their topic, or edit the
+  existing decision in place with a `History` entry, as described in
+  `docs/adr/README.md`. Cite decisions by ID (`ADR ARC-4`).
 - `src/architecture.spec.ts` runs executable layout rules (archunit graph +
   raw-source scans) in the normal test suite. **Rules are regression locks:
   fix the code, never relax a rule to make CI pass.**
 - Domain purity is path-based: every `**/domain/` folder imports only relative
   modules and only other domain files — no diagram-js, no DOM, no packages.
   Framework access goes through ports defined in `domain/`, implemented outside.
-- Flat DDD feature layout (ADR 0010): `modeler/ story/ iconSet/
+- Flat DDD feature layout (ADR ARC-1): `modeler/ story/ iconSet/
 labelDictionary/ shared/`, each feature with up to three layers (`domain/`,
   `service/`, `infrastructure/`).
-- Multi-instance safety: no new module-level singletons (see #12 — existing
-  ones in renderer/labeling are being removed).
+- Multi-instance safety: no module-level mutable state (ADR ARC-5, rule H).
+  State lives on didi-instantiated services.
 
 ## Domain code: test-first, mutation-gated
 
@@ -41,10 +45,10 @@ under `**/domain/**`.
 
 - **Test-first.** Write the failing spec before the code. A bug fix starts
   with its regression test.
-- **Domain objects own invariants and return decisions** (ADR 0040).
+- **Domain objects own invariants and return decisions** (ADR ARC-7).
   Infrastructure applies those decisions through diagram-js commands, so
   undo stays with diagram-js.
-- **Mutation gate per file** (ADR 0041; tooling arrives with #175).
+- **Mutation gate per file** (ADR TST-4; tooling arrives with #175).
     - A new domain file needs a 100% Stryker score.
     - An existing file must not fall below its floor in
       `mutation-baseline.json`, and floors only go up.
@@ -53,7 +57,7 @@ under `**/domain/**`.
 - **Mutation testing covers only domain code.** Service and infrastructure
   code get normal unit or browser tests.
 
-## Delivery: trunk-based (ADR 0042)
+## Delivery: trunk-based (ADR ENG-4)
 
 - Use short-lived branches and small PRs, merged within about two days. There
   are no long-lived feature branches.

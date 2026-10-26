@@ -37,7 +37,7 @@ export default defineConfig({
     plugins: [announcePortlessUrl()],
     resolve: {
         // Exact public-specifier aliases keep the development demo on source
-        // without allowing arbitrary egon-core subpaths (ADR 0028).
+        // without allowing arbitrary egon-core subpaths (ADR TST-3).
         alias: [
             { find: /^egon-core\/style\.css$/, replacement: publicStyles },
             { find: /^egon-core\/icons$/, replacement: publicIcons },

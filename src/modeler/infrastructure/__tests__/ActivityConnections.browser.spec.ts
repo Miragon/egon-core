@@ -31,7 +31,7 @@ import { isForbiddenAnnotationEdge } from "../../../story/domain/modelingRules";
  * a reconnect plus undo keeps element and business object in step. Those are the
  * seams an upstream sync breaks silently.
  *
- * WHY browser tier and not jsdom (ADR 0014): creating a connection reaches
+ * WHY browser tier and not jsdom (ADR TST-2): creating a connection reaches
  * `canvas.addConnection` → tiny-svg `translate()` →
  * `SVGSVGElement.createSVGTransform`, which jsdom does not implement, and the
  * cropping asserted here needs real SVG geometry.

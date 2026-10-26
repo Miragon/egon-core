@@ -36,7 +36,7 @@ export default tseslint.config(
     {
         files: ["demo/**/*.ts", "demo/**/*.mts"],
         rules: {
-            // ADRs 0028 and 0039: the demo is a consumer harness. It uses only
+            // ADRs TST-3 and API-1: the demo is a consumer harness. It uses only
             // the three
             // package exports a real host needs, even though Vite resolves
             // those exact specifiers to source during local development.

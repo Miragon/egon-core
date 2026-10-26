@@ -183,7 +183,7 @@ describe("DiagramJsModelerAdapter", () => {
 
     /**
      * The debounce contract hosts actually observe. Fake timers are legal here
-     * and only here (ADR 0014): this tier drives no real canvas, so freezing the
+     * and only here (ADR TST-2): this tier drives no real canvas, so freezing the
      * clock stalls nothing but the debounce itself.
      */
     describe("event debouncing", () => {
@@ -263,7 +263,7 @@ describe("DiagramJsModelerAdapter", () => {
     /**
      * The one host event that is deliberately *not* debounced: an import fires
      * it at most once and a host that shows "this file was damaged" must not
-     * learn about it a debounce window after `import()` returned (ADR 0017).
+     * learn about it a debounce window after `import()` returned (ADR DOC-2).
      */
     describe("import repair signalling", () => {
         const REPAIRED = {

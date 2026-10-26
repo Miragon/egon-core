@@ -20,7 +20,7 @@ export type {
 // Port interfaces (for testing via constructor injection)
 export type {
     ModelerPort,
-    // Payload of the `import.repaired` event (ADR 0017).
+    // Payload of the `import.repaired` event (ADR DOC-2).
     ImportRepairData,
 } from "./modeler/domain/ports/ModelerPort";
 export type { IconPort } from "./modeler/domain/ports/IconPort";
@@ -71,7 +71,7 @@ export type {
 export type { ReplayStartOptions, ReplayState } from "./story/domain/replay";
 
 // The public API is deliberately frozen to EgonClient plus the types above
-// (locked by architecture.spec.ts, rule G / ADR 0010). EgonPlugin and the
+// (locked by architecture.spec.ts, rule G / ADR API-1). EgonPlugin and the
 // former internal service exports are gone: EgonClient.create(config,
 // additionalModules) is the advanced-integration escape hatch, and re-adding a
 // named export later is non-breaking. Deep imports here are intentional so this

@@ -35,7 +35,7 @@ import { defaultIcons } from "../../../icons";
  * stays undoable, or that the icon API reaches the live icon dictionary. Those
  * are the seams an upstream sync breaks silently.
  *
- * WHY browser tier (ADR 0014): every case here reaches `canvas.addShape` via
+ * WHY browser tier (ADR TST-2): every case here reaches `canvas.addShape` via
  * `import()`, which needs `SVGSVGElement.createSVGTransform`; and viewbox maths
  * needs a real `getBBox` and a non-zero `viewbox().outer` — in jsdom the outer
  * box is `{0,0}`, so `fitToScreen()` yields NaN.

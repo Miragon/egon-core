@@ -124,7 +124,7 @@ export function renameLegacyWorkObjectTypes(
  * Resolves historical space-to-hyphen icon references against the icons that
  * will actually be available after import.
  *
- * Icon names are otherwise verbatim data (ADR 0008): a spaced name may be a
+ * Icon names are otherwise verbatim data (ADR ICO-1): a spaced name may be a
  * deliberate, exact dictionary key and must win even when its hyphenated form
  * also exists. Only when the exact suffix is absent do we try the legacy
  * replacement, and only when that replacement names a real icon. Other element

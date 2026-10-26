@@ -18,7 +18,7 @@ import UpdateHandlerModule from "../update-handler";
  * subset (the WPS web app end goal), as a didi "No provider" throw. Booting each
  * module alone is the only thing that proves the declarations are complete.
  *
- * WHY unit tier despite driving a real `Diagram` (ADR 0014): nothing here
+ * WHY unit tier despite driving a real `Diagram` (ADR TST-2): nothing here
  * reaches `canvas.addShape`, so jsdom is enough. `__init__` services and the
  * tokens read back via `diagram.get` are all constructed at boot.
  */

@@ -26,7 +26,7 @@ const noopStyleSheet: IconStyleSheetPort = { addIconStyle() {} };
  * touches. Nothing renders: the service only ever *adds* elements, so insertion
  * order, version gating and event sequencing are all directly observable from
  * the recorded calls. A browser test could only infer the order from the final
- * registry, which is why this lives in the fast tier (ADR 0013).
+ * registry, which is why this lives in the fast tier (ADR TST-1).
  */
 function makeHarness() {
     const added: {
@@ -423,7 +423,7 @@ describe("DomainStoryImportService canvas lifecycle", () => {
         expect(harness.added).toHaveLength(1);
     });
 
-    // The contract ADR 0007 promises: parsing happens first, so a host handing
+    // The contract ADR DOC-1 promises: parsing happens first, so a host handing
     // over a wrong file cannot wipe the user's current diagram.
     it.each([
         { what: "an unrecognized payload", story: '{"foo":1}' },

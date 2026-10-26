@@ -30,7 +30,7 @@ const HIGH_PRIORITY = 1500;
  * is registered through {@link DomainStoryRules.addVerdictRule}, which types the
  * callback as returning a `RuleVerdict` and funnels it through `toRuleResult` —
  * so a bare `return false`/`return undefined` inside a rule does not compile and
- * the wire mapping cannot drift per rule (issue #66; ADR 0015).
+ * the wire mapping cannot drift per rule (issue #66; ADR ARC-3).
  *
  * What is left that the grammar cannot express: the in-place mutation of
  * `context.newBounds` that diagram-js's resize expects, and the per-action

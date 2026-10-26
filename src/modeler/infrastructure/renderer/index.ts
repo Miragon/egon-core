@@ -4,7 +4,7 @@ import DomainStoryColorPicker from "../color-picker";
 
 import { DomainStoryRenderer } from "./DomainStoryRenderer";
 
-// Every dependency is read-only from the renderer (ADRs 0016 and 0026). The
+// Every dependency is read-only from the renderer (ADRs ARC-4 and EDT-2). The
 // element registry, dirty flag, command stack and number stash remain absent;
 // preview state is passive session-local presentation data.
 export default {

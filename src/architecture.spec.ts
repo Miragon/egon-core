@@ -4,9 +4,9 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { extractGraph, projectFiles } from "archunit";
 
 /**
- * Executable architecture tests — the enforcement half of
- * docs/adr/0010-flat-ddd-feature-layout-and-frozen-public-api.md (which
- * supersedes 0005). They turn the layout rules (framework-free domain layers,
+ * Executable architecture tests — the enforcement half of ADRs ARC-1, ARC-2
+ * and API-1 (docs/adr/architecture.md, docs/adr/public-api.md). They turn
+ * the layout rules (framework-free domain layers,
  * per-feature hexagons, sibling isolation, one sanctioned composition root per
  * feature, and a frozen public API) into CI gates so regressions break the
  * build instead of rotting silently. All rules are regression locks that must
@@ -160,7 +160,7 @@ const FEATURE_ROOTS: readonly string[] = [
 /**
  * The frozen public surface. `src/index.ts` may import exactly these specifiers
  * (rule G1) and re-export exactly these runtime values (rule G2). Changing the
- * public API is a deliberate act that must update this list and ADR 0010, not an
+ * public API is a deliberate act that must update this list and ADR API-1, not an
  * accident that slips through review.
  */
 const FROZEN_INDEX_SPECIFIERS: readonly string[] = [
@@ -188,7 +188,7 @@ const FROZEN_INDEX_RUNTIME_EXPORTS: readonly string[] = [
     "PointInTime",
 ];
 
-/** The deliberately narrow, data-only secondary entry from ADR 0039. */
+/** The deliberately narrow, data-only secondary entry (ADRs API-1, ICO-5). */
 const FROZEN_ICONS_SPECIFIERS: readonly string[] = [
     "./iconSet/domain/defaultIcons",
 ];
@@ -217,7 +217,7 @@ const MODULE_STATE_ALLOWLIST: readonly string[] = [];
 /**
  * Production infrastructure files that directly import the central element
  * predicates. This is a frozen baseline, not an endorsement of every entry:
- * ADR 0020 requires the list to shrink as policy leaves adapters. New entries
+ * ADR ARC-3 requires the list to shrink as policy leaves adapters. New entries
  * are forbidden even for otherwise legitimate type-dispatch adapters.
  */
 const INFRASTRUCTURE_PREDICATE_IMPORT_ALLOWLIST: readonly string[] = [
@@ -236,7 +236,7 @@ const INFRASTRUCTURE_PREDICATE_IMPORT_ALLOWLIST: readonly string[] = [
 ];
 
 /**
- * Writes a renderer may not perform (rule I / ADR 0016), in the two shapes the
+ * Writes a renderer may not perform (rule I / ADR ARC-4), in the two shapes the
  * historical ones actually took.
  *
  * 1. A direct assignment through `businessObject`/`semantic` — the local name
@@ -297,7 +297,7 @@ describe("architecture", () => {
     // ─── A. Graph sanity ─────────────────────────────────────────────────────
     //
     // If the resolver fails (wrong tsconfig path, moduleResolution quirks — see
-    // ADR 0005), it degrades to an edge-less graph and every dependency rule
+    // ADR ARC-2), it degrades to an edge-less graph and every dependency rule
     // below passes without checking anything. Assert real cross-file edges
     // exist so that failure mode is loud.
     describe("graph sanity", () => {
@@ -369,7 +369,7 @@ describe("architecture", () => {
     // is the type-only `didi` surface of `EgonClientConfig.additionalModules` in
     // the composition root. (Service→infrastructure layering is enforced for
     // every feature by rule E below; this rule only adds the framework ban, and
-    // only for modeler — see ADR 0010's "deferred" note.)
+    // only for modeler — see ADR ARC-1.)
     describe("modeler service is framework-free", () => {
         it("service imports no framework module except didi types in the composition root", () => {
             const offenders = listSourceFiles()
@@ -479,7 +479,7 @@ describe("architecture", () => {
 
     // ─── G. Public surface freeze ────────────────────────────────────────────
     //
-    // `src/index.ts` remains the client entry frozen by ADR 0010. ADR 0039 adds
+    // `src/index.ts` remains the client entry frozen by ADR API-1. ADR ICO-5 adds
     // one narrow, data-only `src/icons.ts` entry without making the client entry
     // depend on its artwork. Widening either surface must be a deliberate edit
     // to the frozen lists here, never an accident.
@@ -627,7 +627,7 @@ describe("architecture", () => {
 
     // ─── I. Rendering is read-only ───────────────────────────────────────────
     //
-    // ADR 0016: drawing must not change the model. A repaint is not a user
+    // ADR ARC-4: drawing must not change the model. A repaint is not a user
     // action, runs an unbounded number of times, and for an imported story the
     // canvas *shares* the business objects with the file — so a write on the draw
     // path is silent, unbounded corruption of the persisted format (#65: an
@@ -669,7 +669,7 @@ describe("architecture", () => {
                 });
             expect(
                 offenders,
-                `drawing is a read (ADR 0016) — move the write onto a command ` +
+                `drawing is a read (ADR ARC-4) — move the write onto a command ` +
                     `handler, an import repair, or the export pass`,
             ).toEqual([]);
         });
@@ -677,7 +677,7 @@ describe("architecture", () => {
 
     // ─── J. Infrastructure predicate-import ratchet ─────────────────────────
     //
-    // ADR 0020: direct dependencies on the central element predicates expose
+    // ADR ARC-3: direct dependencies on the central element predicates expose
     // places where adapters may be making notation decisions. The baseline is
     // frozen and may only shrink through review. Keep the two directions
     // separate so a new importer and a stale exception produce precise failures.
@@ -696,7 +696,7 @@ describe("architecture", () => {
             expect(
                 unlisted,
                 `infrastructure must not add direct elementPredicates imports ` +
-                    `(ADR 0020); move notation decisions into domain code`,
+                    `(ADR ARC-3); move notation decisions into domain code`,
             ).toEqual([]);
         });
 

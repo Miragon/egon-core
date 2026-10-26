@@ -39,74 +39,41 @@ user never asked you to document, write the ADR as part of the same change
 and point it out in your summary. That is the entire point of this skill:
 the record must not depend on someone remembering to ask for it.
 
-## Follow the house convention first
+## This repository's convention: topic-based ADRs
 
-Before writing anything, look for an existing decision log: `docs/adr/`,
-`docs/decisions/`, `adr/`, `doc/adr/`, or files matching `ADR-*`/`NNNN-*.md`
-anywhere under docs. If one exists, read one or two entries and match them
-exactly — heading style, numbering scheme, file naming, status vocabulary,
-index file — and continue their sequence. A decision log in two formats is
-worse than either format alone, so the house convention always beats the
-template below.
+egon-core keeps its decisions in topic files under `docs/adr/`, not in one
+file per decision. `docs/adr/README.md` is the authority. Read it first,
+because it lists the topics, the format, and the rules. In short:
 
-Only when no log exists, bootstrap `docs/adr/` using the default format. When
-bootstrapping, make ADR 0001 the meta-decision ("record architecture
-decisions": the format and the rules of the game), so the practice itself is
-documented, and link the directory once from the project README so it gets
-found. Backfilling two or three foundational decisions that are still fresh
-(license, extraction, core layout) is worthwhile at bootstrap time — but
-don't attempt archaeology beyond that; a fabricated rationale is worse than
-an honest gap.
+- **Find the topic.** The topics are `foundations`, `architecture`,
+  `public-api`, `documents`, `icons`, `editor-features`, `testing`,
+  `engineering-practices`, and `release-and-distribution`. Put the decision in
+  the topic it belongs to. Create a new topic only when nothing fits, and add
+  it to the README table.
+- **Use a stable ID.** Each decision is a `## <a id="arc-7"></a>ARC-7 — <the
+decision, stated as a decision>` section. It takes the next free number in
+  its topic. IDs are never reused or renumbered. Cite decisions by ID
+  (`ADR ARC-7`) in code comments, tests, and docs.
+- **Follow the format.** A `Status` line (`accepted` | `proposed`), a
+  `History` line (dated entries with PR references), an optional
+  `Enforced by` line, and then **Context**, **Decision**, optional **Rejected
+  alternatives**, and **Consequences**.
+- **Extend or change before you add.** If the new decision refines an
+  existing one, edit that decision in place so it states what is in force now,
+  and append a dated `History` entry. Do not leave superseded wording behind.
+  Git history is the audit trail.
+- **Retire decisions visibly.** When a decision no longer applies, remove it
+  and add one line to the topic's `## Retired` section: the ID, what it was,
+  and what replaced it.
+- **Keep the index current.** Update the decision range for the topic in the
+  `docs/adr/README.md` table.
 
-## Default format
-
-One file per decision: `docs/adr/NNNN-short-kebab-title.md`, numbered
-sequentially from 0001.
-
-```markdown
-# NNNN — <The decision, stated as a decision — "Use PostgreSQL", not "Database">
-
-- Status: accepted | proposed | superseded by [NNNN](NNNN-title.md)
-- Date: YYYY-MM-DD
-
-## Context
-
-The situation that forces a choice, as neutral facts: constraints, forces,
-what breaks or hurts if nothing is decided. No advocacy here.
-
-## Decision
-
-What was decided, in one or two paragraphs.
-
-## Alternatives considered
-
-Optional — include only when there was a real contest. One short block per
-serious alternative: what it was and the one reason it lost. This section is
-what stops the next reader from proposing the alternative all over again.
-
-## Consequences
-
-What follows from the decision — good _and_ bad. Name the accepted trade-offs
-explicitly ("this limits adoption in proprietary products — known and
-accepted"), because the uncomfortable consequence is exactly the part the
-next reader needs.
-```
-
-Rules that keep the log trustworthy:
-
-- **One ADR per decision.** If a change embodies two decisions, write two.
-- **Written when decided, not later.** The bootstrap backfill above is the
-  one exception.
-- **Accepted ADRs are immutable.** A change of direction gets a _new_ ADR
-  that sets the old one's status to `superseded by NNNN`. Editing history
-  destroys the log's value as a record.
-- **Maintain the index.** If the log has a README/index, add a row for every
-  new ADR. If bootstrapping, create one (a small table: number, decision,
-  status).
+The former numbered ADRs (0001–0042) live only in git history. The README maps
+each one to its current decision ID.
 
 ## Writing the content
 
-Keep an ADR to roughly a page. It is a record for a future reader, not a
+Keep a decision to roughly a page. It is a record for a future reader, not a
 design document: compress to what someone would need in order to _not_
 re-litigate the decision. If a rule from the ADR is mechanically enforceable
 (layout rules, dependency bans), say in the ADR where the enforcement lives

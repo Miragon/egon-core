@@ -110,4 +110,4 @@ dependency and `release-please-action-implementation`, an exact alias for the
 version bundled by the workflow action. When updating the action SHA, inspect
 that commit's lockfile and update the alias and `ACTION_RELEASE_PLEASE_VERSION`
 in the configuration test together. Keep testing both versions while they
-differ; remove the alias when they align (ADR 0037).
+differ; remove the alias when they align (ADR REL-2).

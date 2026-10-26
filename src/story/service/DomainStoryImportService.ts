@@ -180,7 +180,7 @@ export class DomainStoryImportService {
 
         // Surface the repair so a host can tell the user the file was lossy.
         // This is the internal half of the public `import.repaired` event
-        // (ADR 0017): `DiagramJsModelerAdapter` listens here and re-emits the
+        // (ADR DOC-2): `DiagramJsModelerAdapter` listens here and re-emits the
         // dropped ids through `ModelerPort`. Fired only when something was
         // actually dropped, so a host handler doubles as "the file was damaged".
         if (prepared.removedConnections.length > 0) {

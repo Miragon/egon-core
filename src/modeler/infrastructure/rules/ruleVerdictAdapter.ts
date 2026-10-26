@@ -11,7 +11,7 @@ import { RuleVerdict } from "../../../story/domain/ruleVerdict";
  * means the mapping is written once, reviewed once, and — because the switch is
  * exhaustive over a discriminated union with no `default` — a new verdict kind
  * or a deleted arm breaks the build instead of leaking a default-allow. See
- * ADR 0015.
+ * ADR ARC-3.
  */
 
 /** The four values diagram-js' `Rules.allowed` distinguishes. */

@@ -47,7 +47,7 @@ export interface TestModeler {
  * Boots a real diagram-js graph and hands back its injector, for specs that
  * drive the commandStack rather than the public API.
  *
- * Browser-tier only — see ADR 0014. Anything that reaches `canvas.addShape`
+ * Browser-tier only — see ADR TST-2. Anything that reaches `canvas.addShape`
  * needs `SVGSVGElement.createSVGTransform` and a non-zero `getBBox`, neither of
  * which jsdom implements, so a canvas-driving spec cannot run in the unit tier.
  *
