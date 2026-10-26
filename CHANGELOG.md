@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.3.2](https://github.com/Miragon/egon-core/compare/v0.3.1...v0.3.2) (2026-10-26)
+
+
+### 🐞 Bug Fixes
+
+* bump transitive undici and brace-expansion for advisories ([#215](https://github.com/Miragon/egon-core/issues/215)) ([ea6ef2e](https://github.com/Miragon/egon-core/commit/ea6ef2eb2effbbf9fab531ce9cca46bb26a46101))
+
+
+### 📔 Documentation
+
+* consolidate ADRs into topic-based decision files ([#209](https://github.com/Miragon/egon-core/issues/209)) ([1dc05a4](https://github.com/Miragon/egon-core/commit/1dc05a4754d9e06708fa7484679c2686abc92652))
+* record rich domain model, mutation gate and trunk-based delivery ([#208](https://github.com/Miragon/egon-core/issues/208)) ([c311f7e](https://github.com/Miragon/egon-core/commit/c311f7e4a6ae4c33329d206101ec500655cce291))
+* trim comments to why-only and drop issue references ([#220](https://github.com/Miragon/egon-core/issues/220)) ([bff224f](https://github.com/Miragon/egon-core/commit/bff224fbf1458cda2234b09ceb6144f2e85dab3c))
+
+
+### 🛠️ Misc
+
+* **deps-dev:** bump vite from 8.2.2 to 8.2.4 ([#172](https://github.com/Miragon/egon-core/issues/172)) ([71e534d](https://github.com/Miragon/egon-core/commit/71e534d42431e60fcefb1d0efa77b14598c436df))
+* **deps:** bump dompurify from 3.4.15 to 3.4.16 ([#166](https://github.com/Miragon/egon-core/issues/166)) ([4b7e98f](https://github.com/Miragon/egon-core/commit/4b7e98fb3902091e8a2d28f48bf71bb1c94921d4))
+* **deps:** bump handlebars from 4.7.9 to 4.7.10 ([#170](https://github.com/Miragon/egon-core/issues/170)) ([29ab6d8](https://github.com/Miragon/egon-core/commit/29ab6d8bace53dd286eea4027773a74c64d7309b))
+* **deps:** bump source-map-js from 1.2.1 to 1.2.2 ([#167](https://github.com/Miragon/egon-core/issues/167)) ([eaca0e7](https://github.com/Miragon/egon-core/commit/eaca0e792a2f7b29f68ace65ffc67501ebdc9a54))
+* **deps:** bump the github-actions-all group across 1 directory with 7 updates ([#171](https://github.com/Miragon/egon-core/issues/171)) ([47faf89](https://github.com/Miragon/egon-core/commit/47faf89b2874f82081d50cdfc5c66a65e306a749))
+* group dependabot security updates and split npm majors ([#210](https://github.com/Miragon/egon-core/issues/210)) ([d6a2ebb](https://github.com/Miragon/egon-core/commit/d6a2ebb2c65daa8e8c52f02f96d65c1287739915))
+* merge unit and browser coverage with per-layer ratchets ([#219](https://github.com/Miragon/egon-core/issues/219)) ([d7c3b0b](https://github.com/Miragon/egon-core/commit/d7c3b0b295ef61a1aad1c9d2027afaeeac17c9e6))
+
 ## [0.3.1](https://github.com/Miragon/egon-core/compare/v0.3.0...v0.3.1) (2026-10-07)
 
 ### 🐞 Bug Fixes
