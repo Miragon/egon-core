@@ -1,6 +1,7 @@
 # Testing
 
-Test tiers, coverage, and how the published package is validated.
+Test tiers, coverage, the domain mutation gate, and how the published package
+is validated.
 
 ## <a id="tst-1"></a>TST-1 — Two test tiers: fast jsdom unit tests, real-Chromium browser tests
 
@@ -162,3 +163,89 @@ also pass while the package itself is broken, for example through:
 - The acceptance environment is Chromium, Node 24, Yarn 4, and portless.
 - The demo also serves for manual exploration, but deliberately has no
   persistence, dialogs, downloads, or clipboard integration.
+
+## <a id="tst-4"></a>TST-4 — Gate domain code on per-file mutation scores
+
+- Status: accepted
+- History: 2026-10-26 decided (ADR 0041); Stryker setup and rollout tracked in
+  #175
+- Enforced by: the per-file gate script and a raw-source rule for disable
+  comments in `src/architecture.spec.ts`. Both arrive with #175 and are not in
+  the repository yet.
+
+**Context.** At `32075e3` the domain layers had 99.1% statement coverage but
+an 85.1% Stryker mutation score: 124 surviving mutants, 52 of which pointed at
+missing assertions. Coverage cannot detect a missing rule. The
+group-as-activity-source bug (#181) sat in a domain function with 99% branch
+coverage.
+
+Stryker's `thresholds.break` applies to a whole run only. A global threshold
+lets a new file at 60% pass behind the legacy average, and raising it to 100%
+would block every PR until the existing survivors are resolved.
+
+Outside the domain, mutation testing is not ready to act as a gate. The
+service layer scores 69.4% in the unit tier, with 166 mutants that no unit
+test reaches, and the browser tier costs about one second per mutant per
+worker.
+
+**Decision.** Stryker (`@stryker-mutator/core`, `vitest-runner`, and
+`typescript-checker`, exactly pinned per [ENG-1](engineering-practices.md#eng-1))
+is the quality gate for `src/**/domain/**` only.
+
+- **Runner setup.**
+    - Stryker uses its own Vitest config that contains only the unit project.
+    - It uses `perTest` coverage analysis, the TypeScript checker, and
+      `ignoreStatic: false`.
+    - `src/architecture.spec.ts` is excluded, because it scans raw sources.
+- **Per-file gate.** A script reads Stryker's JSON report and checks every
+  domain file against `mutation-baseline.json`. The score is
+  `(killed + timeout) / (killed + timeout + survived + no coverage)`. Ignored
+  mutants and compile errors do not count.
+    - A file missing from the baseline (a new file) must score 100%.
+    - A listed file must not fall below its floor.
+    - Stale entries fail the gate.
+    - The global `break` threshold stays as a backstop.
+- **Ratchet.** Floors only move up. A PR that raises a file's score raises its
+  floor in the same PR. Lowering a floor requires a decision here. A moved
+  file keeps its floor only through a visible baseline edit.
+- **Equivalent mutants.** First remove them by simplifying the code: delete
+  redundant guards and use exact comparisons. If that is not possible,
+  annotate the line with
+  `// Stryker disable next-line <Mutator>[,<Mutator>]: <reason>`. Block-wide,
+  file-wide, and `all` disables are not allowed in domain code.
+- **Test-first.** A domain change starts with a failing spec: a new object
+  starts with its specification, and a bug fix with its regression test. No
+  tool can prove test-first. Surviving mutants are the evidence that code was
+  written ahead of its tests.
+- **Where it runs.**
+    - Locally, use incremental runs for the TDD loop.
+    - In CI, every PR gets a full, non-incremental domain run plus the gate, as
+      a job under the `ci` aggregate.
+    - Incremental mode is not used in CI because it cannot see changes to
+      dependencies, or to unmutated files that domain specs import.
+
+**Rejected alternatives.**
+
+- **Coverage thresholds only:** they measure execution, not assertions. The
+  domain already had 99% coverage and still contained #181.
+- **Only a global `break` threshold:** new files can hide behind the average,
+  and a global threshold cannot require new code to reach 100%.
+- **Mutate service and infrastructure code on every PR:** rejected for now.
+  Most of that code is reachable only from the browser tier, which costs too
+  much per mutant. A weekly, non-gating run may follow.
+- **Incremental runs in CI:** the gate could go stale without anyone
+  noticing.
+
+**Consequences.**
+
+- Assertion strength is measured where logic is pure and tests are cheap.
+  This rewards moving policy into the domain ([ARC-3](architecture.md#arc-3),
+  [ARC-7](architecture.md#arc-7)).
+- The opposite pressure is real: keeping logic out of `domain/` avoids the
+  gate. Reviewers counter it with ARC-3's classification.
+- Domain code that only browser tests reach scores as "no coverage" and needs
+  unit specs. This is intended.
+- CI gains a job of several minutes (about 3 minutes locally at `32075e3`) and
+  three pinned dev dependencies.
+- Production code carries a reviewed comment for each annotated equivalent
+  mutant.

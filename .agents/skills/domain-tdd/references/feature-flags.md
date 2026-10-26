@@ -1,4 +1,4 @@
-# Internal feature flags (ADR 0042)
+# Internal feature flags (ADR ENG-4)
 
 Read this before adding, testing, flipping, or removing a flag.
 
@@ -24,8 +24,8 @@ When a flag is justified, state the reason in the PR description.
     - It never goes into a `domain/` folder. Domain purity would then no longer
       keep it out of the domain.
 - **Instance-scoped.** The registry is a value in the client's injector, like
-  `config.textRenderer`, and it must reach every editor session (ADR 0024).
-  It is never module state (ADR 0012).
+  `config.textRenderer`, and it must reach every editor session (ADR ARC-6).
+  It is never module state (ADR ARC-5).
 - **Not in the public API.** Flags are not on `EgonClientConfig` and not
   exported from `src/index.ts`. The architecture tests' public-surface freeze
   rejects that anyway. Exposing a flag to hosts needs its own ADR.

@@ -1,6 +1,7 @@
 # Engineering practices
 
-The toolchain, code formatting, and local runtime.
+The toolchain, code formatting, local runtime, and how work is delivered to
+`main`.
 
 ## <a id="eng-1"></a>ENG-1 — Use a standalone toolchain with exact pins
 
@@ -117,3 +118,93 @@ and a privileged port.
   get an actionable error.
 - Manual and e2e demos can run side by side, including across worktrees.
 - The proxy may keep running after the demo stops. This is by design.
+
+## <a id="eng-4"></a>ENG-4 — Deliver trunk-based; hide unfinished work behind internal flags outside the domain
+
+- Status: accepted
+- History: 2026-10-26 decided (ADR 0042)
+
+**Context.** Release Please cuts releases from `main`
+([REL-2](release-and-distribution.md#rel-2)), so every merge reaches the VS
+Code host, and later the WPS web app, with the next release. Epic #173
+reworks the core over many weeks ([ARC-7](architecture.md#arc-7)). Long-lived
+branches would conflict with each other and with upstream sync rounds
+(`SYNC.md`), and would integrate late. Three existing decisions constrain
+where a flag can live:
+
+- Any option on `EgonClientConfig` is a public promise
+  ([API-1](public-api.md#api-1)).
+- Runtime state must be instance-scoped ([ARC-5](architecture.md#arc-5)).
+- Every editor session builds its own injector
+  ([ARC-6](architecture.md#arc-6)).
+
+**Decision.** Work lands on `main` in small PRs from short-lived branches. A
+PR is merged within about two days and passes the full CI gate. There are no
+long-lived feature branches.
+
+Unfinished work is hidden by the cheapest technique that works, in this order:
+
+1. **Inert code.** A new domain object merges unwired. Nothing calls it, so no
+   flag is needed.
+2. **Branch by abstraction.** Once characterization tests pass, a
+   behavior-preserving change swaps the implementation behind the existing
+   seam. No flag is needed.
+3. **Internal feature flag.** Only for a user-visible behavior change that
+   cannot land in one small PR.
+
+Bug fixes land directly with their regression test and never go behind a
+flag.
+
+Feature flags follow these rules:
+
+- **One typed registry.** All flags are defined in one typed registry outside
+  every `domain/` folder, and every flag defaults to `false`.
+- **Instance-scoped.** The registry is a value in the client's injector, like
+  `config.textRenderer`, and it reaches every editor session.
+- **Read outside the domain.** Only service and infrastructure code read
+  flags. The adapter or service chooses between two domain implementations,
+  and each implementation has a single behavior.
+- **Not public API.** Flags are not in `EgonClientConfig` or `src/index.ts`.
+  Tests switch them on through the internal injection point. Exposing a flag
+  to hosts is a public API change and needs its own decision.
+- **Tested in both states.** While a flag exists, the affected tests run with
+  the flag off and on.
+- **Removed on schedule.** Each flag is created together with the issue that
+  removes it. The flag and the old path are deleted once the flipped default
+  has shipped in one release without regressions.
+
+Commit types follow the user-visible effect. Inert code, branch by
+abstraction, and flag removal are `refactor:`. The PR that flips a default is
+`feat:` or `fix:`, so the changelog describes the change once.
+
+The registry arrives with the first change that needs a flag (#207). Until
+then, no flag code exists.
+
+**Rejected alternatives.**
+
+- **Long-lived feature branches per phase:** late integration, merge
+  conflicts with sibling work and upstream syncs, and reviews too large to
+  read.
+- **Host-facing runtime flags in `EgonClientConfig`:** each flag would be a
+  semver promise on a frozen API, and hosts would see half-finished behavior.
+- **Build-time flags (Vite `define`):** one published build serves all hosts,
+  and one test run could not exercise both states.
+- **Flags inside domain code:** Stryker mutates both branches, so tests must
+  kill mutants in both ([TST-4](testing.md#tst-4)), and one branch is deleted
+  later anyway.
+- **A third-party flag service:** it adds a runtime dependency and network
+  access to a host-independent library.
+
+**Consequences.**
+
+- Diffs stay small, `main` is always releasable, and sync rounds rebase onto
+  current code.
+- Existing architecture rules already enforce the key constraints. Domain
+  purity keeps the registry out of `domain/`, and the public-surface freeze
+  keeps it out of `src/index.ts`.
+- While a flag exists, published packages contain an unreachable code path,
+  and the affected tests run twice.
+- Flag debt is possible if removal slips. Only the removal issue and review
+  guard against it; no tool does.
+- Hosts cannot try a flagged change before its default flips. This is
+  accepted.

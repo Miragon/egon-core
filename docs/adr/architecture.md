@@ -7,7 +7,8 @@ invariants that every feature relies on.
 
 - Status: accepted
 - History: 2026-07-20 two-ring layout (ADR 0005); 2026-07-22 replaced by the
-  flat feature layout (ADR 0010)
+  flat feature layout (ADR 0010); 2026-10-26 features named as modules of one
+  bounded context (ADR 0040)
 - Enforced by: architecture rules B–F ([ARC-2](#arc-2))
 
 **Context.** The extraction inherited two structures side by side:
@@ -16,9 +17,12 @@ context. Code was organized by where it came from in the extraction rather
 than by domain concept. Each concept (icons, labels, the story) was split
 across three places, which also made upstream sync harder to reason about.
 
-**Decision.** Features are top-level folders under `src/`:
+**Decision.** Features are top-level folders under `src/`. They are modules
+of **one** bounded context, Domain Storytelling, not separate bounded
+contexts:
 
-- `modeler/`: the canvas and model context, and `EgonClient`.
+- `modeler/`: the application and adapter layer for the canvas, and
+  `EgonClient`.
 - `story/`: the domain story, with its model, grammar, import, and export.
 - `iconSet/`: the icon dictionary and icon-set import/export.
 - `labelDictionary/`: activity and work-object labels.
@@ -125,7 +129,8 @@ decision that owns it.
 
 - Status: accepted
 - History: 2026-07-26 typed rule verdicts (ADR 0015); 2026-09-06 extended to
-  all adapters with the predicate-import ratchet (ADR 0020)
+  all adapters with the predicate-import ratchet (ADR 0020); 2026-10-26
+  extended to domain objects that own invariants ([ARC-7](#arc-7))
 - Enforced by: the compiler (`noImplicitReturns`, an exhaustive `switch`);
   architecture rule J
 
@@ -333,3 +338,79 @@ successful swap or by destruction. A failed import does not invalidate it.
 - Errors in host observers or in cleanup of the old session happen after the
   swap. They are reported through browser error reporting (with a console
   fallback) and do not make a successful import look like a failure.
+
+## <a id="arc-7"></a>ARC-7 — Domain objects own invariants and return decisions; diagram-js stays the system of record
+
+- Status: accepted
+- History: 2026-10-26 decided (ADR 0040)
+
+**Context.** The domain layers were a functional core of interfaces and free
+functions, and no domain object owned an invariant. The architecture review
+for epic #173 found the cost of that:
+
+- Activity numbering was spread over seven or more sites, and three
+  infrastructure sites each restated "a step is an actor-sourced activity".
+- Group nesting, cycle prevention, and adoption lived entirely in
+  `DomainStoryUpdater`, a diagram-js `CommandInterceptor`.
+- `CanvasObject` (`story/domain/canvasObject.ts`) mirrors diagram-js's element
+  graph (`host: any`, `attachers: any`, `incoming`, `outgoing`). The
+  import-based purity rule cannot detect framework leakage through a type's
+  shape.
+- `BusinessObject` serves as the wire DTO, the domain record, and the
+  diagram-js attribute bag at once. This is the root of the #65/#74 class of
+  bugs.
+
+diagram-js owns element identity, mutation, and undo through its command
+stack. Upstream sync depends on keeping upstream's file and method names
+reviewable ([FND-3](foundations.md#fnd-3)).
+
+**Decision.** Domain objects own invariants and return **decisions**: the
+changes a command should make. Infrastructure command handlers and
+interceptors apply those decisions through diagram-js, so identity, mutation,
+and undo stay with diagram-js. This extends [ARC-3](#arc-3) from free
+functions to objects that protect an invariant.
+
+- **Inputs are domain snapshots**, not framework-shaped objects. A
+  `StoryGraph` and persisted element records are built by infrastructure from
+  the element registry, and they replace `CanvasObject` (#201).
+- **A classic aggregate only where diagram-js does not own the state.**
+  `IconCatalog` (#200) owns the icon pool. Everything element-shaped stays in
+  the registry.
+- **Planned objects:** `ElementType` (#196), `ActivitySequence` (#197),
+  `GroupTree` (#198), the label-dictionary projection (#199), `IconCatalog`
+  (#200), and `StoryGraph` (#201).
+- **Classes only for invariants.** Pure functions that own no invariant stay
+  functions.
+- **Upstream names survive moves.** Logic moved out of an upstream-mapped file
+  keeps upstream's names where they exist, and `SYNC.md` records where it went.
+- **Test-first and mutation-gated.** Domain objects are written test-first and
+  gated per file ([TST-4](testing.md#tst-4)). Unfinished objects land through
+  trunk-based delivery without flags in the domain
+  ([ENG-4](engineering-practices.md#eng-4)).
+
+**Rejected alternatives.**
+
+- **A `DomainStory` aggregate that owns elements alongside diagram-js:** every
+  built-in diagram-js command would need two-way synchronization, undo would
+  have to be reimplemented, and upstream sync would become far more expensive.
+- **A domain event bus:** the command stack already is the event source. #203
+  types the existing events instead.
+- **Keep the functional core unchanged:** without an owner, invariants keep
+  being restated at each call site. That is how the group-source (#181) and
+  hidden-number (#182) bugs slipped through near-total line coverage.
+- **Move ports into an `application/` folder:** a rename with no behavioral
+  gain, which would churn imports and the sync mapping.
+
+**Consequences.**
+
+- Invariants become testable without a canvas, and the mutation gate applies
+  to them.
+- Adapters and interceptors shrink to translation. Adapter size is a progress
+  measure alongside the mutation score.
+- Snapshots must be built from the registry for each decision. Build them per
+  command, not per render, to keep large diagrams responsive.
+- There are two representations, snapshot and element, and their mapping
+  lives in infrastructure. The mutation gate does not cover that mapping, so
+  it needs its own browser-tier tests ([TST-2](testing.md#tst-2)).
+- Upstream fixes may now land in different local files than before, and
+  `SYNC.md` carries the extra mapping.

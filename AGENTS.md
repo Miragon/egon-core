@@ -45,10 +45,10 @@ under `**/domain/**`.
 
 - **Test-first.** Write the failing spec before the code. A bug fix starts
   with its regression test.
-- **Domain objects own invariants and return decisions** (ADR 0040).
+- **Domain objects own invariants and return decisions** (ADR ARC-7).
   Infrastructure applies those decisions through diagram-js commands, so
   undo stays with diagram-js.
-- **Mutation gate per file** (ADR 0041; tooling arrives with #175).
+- **Mutation gate per file** (ADR TST-4; tooling arrives with #175).
     - A new domain file needs a 100% Stryker score.
     - An existing file must not fall below its floor in
       `mutation-baseline.json`, and floors only go up.
@@ -57,7 +57,7 @@ under `**/domain/**`.
 - **Mutation testing covers only domain code.** Service and infrastructure
   code get normal unit or browser tests.
 
-## Delivery: trunk-based (ADR 0042)
+## Delivery: trunk-based (ADR ENG-4)
 
 - Use short-lived branches and small PRs, merged within about two days. There
   are no long-lived feature branches.

@@ -68,7 +68,7 @@ decision, stated as a decision>` section. It takes the next free number in
 - **Keep the index current.** Update the decision range for the topic in the
   `docs/adr/README.md` table.
 
-The former numbered ADRs (0001–0039) live only in git history. The README maps
+The former numbered ADRs (0001–0042) live only in git history. The README maps
 each one to its current decision ID.
 
 ## Writing the content

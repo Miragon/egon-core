@@ -4,21 +4,21 @@ The decisions that shape egon-core, grouped by topic. Each topic file holds
 the decisions **currently in force** for its area. Read the relevant topic
 before making a structural change.
 
-| Topic                                                   | Covers                                                   | Decisions     |
-| ------------------------------------------------------- | -------------------------------------------------------- | ------------- |
-| [Foundations](foundations.md)                           | Scope, license, relationship to upstream egon.io         | FND-1 – FND-3 |
-| [Architecture](architecture.md)                         | Code layout, dependency rules, runtime invariants        | ARC-1 – ARC-6 |
-| [Public API](public-api.md)                             | The `EgonClient` contract: surface, events, side effects | API-1 – API-3 |
-| [Story documents](documents.md)                         | EGN format, import, export, visual export                | DOC-1 – DOC-3 |
-| [Icons](icons.md)                                       | Icon names, content safety, selection, artwork, starters | ICO-1 – ICO-5 |
-| [Editor features](editor-features.md)                   | Alignment, color picking, label renames, replay          | EDT-1 – EDT-4 |
-| [Testing](testing.md)                                   | Test tiers, coverage, installed-package journeys         | TST-1 – TST-3 |
-| [Engineering practices](engineering-practices.md)       | Toolchain, formatting, Node and demo routing             | ENG-1 – ENG-3 |
-| [Release and distribution](release-and-distribution.md) | Package contents, release process                        | REL-1 – REL-2 |
+| Topic                                                   | Covers                                                             | Decisions     |
+| ------------------------------------------------------- | ------------------------------------------------------------------ | ------------- |
+| [Foundations](foundations.md)                           | Scope, license, relationship to upstream egon.io                   | FND-1 – FND-3 |
+| [Architecture](architecture.md)                         | Code layout, dependency rules, runtime invariants, domain objects  | ARC-1 – ARC-7 |
+| [Public API](public-api.md)                             | The `EgonClient` contract: surface, events, side effects           | API-1 – API-3 |
+| [Story documents](documents.md)                         | EGN format, import, export, visual export                          | DOC-1 – DOC-3 |
+| [Icons](icons.md)                                       | Icon names, content safety, selection, artwork, starters           | ICO-1 – ICO-5 |
+| [Editor features](editor-features.md)                   | Alignment, color picking, label renames, replay                    | EDT-1 – EDT-4 |
+| [Testing](testing.md)                                   | Test tiers, coverage, installed-package journeys, mutation gate    | TST-1 – TST-4 |
+| [Engineering practices](engineering-practices.md)       | Toolchain, formatting, Node and demo routing, trunk-based delivery | ENG-1 – ENG-4 |
+| [Release and distribution](release-and-distribution.md) | Package contents, release process                                  | REL-1 – REL-2 |
 
 ## How this log works
 
-The log used to be one numbered file per decision. By 0039 it had become hard
+The log used to be one numbered file per decision. By 0042 it had become hard
 to answer the question "what is in force?". Several ADRs only amended or
 superseded others, and the current rule often had to be pieced together from
 two or three files. Topic files state the current decision for each area in
@@ -86,10 +86,10 @@ changes that matter.
 
 ## Former numbered ADRs
 
-Until 2026-10, decisions were recorded as numbered ADRs 0001–0039.
+Until 2026-10, decisions were recorded as numbered ADRs 0001–0042.
 `CHANGELOG.md` and older commits still cite them. The original files remain in
 git history. For example:
-`git show 32075e3:docs/adr/0016-rendering-is-read-only.md`.
+`git show c311f7e:docs/adr/0016-rendering-is-read-only.md`.
 
 | Former ADR                                                   | Now                 |
 | ------------------------------------------------------------ | ------------------- |
@@ -132,3 +132,6 @@ git history. For example:
 | 0037 Test release config against action and upgraded library | REL-2               |
 | 0038 Bundled color picker and provider contract              | EDT-2, REL-1        |
 | 0039 Publish optional starter icons                          | ICO-5, API-1        |
+| 0040 Rich domain objects over snapshots                      | ARC-7, ARC-1        |
+| 0041 Gate domain code on per-file mutation scores            | TST-4               |
+| 0042 Trunk-based delivery with internal feature flags        | ENG-4               |
