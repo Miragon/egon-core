@@ -594,7 +594,7 @@ describe("architecture", () => {
 
     // ─── H. No module-level mutable state ────────────────────────────────────
     //
-    // Multi-instance safety (issue #12, CLAUDE.md): mutable state must live on
+    // Multi-instance safety (issue #12, AGENTS.md): mutable state must live on
     // didi-instantiated classes so each EgonClient injector owns its own copy —
     // module scope is for pure functions and frozen config only. A shared
     // module-level binding cross-contaminates two clients on one page (e.g. one
