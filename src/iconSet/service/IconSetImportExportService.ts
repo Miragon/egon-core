@@ -10,9 +10,8 @@ import { UsedIconList } from "../../story/domain/UsedIconList";
 export type { IconSetExportConfiguration };
 
 /**
- * The inbound raw icon set read from a file, before it is turned into an
- * in-memory {@link IconSet}. `name` is optional because legacy files and the
- * icon-only client API omit it (it then defaults to "").
+ * The raw icon set read from a file. `name` is optional because legacy files
+ * and the icon-only client API omit it.
  */
 export interface FileConfiguration {
     name?: string;
@@ -38,9 +37,6 @@ export class IconSetImportExportService {
             };
         }
 
-        // fromRecord's null-skip is exactly the old `if (icon)` guard: an actor
-        // or work object arriving without an icon is dropped rather than keyed
-        // to an empty value.
         return {
             name: fileConfiguration.name ?? "",
             actors: Dictionary.fromRecord(fileConfiguration.actors),
@@ -49,9 +45,6 @@ export class IconSetImportExportService {
     }
 
     public loadConfiguration(customConfig: IconSet): void {
-        // Import replaces the selected icon set with the incoming one. The
-        // config always carries real Dictionaries (createIconSetConfiguration
-        // builds them), so it is handed downstream verbatim.
         this.iconDictionaryService.updateIconRegistries(customConfig);
     }
 
@@ -69,13 +62,9 @@ export class IconSetImportExportService {
     }
 
     /**
-     * Builds the icon-set portion of a story export.
-     *
-     * The selected dictionaries remain the public creation vocabulary. A
-     * diagram can, however, still contain an icon removed from that vocabulary
-     * or displaced by `loadIcons()`. Keep such live references in the document
-     * using the instance's historical icon pool, without changing either pool
-     * or selection as a side effect of exporting.
+     * A diagram may still use an icon that was removed from the selection or
+     * displaced by `loadIcons()`; such icons are exported from the pool,
+     * without changing pool or selection as a side effect.
      */
     getConfigurationForStoryExport(
         usedIcons: UsedIconList,
@@ -111,13 +100,9 @@ export class IconSetImportExportService {
 
         let iconSetConfiguration;
 
-        // `||`, not `&&`: upstream always has the default icon set loaded, so
-        // "both halves populated" and "any icon at all" coincide there. Here an
-        // icon set with only actors or only work objects is legal, and requiring
-        // both reported an empty set after a successful `addIcon()` — and, on
-        // export, wrote EMPTY_ICON_SET over the half that did exist. A set with
-        // neither half still yields `undefined`, which is what preserves
-        // EMPTY_ICON_SET for a genuinely empty set.
+        // `||`, unlike upstream's `&&`: upstream always has the default set
+        // loaded, but here a set with only actors or only work objects is
+        // legal.
         if (actors.length > 0 || workObjects.length > 0) {
             iconSetConfiguration = this.createConfigFromDictionaries(
                 actors,
@@ -136,7 +121,6 @@ export class IconSetImportExportService {
         const newActors = new Dictionary<string>();
         const newWorkobjects = new Dictionary<string>();
 
-        // Fill Configuration from Canvas-Objects
         actorNames.forEach((actor) => {
             newActors.set(
                 actor.replace(ElementTypes.ACTOR, ""),

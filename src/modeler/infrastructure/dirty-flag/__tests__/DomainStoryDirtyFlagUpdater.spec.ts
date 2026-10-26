@@ -5,15 +5,9 @@ import { DomainStoryDirtyFlagUpdater } from "../DomainStoryDirtyFlagUpdater";
 import { DirtyFlagService } from "../../../service/DirtyFlagService";
 
 /**
- * Issue #74: the unsaved-changes flag follows the command stack, not the paint.
- *
- * It used to be set from `DomainStoryRenderer.drawShape`/`drawConnection`, so
- * opening a story, selecting an element or scrolling one back into view all
- * reported unsaved changes.
- *
- * A real `EventBus` with a stubbed `CommandStack`: the whole behaviour is "what
- * does it do with `canUndo()` when `commandStack.changed` fires", and diagram-js'
- * real stack cannot reach that state without a canvas (ADR TST-2).
+ * A real `EventBus` with a stubbed `CommandStack`: the behaviour is what happens
+ * with `canUndo()` on `commandStack.changed`, and diagram-js' real stack cannot
+ * reach that state without a canvas (ADR TST-2).
  */
 describe("DomainStoryDirtyFlagUpdater", () => {
     let eventBus: EventBus;
@@ -48,8 +42,7 @@ describe("DomainStoryDirtyFlagUpdater", () => {
     });
 
     it("comes back clean when the stack is emptied again", () => {
-        // Undoing back to the start of history is a return to clean; without
-        // the `canUndo()` guard it would count as one more change.
+        // Undoing back to the start of history is a return to clean.
         canUndo = true;
         eventBus.fire("commandStack.changed", {});
         expect(dirtyFlagService.dirty).toBe(true);
@@ -65,9 +58,8 @@ describe("DomainStoryDirtyFlagUpdater", () => {
         eventBus.fire("commandStack.changed", {});
         expect(dirtyFlagService.dirty).toBe(true);
 
-        // CommandStack clears itself silently on `diagram.clear`
-        // (`clear(emit = false)`), so `canUndo` stays whatever the stub says and
-        // no `commandStack.changed` follows — this listener is the only reset.
+        // CommandStack clears itself silently on `diagram.clear`, so this
+        // listener is the only reset.
         eventBus.fire("diagram.clear", {});
 
         expect(dirtyFlagService.dirty).toBe(false);
@@ -83,8 +75,7 @@ describe("DomainStoryDirtyFlagUpdater", () => {
         canUndo = false;
         eventBus.fire("commandStack.changed", {});
 
-        // The replayed initial `false`, then one transition each way — not one
-        // event per command, which a repaint-driven flag effectively produced.
+        // The replayed initial `false`, then one transition each way, not one per command.
         expect(seen).toEqual([false, true, false]);
     });
 });

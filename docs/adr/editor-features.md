@@ -9,8 +9,7 @@ renames, and replay.
 - History: 2026-07-23 decided (ADR 0011)
 
 **Context.** Stories can contain elements at negative coordinates, and
-external tools break when they re-export such stories (upstream
-WPS/egon.io #205). Upstream bundles `@bpmn-io/align-to-origin` and aligns the
+external tools break when they re-export such stories. Upstream bundles `@bpmn-io/align-to-origin` and aligns the
 story before fitting it to the screen. Hosts here had only raw viewbox access.
 `align()` runs through the command stack, so it fires `story.changed`.
 

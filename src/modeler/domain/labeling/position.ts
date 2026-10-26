@@ -7,7 +7,6 @@ export function countLines(str: string) {
     return str.split(/\r\n|\r|\n/).length;
 }
 
-// determine the position of the label at the activity
 export function labelPosition(waypoints: readonly Coordinate[], lines = 1) {
     const amountWaypoints = waypoints.length;
     let determinedPosition;
@@ -17,7 +16,6 @@ export function labelPosition(waypoints: readonly Coordinate[], lines = 1) {
     if (amountWaypoints > 2) {
         const angleActivity = new Array<number>(amountWaypoints - 1);
         for (let i = 0; i < amountWaypoints - 1; i++) {
-            // calculate the angles of the activities
             angleActivity[i] = angleBetween(waypoints[i], waypoints[i + 1]);
         }
 
@@ -54,7 +52,6 @@ export function labelPosition(waypoints: readonly Coordinate[], lines = 1) {
     }
 }
 
-// calculate the X position of the label
 export function labelPositionX(startPoint: Coordinate, endPoint: Coordinate) {
     const angle = angleBetween(startPoint, endPoint);
     let offsetX = 0;
@@ -79,7 +76,6 @@ export function labelPositionX(startPoint: Coordinate, endPoint: Coordinate) {
     return offsetX + (startPoint.x + endPoint.x) / 2;
 }
 
-// calculate the Y position of the label
 export function labelPositionY(
     startPoint: Coordinate,
     endPoint: Coordinate,
@@ -111,7 +107,6 @@ export function labelPositionY(
     return offsetY + (startPoint.y + endPoint.y) / 2;
 }
 
-// select at which part of the activity the label should be attached to
 export function selectPartOfActivity(
     waypoints: readonly Coordinate[],
     angleActivity: readonly number[],

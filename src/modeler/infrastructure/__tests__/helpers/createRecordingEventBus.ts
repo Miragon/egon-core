@@ -1,14 +1,8 @@
 import { vi } from "vitest";
 
 /**
- * A diagram-js `eventBus` stub that really registers, removes and dispatches
- * listeners.
- *
- * Both adapter specs need this rather than bare `vi.fn()`s: the properties #69
- * is about — a burst coalescing into one callback, `destroy()` disarming an
- * in-flight timer, `off()` matching by function identity — can only be observed
- * by firing events and counting what comes out the other side. Dispatch is
- * synchronous, so only the adapters' own debounce delays a callback.
+ * An `eventBus` stub that really dispatches, so coalescing, teardown and `off()`
+ * identity are observable. Dispatch is synchronous.
  */
 export function createRecordingEventBus() {
     const listeners = new Map<string, ((...args: unknown[]) => void)[]>();

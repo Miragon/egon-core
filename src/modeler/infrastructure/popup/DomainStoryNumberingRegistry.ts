@@ -10,12 +10,8 @@ import {
 } from "../../../story/domain/activityNumbering";
 
 /**
- * Applies the pure activity-numbering policy (`story/domain/activityNumbering`)
- * to the live canvas: it owns the mutable multiple-number registry (mutable
- * state must live on a didi-instantiated class, ADR ARC-5) and translates
- * computed number assignments into business-object mutations plus
- * `element.changed` events. The arithmetic itself is domain code — this class
- * only wires it to diagram-js.
+ * Applies `story/domain/activityNumbering` to the live canvas and owns the
+ * mutable multiple-number registry (ADR ARC-5).
  */
 export class DomainStoryNumberingRegistry {
     static $inject: string[] = [
@@ -23,9 +19,7 @@ export class DomainStoryNumberingRegistry {
         "domainStoryElementRegistryService",
     ];
 
-    /**
-     * Specifies whether the index may occur multiple times.
-     */
+    /** Whether the number at each index may occur multiple times. */
     private multipleNumberRegistry = [false];
 
     constructor(
@@ -42,23 +36,16 @@ export class DomainStoryNumberingRegistry {
     }
 
     /**
-     * A snapshot an undoable command can hold onto. The **copy is load-bearing**:
-     * `ActivityChangedHandler` keeps it in its command context for the lifetime
-     * of the action, across undo → redo → undo. Handing out the live array would
-     * let the redo's cascade write through the snapshot, so the second undo would
-     * restore post-edit values — silently, with no error anywhere.
+     * A copy, because `ActivityChangedHandler` keeps it across undo/redo; the live
+     * array would let a redo's cascade write through it.
      */
     snapshotMultipleNumberRegistry(): boolean[] {
         return [...this.multipleNumberRegistry];
     }
 
     /**
-     * Restores a snapshot taken by `snapshotMultipleNumberRegistry`.
-     *
-     * **Replaces rather than merges**, and copies again on the way in. A
-     * per-index write-back would leave behind the slots a cascade added *beyond*
-     * the snapshot's length; copying keeps the caller's snapshot reusable for the
-     * next undo.
+     * Replaces rather than merges, so slots a cascade added beyond the snapshot
+     * vanish; copies so the snapshot stays reusable for the next undo.
      */
     restoreMultipleNumberRegistry(snapshot: readonly boolean[]): void {
         this.multipleNumberRegistry = [...snapshot];
@@ -74,9 +61,7 @@ export class DomainStoryNumberingRegistry {
         );
     }
 
-    /**
-     * Get the IDs of activities with their associated number, only returns activities that are originating from an actor
-     */
+    /** Only activities that originate from an actor. */
     getNumbersAndIDs(): { id: string; number: number | undefined }[] {
         const iDWithNumber = [];
         const activities =
@@ -91,13 +76,8 @@ export class DomainStoryNumberingRegistry {
     }
 
     /**
-     * Determine the next available number that is not yet used.
-     *
-     * A pure query on purpose (#74 class): it used to write the number onto the
-     * element as a side effect, so a caller that computes a number *before*
-     * executing a command handed that handler an already-mutated model to
-     * snapshot — and the undo restored the new number instead of the old one.
-     * Whoever owns the transaction owns the write.
+     * A pure query: callers compute the number before executing a command, which
+     * must still snapshot the unmutated model for undo.
      */
     generateAutomaticNumber(): number {
         const usedNumbers = this.domainStoryElementRegistryService
@@ -108,13 +88,8 @@ export class DomainStoryNumberingRegistry {
     }
 
     /**
-     * Update the numbers at the activities when editing an activity.
-     *
-     * `activitiesFromActors` may include the edited activity — the domain
-     * excludes it by `edit.id` — and must be read *before* the edit is written
-     * to the model, so the cascade sees the numbers it has to move out of the
-     * way. Applying the allowance updates before the assignments keeps the
-     * pre-edit flags readable inside `renumberOnNumberEdit`.
+     * `activitiesFromActors` must be read before the edit is written, so the
+     * cascade sees the numbers it has to move out of the way.
      */
     updateExistingNumbersAtEditing(
         activitiesFromActors: ActivityCanvasObject[],

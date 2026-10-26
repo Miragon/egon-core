@@ -5,26 +5,11 @@ import { DomainStoryPropertyCopy } from "../DomainStoryPropertyCopy";
 import { ElementTypes } from "../../../../story/domain/elementTypes";
 
 /**
- * Pins the property-copy contract that every paste depends on. Two things here
- * are easy to break silently and neither had cover:
+ * - `incoming`/`outgoing` hold live element references; copying them would wire
+ *   the paste into the original's connections. Everything else is copied.
+ * - `extensionElements` sorts last, since its copy may read earlier properties.
  *
- * - `incoming`/`outgoing` must never be copied. They hold live diagram-js
- *   element references; carrying them onto a pasted business object would wire
- *   the copy back into the original's connections. Note this is a two-entry
- *   *blacklist* (`DISALLOWED_PROPERTIES`), not a whitelist — everything else is
- *   copied, so a new business-object field needs no registration here.
- * - `extensionElements` must sort last, because the extension copy may read
- *   properties written by the earlier ones.
- *
- * Writing these turned up a port regression: the default `canCopyProperty`
- * listener answered `true` for an allowed property where upstream answers
- * nothing, so `copyProperty` handed that `true` back as the value and every
- * copied property became the boolean `true`. Fixed alongside; "copies ordinary
- * properties onto the target" and "passes a primitive straight through" are the
- * regression locks.
- *
- * Drives a real diagram-js `EventBus` with no canvas — the service only ever
- * talks to the bus (precedent: `DomainStoryPasteRestore.spec.ts`).
+ * Real `EventBus`, no canvas: the service only talks to the bus.
  */
 
 const ACTOR_TYPE = ElementTypes.ACTOR + "Person";

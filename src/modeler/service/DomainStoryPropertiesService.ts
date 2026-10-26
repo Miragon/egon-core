@@ -1,16 +1,9 @@
 import { Scope } from "../../story/domain/scope";
 
 /**
- * Session-scoped holder for the story-level metadata that the diagram-js
- * element registry cannot express: title, description, scope and the version
- * the story was imported from.
- *
- * Exists to bridge import and export. `export()` takes no arguments and
- * reconstructs the story purely from the element registry, so without this
- * service the title/description/scope read on import would be dropped on the
- * next save. Import writes here; export reads back. Mirrors upstream Egon.io's
- * PropertiesService and follows the dependency-free singleton pattern of
- * [[DirtyFlagService]].
+ * Holds story metadata the element registry cannot express (title,
+ * description, scope, imported version), so export can write back what import
+ * read. Upstream: PropertiesService.
  */
 export class DomainStoryPropertiesService {
     static $inject: string[] = [];

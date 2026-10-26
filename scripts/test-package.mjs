@@ -65,8 +65,8 @@ try {
         YARN_ENABLE_GLOBAL_CACHE: "false",
         YARN_ENABLE_TELEMETRY: "false",
     };
-    // This disposable project intentionally has no pre-existing lockfile. CI's
-    // Yarn default is immutable, so opt out for this one generated install.
+    // The disposable project has no lockfile, and CI's Yarn default is
+    // immutable.
     await run(
         "yarn",
         ["install", "--no-immutable"],

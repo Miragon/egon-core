@@ -2,10 +2,8 @@ import { DomainStory } from "./domainStory";
 import { IconSetExportConfiguration } from "./iconSet";
 
 /**
- * The EGN v4.0.0 on-disk envelope: an icon set paired with a story. Replaces
- * the legacy `{ domain, dst }` `ConfigAndDST`. Serializing an instance with
- * `JSON.stringify` yields exactly the `{ iconSet, domainStory }` file current
- * Egon.io reads and writes.
+ * The EGN v4.0.0 envelope: `JSON.stringify` of an instance yields exactly the
+ * `{ iconSet, domainStory }` file Egon.io reads and writes.
  */
 export class EgnExportFile {
     constructor(

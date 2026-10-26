@@ -52,7 +52,7 @@ under `**/domain/**`.
 - **Domain objects own invariants and return decisions** (ADR ARC-7).
   Infrastructure applies those decisions through diagram-js commands, so
   undo stays with diagram-js.
-- **Mutation gate per file** (ADR TST-4; tooling arrives with #175).
+- **Mutation gate per file** (ADR TST-4; tooling not yet in place).
     - A new domain file needs a 100% Stryker score.
     - An existing file must not fall below its floor in
       `mutation-baseline.json`, and floors only go up.
@@ -89,6 +89,9 @@ diffs stay reviewable.
 ## Conventions
 
 - Tests are colocated in `__tests__/` folders next to their subjects.
+- Comments explain only **why**; names carry the what. No issue or PR
+  numbers or links in code or docs (ADR ENG-5, enforced by
+  `architecture.spec.ts`).
 - PR titles must be conventional-commit style — `feat|fix|refactor|docs|chore`
   (enforced by CI); commits follow the same pattern.
 - License is GPL-3.0-or-later — only compatible code may be ported in.

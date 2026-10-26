@@ -17,10 +17,10 @@ When a flag is justified, state the reason in the PR description.
 
 ## Where flags live
 
-- **One typed registry** of flag names, each defaulting to `false`, introduced
-  by #207. Look for `FeatureFlags` under `src/modeler/service/`.
+- **One typed registry** of flag names, each defaulting to `false`, not yet
+  introduced. Look for `FeatureFlags` under `src/modeler/service/`.
     - If it does not exist yet, this change is the first one that needs a flag:
-      implement the registry per #207 as part of it.
+      implement the registry as part of it.
     - It never goes into a `domain/` folder. Domain purity would then no longer
       keep it out of the domain.
 - **Instance-scoped.** The registry is a value in the client's injector, like

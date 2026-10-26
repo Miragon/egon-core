@@ -6,34 +6,16 @@ import { isActivity, isActor } from "../../../story/domain/elementPredicates";
 import { DomainStoryNumberingRegistry } from "./DomainStoryNumberingRegistry";
 
 /**
- * The commands that can change which shape an activity starts at — and therefore
- * whether it is a numbered story step at all.
- *
- * `connection.reconnect` covers "change type" for free: diagram-js'
- * `ReplaceShapeHandler.preExecute` re-points every attached connection through
- * `modeling.reconnectStart`/`reconnectEnd`, each of which is a nested
- * `connection.reconnect` command. `activity.directionChange` is deliberately
- * absent — `ActivityDirectionChangedHandler` computes its own number and owns
- * that transaction, as `activity.changed` owns the popup edit.
+ * `connection.reconnect` also covers "change type", whose replace re-points
+ * attached connections through nested reconnects. `activity.directionChange` is
+ * absent because its handler computes its own number.
  */
 const SOURCE_CHANGING_COMMANDS = ["connection.create", "connection.reconnect"];
 
 /**
- * Owns an activity's automatic sequence number as part of the command that
- * changes its source.
- *
- * WHY it exists: until #74 the number was minted *and* cleared inside
- * `DomainStoryRenderer.renderExternalNumber`, i.e. by a repaint. Drawing is a
- * read — a mutation the command stack never saw could not be undone, was
- * re-applied on every paint, and made "does the model change?" depend on whether
- * something happened to be rendered. Moving it into an interceptor puts the write
- * where undo can see it and leaves the renderer with nothing to do but paint
- * whatever number the model already carries.
- *
- * WHY an interceptor rather than a handler: the numbering rides along with
- * diagram-js' own `connection.create`/`connection.reconnect` handlers, which this
- * package does not own. An interceptor extends those transactions instead of
- * wrapping them.
+ * Mints and clears an activity's number inside the command that changes its
+ * source, so undo sees the write. An interceptor because the handlers it
+ * extends belong to diagram-js.
  */
 export class DomainStoryActivityNumbering extends CommandInterceptor {
     static override $inject: string[] = [
@@ -47,9 +29,8 @@ export class DomainStoryActivityNumbering extends CommandInterceptor {
     ) {
         super(eventBus);
 
-        // Snapshot only. `preExecute` is skipped on redo, so anything mutated
-        // here would make the redo path diverge from the first execute — the same
-        // constraint `ActivityChangedHandler` documents.
+        // Snapshot only: `preExecute` is skipped on redo, so a write here would
+        // make redo diverge from the first execute.
         this.preExecute(SOURCE_CHANGING_COMMANDS, (event: any) => {
             const connection: Connection = event.context.connection;
             if (isActivity(connection)) {
@@ -58,8 +39,7 @@ export class DomainStoryActivityNumbering extends CommandInterceptor {
             }
         });
 
-        // This *is* the redo path (diagram-js re-runs `execute` and re-fires
-        // `executed`, never `preExecute`), so the whole decision has to live here.
+        // Redo re-fires `executed` but never `preExecute`, so the decision lives here.
         this.executed(SOURCE_CHANGING_COMMANDS, (event: any) =>
             this.applyNumber(event.context.connection),
         );
@@ -73,12 +53,8 @@ export class DomainStoryActivityNumbering extends CommandInterceptor {
     }
 
     /**
-     * Mints a number for an actor-sourced activity that has none, and clears the
-     * number of one that no longer starts at an actor.
-     *
-     * The `== null` guard keeps an existing number: a plain move or a re-point of
-     * the *target* must not renumber a step, and an imported story must not be
-     * renumbered by being reconnected.
+     * The `== null` guard keeps an existing number: re-pointing the target or
+     * reconnecting an imported story must not renumber a step.
      */
     private applyNumber(connection?: Connection): void {
         if (!connection || !isActivity(connection)) {
@@ -88,27 +64,17 @@ export class DomainStoryActivityNumbering extends CommandInterceptor {
 
         if (isActor(connection.source)) {
             if (businessObject.number == null) {
-                // The write happens here, inside the interceptor's
-                // executed/reverted hook, so it is part of the command's
-                // transaction rather than something that leaked in ahead of it.
                 businessObject.number =
                     this.numberingRegistry.generateAutomaticNumber();
             }
             return;
         }
-        // `null`, never `undefined`: `JSON.stringify` drops `undefined`, so the
-        // key would vanish from the exported bytes, where every historical file
-        // and every fixture persists `"number": null` for an unnumbered activity.
+        // `null`, never `undefined`: the file format persists `"number": null`,
+        // and `JSON.stringify` would drop an `undefined` key.
         businessObject.number = null;
     }
 
-    /**
-     * Puts back the number the activity carried before the command.
-     *
-     * Normalized to `null` for the same format reason as {@link applyNumber}: a
-     * story hand-written without the key at all would otherwise have it deleted
-     * again by an undo, and `null` is what the previous render-time clear wrote.
-     */
+    /** Normalized to `null` for the same format reason as {@link applyNumber}. */
     private restoreNumber(
         connection: Connection | undefined,
         numberBeforeSourceChange: number | null | undefined,

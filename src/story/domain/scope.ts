@@ -1,11 +1,7 @@
 /**
- * Describes the analytical framing of a domain story: how coarse it is, whether
- * it depicts the current or a target state, and whether it includes digital
- * detail. Introduced with the EGN v4.0.0 file format so this framing is
- * persisted alongside the story instead of being lost on save.
- *
- * Ported verbatim from upstream Egon.io (wps/egon.io) to stay wire-compatible;
- * the string enum values are the exact tokens written to and read from disk.
+ * The story's framing: granularity, current vs. target state, and digital
+ * detail, persisted since EGN v4.0.0. Ported verbatim from upstream: the enum
+ * values are the exact on-disk tokens.
  */
 export interface Scope {
     granularity?: Granularity_Grain | Granularity_Goal;

@@ -24,44 +24,26 @@ import type { IconDictionaryService } from "../../../iconSet/service";
 import { defaultIcons } from "../../../icons";
 
 /**
- * The other half of `EgonClient.spec.ts`: the same public API, but wired to the
- * real `DiagramJsModelerAdapter` and `DiagramJsIconAdapter`.
+ * The public API on the real adapters. `EgonClient.spec.ts` proves routing
+ * only; this pins the behaviour hosts depend on and upstream syncs break.
  *
- * WHY it exists next to the mocked-port spec: that spec proves routing only —
- * every case asserts "the port method was called". It therefore cannot see the
- * behaviour hosts actually depend on: that `story.changed` arrives *once* and
- * only after the adapters' 100 ms debounce, that a viewport round-trips through
- * diagram-js' viewbox maths, that `alignToOrigin` really shifts elements and
- * stays undoable, or that the icon API reaches the live icon dictionary. Those
- * are the seams an upstream sync breaks silently.
- *
- * WHY browser tier (ADR TST-2): every case here reaches `canvas.addShape` via
- * `import()`, which needs `SVGSVGElement.createSVGTransform`; and viewbox maths
- * needs a real `getBBox` and a non-zero `viewbox().outer` — in jsdom the outer
- * box is `{0,0}`, so `fitToScreen()` yields NaN.
+ * Browser tier (ADR TST-2): `import()` reaches `canvas.addShape`, which needs
+ * `SVGSVGElement.createSVGTransform`, and viewbox maths needs a real `getBBox`
+ * and non-zero `viewbox().outer` (in jsdom `fitToScreen()` yields NaN).
  */
 
 /** The adapters debounce host callbacks by this much before delivering them. */
 const DEBOUNCE_MS = 100;
 
 /**
- * Waits long enough that a debounced callback *must* have been delivered.
- *
- * Real timers, not `vi.useFakeTimers()`: this tier drives a real canvas whose
- * rendering and scroll compensation are browser-scheduled, and freezing the
- * clock would stall them alongside the debounce.
+ * Real timers, not `vi.useFakeTimers()`: freezing the clock would also stall
+ * the browser-scheduled canvas rendering.
  */
 function settle(): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, DEBOUNCE_MS * 2.5));
 }
 
-/**
- * The two halves of the shared icon set, narrowed once.
- *
- * `IconSetData` marks both maps optional (icon-only callers may send just one),
- * while a document's `iconSet` and `Object.keys` want them present — so the
- * fallback lives here rather than at four call sites.
- */
+/** `IconSetData` marks both maps optional; narrow them once, not per call site. */
 const TEST_ACTOR_ICONS = TEST_ICON_SET.actors ?? {};
 const TEST_WORK_OBJECT_ICONS = TEST_ICON_SET.workObjects ?? {};
 
@@ -74,16 +56,9 @@ interface ExportedBounds {
 }
 
 /**
- * A minimal EGN v4 story, placed wherever a case needs it.
- *
- * Hand-built rather than taken from `importFixture`: the alignment cases need
- * *negative* coordinates (the shipped fixtures start at x >= 100, and
- * align-to-origin ignores adjustments below its 50 px tolerance), and explicit
- * width/height so the enclosure assertions do not depend on the element
- * factory's defaults reaching the business object.
- *
- * Its `iconSet` is TEST_ICON_SET because import loads the document's own icons,
- * and an actor whose icon is missing throws inside the renderer.
+ * Hand-built, not from `importFixture`: alignment cases need negative
+ * coordinates beyond align-to-origin's 50 px tolerance, plus explicit sizes.
+ * Carries TEST_ICON_SET because an actor with a missing icon throws on render.
  */
 function storyAt(topLeft: { x: number; y: number }): DomainStoryDocument {
     return {
@@ -121,12 +96,9 @@ function storyAt(topLeft: { x: number; y: number }): DomainStoryDocument {
 }
 
 /**
- * `storyAt`, plus an activity whose target does not exist in the file.
- *
- * That is the damage `pruneUnreferencedConnections` repairs on import: the edge
- * cannot be added (its endpoint is not in the registry), so it is dropped and
- * the story loads without it. It is also the only way to make `import.repaired`
- * fire through the public API.
+ * `storyAt` plus an activity with a missing target: the damage
+ * `pruneUnreferencedConnections` drops, and the only public way to fire
+ * `import.repaired`.
  */
 function storyWithDanglingActivity(topLeft: {
     x: number;
@@ -321,12 +293,8 @@ function exportedBounds(client: EgonClient): ExportedBounds[] {
 }
 
 /**
- * Halves the visible area while keeping the canvas' aspect ratio.
- *
- * Aspect matters: diagram-js' viewbox setter re-derives the scale as
- * `min(outer.width / box.width, outer.height / box.height)` and re-centres the
- * result, so only an aspect-preserving box round-trips unchanged. Deriving it
- * from the current viewport keeps the case independent of the container size.
+ * Keeps the aspect ratio: diagram-js re-derives the scale from the outer box
+ * and re-centres, so only an aspect-preserving box round-trips unchanged.
  */
 function halfOf(viewport: ViewportData): ViewportData {
     return {
@@ -338,13 +306,8 @@ function halfOf(viewport: ViewportData): ViewportData {
 }
 
 /**
- * Reaches the diagram's own commandStack through `additionalModules`.
- *
- * `EgonClient` exposes no undo — hosts drive it via keyboard or their own editor
- * actions — so this is the only way to prove that `alignToOrigin()`, called on
- * the public API, produced a *revertible* command rather than an in-place edit.
- * `additionalModules` is the supported extension point, so the probe rides the
- * production boot instead of a second diagram.
+ * EgonClient exposes no undo, so this commandStack probe is the only way to
+ * prove `alignToOrigin()` produced a revertible command.
  */
 function commandStackProbe(): {
     module: ModuleDeclaration;
@@ -369,13 +332,8 @@ function commandStackProbe(): {
 }
 
 /**
- * Reaches the diagram's own eventBus through `additionalModules`.
- *
- * Needed because no *public* call produces an event burst: `alignToOrigin()`
- * emits exactly one `commandStack.changed`, so it cannot tell a working
- * debounce from a broken one. Firing the raw event is the only way to prove
- * coalescing end-to-end, and it rides the production boot like the commandStack
- * probe does.
+ * No public call emits an event burst, so firing raw events on this eventBus
+ * probe is the only way to prove coalescing end-to-end.
  */
 function eventBusProbe(): {
     module: ModuleDeclaration;
@@ -505,9 +463,8 @@ describe("EgonClient on real adapters (browser)", () => {
     describe("story.changed", () => {
         it("fires once, and only after the debounce window", async () => {
             diagram = await createTestDiagram();
-            // Import runs through canvas.addShape, not the commandStack, so it
-            // raises no story.changed of its own — the align below is the only
-            // command in this case.
+            // Import uses canvas.addShape, not the commandStack, so the align
+            // below is the only command in this case.
             diagram.client.import(storyAt({ x: -400, y: -300 }));
 
             const storyChanged = vi.fn();
@@ -521,9 +478,8 @@ describe("EgonClient on real adapters (browser)", () => {
             );
             await settle();
 
-            // Still one — align raises exactly one commandStack.changed, so
-            // this pins delivery-once, not coalescing. The burst case below is
-            // what actually exercises the debounce.
+            // Align raises one commandStack.changed, so this pins
+            // delivery-once; the burst case below tests coalescing.
             expect(storyChanged).toHaveBeenCalledTimes(1);
         });
 
@@ -534,10 +490,8 @@ describe("EgonClient on real adapters (browser)", () => {
             const storyChanged = vi.fn();
             diagram.client.on("story.changed", storyChanged);
 
-            // Fired directly rather than through the public API: no public call
-            // emits more than one commandStack.changed, so a real burst is the
-            // only thing that can distinguish a debounce that coalesces from one
-            // that merely delays (the pre-#69 behaviour delivered 5).
+            // Only a burst tells a coalescing debounce from one that merely
+            // delays, and no public call emits one.
             for (let index = 0; index < 5; index++) {
                 probe.eventBus().fire("commandStack.changed", {});
             }
@@ -601,9 +555,8 @@ describe("EgonClient on real adapters (browser)", () => {
                 storyWithDanglingActivity({ x: 100, y: 100 }),
             );
 
-            // No `waitFor`: unlike the debounced events above, this one has to
-            // have arrived by the time `import()` returns, or a host cannot warn
-            // before it lets the user save the repaired story back over the file.
+            // No `waitFor`: it must arrive before `import()` returns, or a host
+            // cannot warn before the user saves the repaired story.
             expect(importRepaired).toHaveBeenCalledWith({
                 removedConnectionIds: ["connection_dangling"],
             });
@@ -1211,10 +1164,7 @@ describe("EgonClient on real adapters (browser)", () => {
     });
 
     describe("destroy", () => {
-        /**
-         * Hands teardown only the DOM node, because each case below destroys the
-         * client itself — otherwise `afterEach` would destroy it twice.
-         */
+        /** Each case destroys the client itself; `afterEach` removes only the node. */
         function ownDestroy(current: TestDiagram): TestDiagram {
             return { ...current, cleanup: () => current.container.remove() };
         }
@@ -1233,10 +1183,8 @@ describe("EgonClient on real adapters (browser)", () => {
             diagram = ownDestroy(diagram);
             client.destroy();
 
-            // `children.length === 0`, not "no .djs-container": diagram-js
-            // removes only its own node, so the adapter must take its icon
-            // `<style>` back out itself. Asserting emptiness rather than the
-            // marker keeps this case honest if the marker is ever renamed.
+            // Emptiness, not "no .djs-container": diagram-js removes only its
+            // own node, so the adapter must remove its icon `<style>` itself.
             expect(container.children.length).toBe(0);
             expect(container.querySelector("svg")).toBeNull();
 
@@ -1254,9 +1202,7 @@ describe("EgonClient on real adapters (browser)", () => {
             const storyChanged = vi.fn();
             client.on("story.changed", storyChanged);
 
-            // Destroyed inside the debounce window, with a timer already armed —
-            // the case the old teardown could not cover, because the pending
-            // timeout was closure-private and nothing could clear it.
+            // Destroyed inside the debounce window, with a timer already armed.
             diagram = ownDestroy(diagram);
             client.alignToOrigin();
             client.destroy();
@@ -1272,10 +1218,8 @@ describe("EgonClient on real adapters (browser)", () => {
             const iconsChanged = vi.fn();
             client.on("icons.changed", iconsChanged);
 
-            // `loadIcons` fires dst.config.changed unconditionally, so the timer
-            // is certainly armed. This is the case that proves EgonClient.destroy()
-            // reaches the *icon* port — whose callback would otherwise read
-            // services off the injector the modeler port has just torn down.
+            // `loadIcons` always arms the timer, so this proves destroy() reaches
+            // the icon port, whose callback would read a torn-down injector.
             diagram = ownDestroy(diagram);
             client.loadIcons(TEST_ICON_SET);
             client.destroy();

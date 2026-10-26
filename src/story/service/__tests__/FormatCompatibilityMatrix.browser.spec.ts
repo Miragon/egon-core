@@ -10,28 +10,16 @@ import {
 import type { DomainStoryDocument } from "../../domain/DomainStoryDocument";
 
 /**
- * Level-2 format compatibility matrix: every historical Egon.io export shape,
- * imported into a *real* diagram-js canvas and exported again.
- *
- * WHY this tier: `ExportFileParser.spec.ts` already pins the decode step and
- * `DomainStoryRoundTrip.spec.ts` pins open→save with the element registry
- * stubbed. Neither proves a historical file survives the trip *through the
- * canvas* — element factory defaults, group parenting, the renderer and the live
- * element registry all sit on that path. Only a browser can run it: diagram-js
- * lays out by measuring SVG with `getBBox`, which jsdom returns as zero
+ * Every historical Egon.io export shape, imported into a real diagram-js canvas
+ * and exported again. The unit specs stop short of the canvas (factory
+ * defaults, group parenting, renderer, live registry), and diagram-js measures
+ * SVG with `getBBox`, which jsdom returns as zero, so this needs a browser
  * (ADR TST-1).
  *
- * File compatibility with the WPS web app is this library's most important
- * invariant (ADR DOC-1), so the assertions are deliberately strict: converging on
- * canonical v4.0.0 is asserted for all eight rows, and each row's business
- * objects must come back byte-identical to the fixture's own modulo the
- * documented canonicalizations. A red row here is a finding, not a reason to
- * loosen an expectation. Since #65 the renderer no longer writes to the model,
- * so the per-row comparison allows no render-time drift at all — the only
- * permitted difference is {@link CANONICALIZED_AWAY}.
- *
- * `egn_cinema_story.egn.json` is excluded on purpose: it encodes a different,
- * smaller story and is already covered by `EgonClientBoot.browser.spec.ts`.
+ * File compatibility with the WPS web app is the core invariant (ADR DOC-1):
+ * each row must come back byte-identical except for {@link CANONICALIZED_AWAY}.
+ * A red row is a finding, not a reason to loosen an expectation.
+ * `egn_cinema_story.egn.json` is covered by `EgonClientBoot.browser.spec.ts`.
  */
 
 /** The ids all eight fixtures share, in the order export emits them. */
@@ -119,11 +107,8 @@ const MATRIX: readonly MatrixRow[] = [
 ];
 
 /**
- * The canonical form of a fixture's own business objects.
- *
- * Deliberately re-decodes the raw JSON instead of calling `parseExportFile`, so
- * the matrix is an independent oracle: a parser bug that `ExportFileParser.spec`
- * also missed cannot make this comparison pass vacuously.
+ * Re-decodes the raw JSON instead of calling `parseExportFile`, so a parser bug
+ * cannot make the comparison pass vacuously.
  */
 function expectedBusinessObjects(fixture: any) {
     let raw = fixture.domainStory ?? fixture.dst;
@@ -143,10 +128,7 @@ function expectedBusinessObjects(fixture: any) {
         .sort((a: any, b: any) => a.id.localeCompare(b.id));
 }
 
-/**
- * Everything that must hold for *every* row: the shape of a canonical v4.0.0
- * export, rendered from a real canvas.
- */
+/** What must hold for every row. */
 function expectCanonical(exported: any, container: HTMLElement) {
     expect(Object.keys(exported)).toEqual(["iconSet", "domainStory"]);
     expect(exported.domainStory.version).toBe("4.0.0");
@@ -170,7 +152,7 @@ function expectCanonical(exported: any, container: HTMLElement) {
     );
     expect(typeById).toEqual(CANONICAL_TYPES);
 
-    // No dangling edge survived: every endpoint resolves to a present shape.
+    // No dangling edge survived.
     const shapeIds = new Set(
         businessObjects
             .filter((bo: any) => !bo.type.startsWith("domainStory:activity"))
@@ -183,21 +165,19 @@ function expectCanonical(exported: any, container: HTMLElement) {
         expect(shapeIds.has(edge.target)).toBe(true);
     }
 
-    // BPMN moddle leftovers that 1.3.0+ files carry are stripped. Group
-    // membership persists through `parent`; only its live inverse `children`
-    // collection is diagram-js-owned and never serialized.
+    // Group membership persists through `parent`; the inverse `children` is
+    // diagram-js-owned and never serialized.
     for (const bo of businessObjects) {
         for (const key of CANONICALIZED_AWAY) {
             expect(bo, `${bo.id} must not carry ${key}`).not.toHaveProperty(
                 key,
             );
         }
-        // Nothing untyped leaked through — no {info}/{version} trailer object.
+        // No {info}/{version} trailer object leaked through.
         expect(bo.type).toBeTypeOf("string");
     }
 
-    // Locks that the element factory's 75×75 default lands in the diagram-js
-    // attrs only, never in the persisted model.
+    // The element factory's 75×75 default must stay out of the persisted model.
     expect(
         businessObjects
             .filter(
@@ -215,8 +195,7 @@ function expectCanonical(exported: any, container: HTMLElement) {
 describe("format compatibility matrix (browser)", () => {
     let diagram: TestDiagram | undefined;
 
-    // One fresh diagram per row, torn down afterwards so canvases and their DOM
-    // don't leak across the run; guarded because a failed boot leaves it unset.
+    // Guarded because a failed boot leaves `diagram` unset.
     afterEach(() => {
         diagram?.cleanup();
         diagram = undefined;
@@ -237,9 +216,8 @@ describe("format compatibility matrix (browser)", () => {
             expect(exported.domainStory.description).toBe(description);
             expect(exported.domainStory.scope).toEqual(scope);
 
-            // Per-fixture fidelity: x/y/name/pickedColor/waypoints/number all
-            // survive the canvas verbatim. Derived from the fixture, never
-            // hand-written, so a coordinate typo cannot silently pass.
+            // Derived from the fixture, never hand-written, so a coordinate
+            // typo cannot silently pass.
             expect(exported.domainStory.businessObjects).toEqual(
                 expectedBusinessObjects(importFixture<any>(file)),
             );

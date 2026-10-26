@@ -58,9 +58,8 @@ describe("sanitizeForDesktop", () => {
 });
 
 /**
- * `sanitizeForCss` turns an arbitrary icon name into a valid CSS class token.
- * The regression (issue #4): dot-containing names used to be truncated at the
- * last dot, producing selectors like `.icon-...-my.icon` that never match.
+ * Truncating at the last dot yields selectors like `.icon-...-my.icon` that
+ * never match.
  */
 describe("sanitizeForCss", () => {
     it("replaces interior dots with underscores instead of truncating", () => {

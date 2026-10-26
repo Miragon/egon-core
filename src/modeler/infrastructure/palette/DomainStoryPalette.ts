@@ -36,9 +36,8 @@ export class DomainStoryPaletteProvider implements PaletteProvider {
         palette.registerProvider(this);
 
         eventBus.on("dst.config.changed", () => {
-            // _rebuild, not _update: only _rebuild re-queries the providers for
-            // the new icon set, and it carries the guards (_diagramInitialized,
-            // providers present, lazy _init of the container) that _update skips.
+            // _rebuild, not _update: only _rebuild re-queries the providers and
+            // guards against an uninitialized palette.
             // @ts-expect-error palette is not typed correctly
             palette._rebuild();
         });
@@ -50,8 +49,6 @@ export class DomainStoryPaletteProvider implements PaletteProvider {
 
     private initPalette(): PaletteEntries {
         const actions: Record<string, PaletteEntry> = {};
-
-        // this.iconDictionaryService.initTypeDictionaries();
 
         const actorTypes = this.iconDictionaryService.getIconsAssignedAs(
             ElementTypes.ACTOR,
@@ -130,11 +127,7 @@ export class DomainStoryPaletteProvider implements PaletteProvider {
         return actions;
     }
 
-    /**
-     * `group` doubles as the key namespace: the same icon may be assigned as both
-     * an actor and a work object, so keying by name alone would let one entry
-     * overwrite the other in the flat `PaletteEntries` record.
-     */
+    /** `group` namespaces the key: an icon may be actor and work object. */
     private addCanvasObjectTypes(
         name: string,
         group: string,

@@ -22,8 +22,7 @@ export default {
         DomainStoryElementFactory,
         DomainStoryModeling,
         DomainStoryReplaceMenuProvider,
-        // provides `domainStoryNumberingRegistry`, which
-        // `DomainStoryContextPadProvider` injects.
+        // provides `domainStoryNumberingRegistry`
         DomainStoryPopup,
         DomainStoryDirtyFlagService,
         DomainStoryIconDictionaryService,

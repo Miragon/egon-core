@@ -4,10 +4,8 @@ import { ElementTypes } from "../../domain/elementTypes";
 import { BusinessObject } from "../../domain/businessObject";
 
 /**
- * The facade owns no logic — the rules and their branch matrix are pinned in
- * `src/story/domain/__tests__/importRepair.spec.ts`. This spec only proves each
- * of the four upstream-named methods routes to the rule it claims to, so a
- * mis-wired delegation cannot slip through unnoticed.
+ * The rules are pinned in the domain spec; this only proves each facade method
+ * delegates to the rule it claims to.
  */
 describe("ImportRepairService delegation", () => {
     const element = (overrides: Partial<BusinessObject> & { id: string }) =>

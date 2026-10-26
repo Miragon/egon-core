@@ -2,38 +2,24 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { extractGraph, projectFiles } from "archunit";
+import ts from "typescript";
 
 /**
- * Executable architecture tests — the enforcement half of ADRs ARC-1, ARC-2
- * and API-1 (docs/adr/architecture.md, docs/adr/public-api.md). They turn
- * the layout rules (framework-free domain layers,
- * per-feature hexagons, sibling isolation, one sanctioned composition root per
- * feature, and a frozen public API) into CI gates so regressions break the
- * build instead of rotting silently. All rules are regression locks that must
- * stay green; do not relax a rule to make CI pass — that defeats the gate.
- *
- * Two mechanisms are combined deliberately:
- * - archunit's import graph for project-internal rules (cycles, folder
- *   dependencies). A sanity test guards against the resolver silently
- *   returning an empty graph, which would make every graph rule pass
- *   vacuously.
- * - raw-source text scans for anything archunit's graph cannot see: external
- *   package imports (the graph drops them entirely under this tsconfig) and
- *   dynamic `import()` calls (no edge is produced for them).
+ * Executable layout rules (ADRs ARC-1 to ARC-5, API-1). They are regression
+ * locks: fix the code, never relax a rule. archunit's graph covers internal
+ * imports; raw-source scans cover what it drops under this tsconfig, namely
+ * package imports and dynamic `import()`.
  */
-// Vitest provides __dirname for source-relative filesystem checks.
+// Vitest injects __dirname even though this file is ESM.
 const REPO_ROOT = resolve(__dirname, "..");
 const TSCONFIG = resolve(REPO_ROOT, "tsconfig.lib.json");
 
 type Edge = Awaited<ReturnType<typeof extractGraph>>[number];
 
 /**
- * Module specifiers a file imports, drawn from every import/require form.
- * Read from source text because archunit's graph exposes neither external
- * imports nor dynamic `import()` edges. The patterns require the
- * `from`/`import`/`require` keyword next to a quoted specifier, so prose
- * mentions in comments don't match — but a commented-out import still would,
- * since the scan does no comment stripping.
+ * Each pattern needs its keyword next to a quoted specifier, so prose in
+ * comments doesn't match. A commented-out import still does: nothing strips
+ * comments.
  */
 const SPECIFIER_PATTERNS: readonly RegExp[] = [
     /\bfrom\s*["']([^"']+)["']/g, // import … from "x";  export … from "x"
@@ -48,12 +34,7 @@ function importedModules(content: string): string[] {
     );
 }
 
-/**
- * All non-test `.ts`/`.tsx` files under `src/`, as repo-relative POSIX paths.
- * `.tsx` is included so the shared UI components (`shared/infrastructure/ui/*`)
- * are visible to the raw-source scans below — otherwise a `.tsx` file could
- * import across boundaries unchecked.
- */
+/** Non-test `.ts`/`.tsx` files under `src/`, as repo-relative POSIX paths. */
 function listSourceFiles(): string[] {
     const srcRoot = resolve(REPO_ROOT, "src");
     const files: string[] = [];
@@ -81,35 +62,102 @@ function listSourceFiles(): string[] {
     return files;
 }
 
+const SKIPPED_DIRECTORIES = new Set(["node_modules", "dist", "coverage"]);
+
+/** Repo-relative paths under `roots` whose file name matches, tests included. */
+function listFilesUnder(roots: readonly string[], fileName: RegExp): string[] {
+    const files: string[] = [];
+    const walk = (repoRelativeDir: string): void => {
+        for (const entry of readdirSync(resolve(REPO_ROOT, repoRelativeDir))) {
+            const repoRelativePath = `${repoRelativeDir}/${entry}`;
+            if (statSync(resolve(REPO_ROOT, repoRelativePath)).isDirectory()) {
+                if (!SKIPPED_DIRECTORIES.has(entry)) {
+                    walk(repoRelativePath);
+                }
+            } else if (fileName.test(entry)) {
+                files.push(repoRelativePath);
+            }
+        }
+    };
+    roots.forEach(walk);
+    return files;
+}
+
+function listCommentScanFiles(): string[] {
+    return [
+        "eslint.config.mjs",
+        "playwright.config.ts",
+        "vite.config.mts",
+        ...listFilesUnder(["src", "demo", "scripts"], /\.(tsx?|mts|mjs)$/),
+    ];
+}
+
+/** `CHANGELOG.md` is exempt: Release Please writes its PR links. */
+function listDocumentationFiles(): string[] {
+    return [
+        "AGENTS.md",
+        "README.md",
+        "SYNC.md",
+        ...listFilesUnder([".agents", ".github", "docs", "src"], /\.md$/),
+    ];
+}
+
+interface SourceComment {
+    readonly line: number;
+    readonly text: string;
+}
+
+/**
+ * Parsed rather than matched by regex, so `//` inside a string or a colour
+ * literal in code is never mistaken for a comment.
+ */
+function commentsIn(repoRelativePath: string): SourceComment[] {
+    const content = readSource(repoRelativePath);
+    const sourceFile = ts.createSourceFile(
+        repoRelativePath,
+        content,
+        ts.ScriptTarget.Latest,
+        true,
+    );
+    const commentsByStart = new Map<number, SourceComment>();
+    const collect = (ranges: readonly ts.CommentRange[] | undefined): void => {
+        for (const range of ranges ?? []) {
+            commentsByStart.set(range.pos, {
+                line:
+                    sourceFile.getLineAndCharacterOfPosition(range.pos).line +
+                    1,
+                text: content.slice(range.pos, range.end),
+            });
+        }
+    };
+    const visit = (node: ts.Node): void => {
+        collect(ts.getLeadingCommentRanges(content, node.pos));
+        collect(ts.getTrailingCommentRanges(content, node.end));
+        node.getChildren(sourceFile).forEach(visit);
+    };
+    visit(sourceFile);
+    return [...commentsByStart.values()];
+}
+
 function readSource(repoRelativePath: string): string {
     return readFileSync(resolve(REPO_ROOT, repoRelativePath), "utf8");
 }
 
-/**
- * Every `domain/` layer is innermost, wherever it lives: the per-feature
- * domain folders (`src/modeler/domain/…`, `src/story/domain/…`,
- * `src/labelDictionary/domain/…`, `src/iconSet/domain/…`).
- */
 function isDomainFile(repoRelativePath: string): boolean {
     return repoRelativePath.includes("/domain/");
 }
 
-/** A file living in some feature's `service/` layer (`src/<F>/service/…`). */
 function isServiceFile(repoRelativePath: string): boolean {
     return /^src\/[^/]+\/service\//.test(repoRelativePath);
 }
 
-/** The owning feature of a source file: the first path segment under `src/`. */
 function featureOf(repoRelativePath: string): string {
     return repoRelativePath.split("/")[1] ?? "";
 }
 
 /**
- * Resolves a relative import `specifier` written in `fromFile` to a normalized
- * repo-relative `src/…` path (with any trailing `/index` stripped, so a barrel
- * import and its explicit-`/index` form compare equal). Returns `null` for
- * package/platform specifiers — those are out of scope for the boundary scans
- * and handled by the domain-purity and framework rules instead.
+ * Strips a trailing `/index` so both barrel spellings compare equal. Package
+ * specifiers return `null`: rules C and D cover them, not the boundary scans.
  */
 function resolveSpecifier(fromFile: string, specifier: string): string | null {
     if (!specifier.startsWith(".")) {
@@ -131,24 +179,14 @@ function resolveSpecifier(fromFile: string, specifier: string): string | null {
     return resolved.join("/").replace(/\/index$/, "");
 }
 
-/**
- * The only service-layer files allowed to reference infrastructure: each is a
- * feature's composition root, wiring adapters that implement domain ports. Any
- * other service file reaching into infrastructure is a hexagon violation.
- */
+/** Composition roots: the only service files that may wire adapters. */
 const COMPOSITION_ROOT_ALLOWLIST: readonly string[] = [
     "src/modeler/service/EgonClient.ts", // dynamic import() of the diagram-js adapters
     "src/iconSet/service/index.ts", // wires IconCssInjector (IconStyleSheetPort)
     "src/story/service/importModule.ts", // wires VersionBoxBanner (VersionBannerPort)
 ];
 
-/**
- * Feature roots that own a bounded context (or, for `shared`, the shared
- * kernel). Sibling isolation (rule F) is checked for files living under these;
- * `src/index.ts`, `src/types`, and `src/assets` are not origins — they are the
- * package barrel and shared-kernel leaves, governed by rules G and F's target
- * allowances respectively.
- */
+/** Origins for rule F. `src/index.ts`, `types` and `assets` are not origins. */
 const FEATURE_ROOTS: readonly string[] = [
     "modeler",
     "story",
@@ -157,12 +195,7 @@ const FEATURE_ROOTS: readonly string[] = [
     "shared",
 ];
 
-/**
- * The frozen public surface. `src/index.ts` may import exactly these specifiers
- * (rule G1) and re-export exactly these runtime values (rule G2). Changing the
- * public API is a deliberate act that must update this list and ADR API-1, not an
- * accident that slips through review.
- */
+/** Rules G1, G2. Changing the public API means editing these and ADR API-1. */
 const FROZEN_INDEX_SPECIFIERS: readonly string[] = [
     "./iconSet/domain/IconTypes",
     "./labelDictionary/domain/LabelDictionary",
@@ -196,11 +229,8 @@ const FROZEN_ICONS_SPECIFIERS: readonly string[] = [
 const FROZEN_ICONS_RUNTIME_EXPORTS: readonly string[] = ["defaultIcons"];
 
 /**
- * Column-0 declarations that introduce mutable state at module scope (rule H).
- * Class members are indented, so anchoring at `^` (no leading whitespace)
- * restricts the scan to true module-level bindings. Non-empty literal config
- * (`DEFAULT_COLOR`, `NULL_DIMENSIONS`, didi module descriptors, `export const`
- * arrow functions) does not match, so those stay legal.
+ * Anchored at column 0 because class members are indented. Non-empty literal
+ * config and `export const` arrow functions deliberately don't match.
  */
 const MODULE_STATE_PATTERNS: readonly RegExp[] = [
     /^(?:export\s+)?(?:let|var)\s/, // reassignable binding
@@ -208,17 +238,12 @@ const MODULE_STATE_PATTERNS: readonly RegExp[] = [
     /^(?:export\s+)?const\s+[\w$]+(?:\s*:[^=]+)?\s*=\s*\[\s*\]/, // empty-array accumulator
 ];
 
-/**
- * Files permitted to hold module-level mutable state. Empty by design (rule H):
- * adding an entry is a deliberate, reviewed exception — never an accident.
- */
+/** Empty by design: any entry is a reviewed exception to rule H. */
 const MODULE_STATE_ALLOWLIST: readonly string[] = [];
 
 /**
- * Production infrastructure files that directly import the central element
- * predicates. This is a frozen baseline, not an endorsement of every entry:
- * ADR ARC-3 requires the list to shrink as policy leaves adapters. New entries
- * are forbidden even for otherwise legitimate type-dispatch adapters.
+ * A frozen baseline, not an endorsement: ADR ARC-3 requires it to shrink as
+ * policy leaves adapters, and forbids new entries.
  */
 const INFRASTRUCTURE_PREDICATE_IMPORT_ALLOWLIST: readonly string[] = [
     "src/modeler/infrastructure/context-pad/DomainStoryContextPadProvider.ts",
@@ -236,41 +261,23 @@ const INFRASTRUCTURE_PREDICATE_IMPORT_ALLOWLIST: readonly string[] = [
 ];
 
 /**
- * Writes a renderer may not perform (rule I / ADR ARC-4), in the two shapes the
- * historical ones actually took.
- *
- * 1. A direct assignment through `businessObject`/`semantic` — the local name
- *    every removed write used (`shape.businessObject.type = type`,
- *    `semantic.number = null`). `=(?!=)` keeps `==`/`===` out; `!==`/`>=`/`<=`
- *    cannot match because their leading character is not an accepted operator.
- * 2. `assign(` whose **first** argument is not an object or array literal.
- *    min-dash writes into that argument, which is how `drawAnnotation` stamped a
- *    height onto the element and its business object. The whitespace lives
- *    *inside* the lookaheads on purpose: with `\s*` before them the engine simply
- *    backtracks off the spaces and every call matches. The second lookahead
- *    tolerates the Prettier-wrapped `assign(\n    { … }` form, whose argument the
- *    scan sees because it joins each line with the next.
- *
- * Syntactic and therefore conservative: an alias (`const bo = element.businessObject`)
- * would slip past. This is a ratchet against the regression, not a proof of
- * purity — `RendererModelPurity.browser.spec.ts` repaints and diffs for that.
+ * Rule I write shapes:
+ * 1. An assignment through `businessObject`/`semantic`.
+ * 2. `assign(` whose first argument is not a literal: min-dash mutates it.
+ *    The `\s*` sits inside the lookaheads: before them, the engine backtracks
+ *    off the spaces and every call matches. `(?!\s*$)` leaves a
+ *    Prettier-wrapped `assign(` to the joined-line check in rule I.
  */
 const RENDERER_WRITE_PATTERNS: readonly RegExp[] = [
     /\b(?:businessObject|semantic)(?:\.\w+|\[[^\]]*\])+\s*(?:\+|-|\*|\/|\?\?|\|\||&&)?=(?!=)/,
     /\bassign\((?!\s*[{[])(?!\s*$)/,
 ];
 
-/** A file under some feature's `renderer/` folder (not `text-renderer/`). */
+/** Matches `renderer/` folders but not `text-renderer/`. */
 function isRendererFile(repoRelativePath: string): boolean {
     return /(^|\/)renderer\//.test(repoRelativePath);
 }
 
-/**
- * Direct production infrastructure importers of elementPredicates. Reuses the
- * same source enumeration, import-form scan, and relative resolver as the other
- * raw-source architecture rules, so static imports, re-exports, dynamic imports,
- * and require calls all count.
- */
 function infrastructurePredicateImporters(): string[] {
     const predicateModule = "src/story/domain/elementPredicates";
     return listSourceFiles()
@@ -287,19 +294,15 @@ function infrastructurePredicateImporters(): string[] {
 describe("architecture", () => {
     let edges: Edge[] = [];
 
-    // archunit builds the TS import graph on first use and caches it by
-    // tsconfig path; warming it here keeps every rule below fast and gives the
-    // cold build a generous timeout instead of tripping the per-test default.
+    // archunit caches the graph per tsconfig; building it here gives the cold
+    // build a long timeout instead of the per-test default.
     beforeAll(async () => {
         edges = await extractGraph(TSCONFIG);
     }, 60_000);
 
-    // ─── A. Graph sanity ─────────────────────────────────────────────────────
-    //
-    // If the resolver fails (wrong tsconfig path, moduleResolution quirks — see
-    // ADR ARC-2), it degrades to an edge-less graph and every dependency rule
-    // below passes without checking anything. Assert real cross-file edges
-    // exist so that failure mode is loud.
+    // ─── A. Graph sanity (ADR ARC-2) ────────────────────────────────────────
+    // A failing resolver yields an edge-less graph, and every graph rule below
+    // would then pass vacuously.
     describe("graph sanity", () => {
         it("resolves cross-file dependencies", () => {
             const crossFileEdges = edges.filter(
@@ -309,7 +312,7 @@ describe("architecture", () => {
         });
     });
 
-    // ─── B. No import cycles ─────────────────────────────────────────────────
+    // ─── B. No import cycles (ADR ARC-1) ────────────────────────────────────
     describe("no cycles", () => {
         it("the source tree is free of import cycles", async () => {
             const violations = await projectFiles(TSCONFIG)
@@ -321,12 +324,8 @@ describe("architecture", () => {
         });
     });
 
-    // ─── C. Domain purity ────────────────────────────────────────────────────
-    //
-    // The domain model stays clean of dependencies: no framework, no platform,
-    // no outer layer. External access goes through ports (e.g.
-    // `ElementRegistryPort`), implemented by the outer layers and injected at
-    // runtime.
+    // ─── C. Domain purity (ADR ARC-1) ───────────────────────────────────────
+    // Framework access goes through ports in `domain/`, implemented outside.
     describe("domain purity", () => {
         it("domain layers import only relative modules", () => {
             const offenders = listSourceFiles()
@@ -361,15 +360,9 @@ describe("architecture", () => {
         });
     });
 
-    // ─── D. Modeler service is framework-free ────────────────────────────────
-    //
-    // Unlike story/labelDictionary (whose services are didi-registered diagram-js
-    // services by nature), the modeler service layer is the pure use-case surface
-    // behind EgonClient and must name no framework module. The single exception
-    // is the type-only `didi` surface of `EgonClientConfig.additionalModules` in
-    // the composition root. (Service→infrastructure layering is enforced for
-    // every feature by rule E below; this rule only adds the framework ban, and
-    // only for modeler — see ADR ARC-1.)
+    // ─── D. Modeler service is framework-free (ADR ARC-1) ───────────────────
+    // Only modeler: story and labelDictionary services are diagram-js services
+    // by nature; modeler's is the pure use-case surface behind EgonClient.
     describe("modeler service is framework-free", () => {
         it("service imports no framework module except didi types in the composition root", () => {
             const offenders = listSourceFiles()
@@ -390,15 +383,10 @@ describe("architecture", () => {
         });
     });
 
-    // ─── E. Generalized hexagon (every feature) ──────────────────────────────
-    //
-    // Each feature is a ports-and-adapters context: its `service` layer reaches
-    // the outside world only through `domain/ports`, and `infrastructure`
-    // implements them. Only a feature's composition root may wire adapters — the
-    // COMPOSITION_ROOT_ALLOWLIST. This subsumes the former modeler-only
-    // service→infra rules and applies them to story/iconSet/labelDictionary too.
+    // ─── E. Generalized hexagon (ADR ARC-1) ─────────────────────────────────
+    // Services reach the outside only through `domain/ports`; only composition
+    // roots wire the adapters.
     describe("generalized hexagon", () => {
-        // E1 (graph): static service→infrastructure edges, allowlist aside.
         it("no service layer statically depends on infrastructure outside its composition root", () => {
             const offenders = edges
                 .filter(
@@ -413,10 +401,8 @@ describe("architecture", () => {
             expect(offenders).toEqual([]);
         });
 
-        // E2 (raw scan): the graph produces no edge for a dynamic `import()`, so
-        // a service file adopting the composition root's `import()` trick would
-        // slip past E1 — this text scan closes that hole for every feature. The
-        // allowlist keeps the sanctioned dynamic import in EgonClient legal.
+        // Raw scan: a dynamic `import()` produces no graph edge, so it would
+        // slip past the graph rule above.
         it("no service file outside a composition root names an infrastructure specifier", () => {
             const offenders = listSourceFiles()
                 .filter(
@@ -435,17 +421,9 @@ describe("architecture", () => {
         });
     });
 
-    // ─── F. Sibling isolation ────────────────────────────────────────────────
-    //
-    // A feature's public surface is its `domain/**` (pure by rule C) plus its
-    // `service` barrel — nothing else. So any relative import that leaves the
-    // owning feature must target another feature's `domain/**` or exactly its
-    // `service` barrel, the `shared/domain` kernel (from any layer), or
-    // `shared/infrastructure`/`assets`/`types` (from an infrastructure file
-    // only). Reaching into a sibling's `service/<file>` or `infrastructure/`, or
-    // importing the package barrel `src/index`, is forbidden. A raw scan (not the
-    // archunit graph) so re-export/default-import edge semantics can't hide a
-    // deep import.
+    // ─── F. Sibling isolation (ADR ARC-1) ───────────────────────────────────
+    // A feature's public surface is its `domain/**` plus its `service` barrel.
+    // A raw scan, so archunit's re-export edges can't hide a deep import.
     describe("sibling isolation", () => {
         it("features import siblings only via domain or the service barrel", () => {
             const offenders = listSourceFiles()
@@ -477,16 +455,12 @@ describe("architecture", () => {
         });
     });
 
-    // ─── G. Public surface freeze ────────────────────────────────────────────
-    //
-    // `src/index.ts` remains the client entry frozen by ADR API-1. ADR ICO-5 adds
-    // one narrow, data-only `src/icons.ts` entry without making the client entry
-    // depend on its artwork. Widening either surface must be a deliberate edit
-    // to the frozen lists here, never an accident.
+    // ─── G. Public surface freeze (ADRs API-1, ICO-5) ───────────────────────
+    // Widening `src/index.ts` or `src/icons.ts` must be a deliberate edit to
+    // the frozen lists.
     describe("public surface freeze", () => {
-        // G1: the barrel imports exactly the frozen specifiers, and never an
-        // infrastructure path (which would pull a didi default module into the
-        // package entry and defeat EgonClient's lazy adapter loading).
+        // G1: an infrastructure path would pull a didi module into the package
+        // entry and defeat EgonClient's lazy adapter loading.
         it("imports exactly the frozen specifiers with no infrastructure path", () => {
             const specifiers = [
                 ...new Set(importedModules(readSource("src/index.ts"))),
@@ -499,8 +473,7 @@ describe("architecture", () => {
             ).toEqual([]);
         });
 
-        // G2: the runtime (value) exports are exactly EgonClient and the four
-        // scope enums — every other export is a type, erased at build time.
+        // G2: every other export is a type, erased at build time.
         it("re-exports exactly the frozen runtime values", async () => {
             const module = await import("./index");
             const runtimeExports = Object.keys(module)
@@ -578,8 +551,6 @@ describe("architecture", () => {
             ).toEqual([]);
         });
 
-        // G3: the package manifest exposes only the client entry, optional icon
-        // data, stylesheet and its own manifest, and ships only `dist`.
         it("package.json exports and files stay locked to public entries", () => {
             const packageJson = JSON.parse(readSource("package.json"));
             expect(Object.keys(packageJson.exports).sort()).toEqual([
@@ -592,16 +563,9 @@ describe("architecture", () => {
         });
     });
 
-    // ─── H. No module-level mutable state ────────────────────────────────────
-    //
-    // Multi-instance safety (issue #12, AGENTS.md): mutable state must live on
-    // didi-instantiated classes so each EgonClient injector owns its own copy —
-    // module scope is for pure functions and frozen config only. A shared
-    // module-level binding cross-contaminates two clients on one page (e.g. one
-    // custom-icon pool for both). Upstream WPS free-function state must be
-    // converted into an injected service (see DomainStoryIdFactory). A raw
-    // line scan, because the mutation is invisible to archunit's import graph;
-    // only column-0 declarations count, since class members are indented.
+    // ─── H. No module-level mutable state (ADR ARC-5) ───────────────────────
+    // Module state would be shared by every EgonClient on a page. A raw line
+    // scan, because archunit's graph cannot see state.
     describe("no module-level mutable state", () => {
         it("declares no reassignable or stateful binding at module scope", () => {
             const offenders = listSourceFiles()
@@ -625,21 +589,11 @@ describe("architecture", () => {
         });
     });
 
-    // ─── I. Rendering is read-only ───────────────────────────────────────────
-    //
-    // ADR ARC-4: drawing must not change the model. A repaint is not a user
-    // action, runs an unbounded number of times, and for an imported story the
-    // canvas *shares* the business objects with the file — so a write on the draw
-    // path is silent, unbounded corruption of the persisted format (#65: an
-    // activity's start point crept 5px per open; #74: five more writes). Every
-    // mutation belongs to a command handler, an import repair, or the export
-    // pass — somewhere undo can see it.
-    //
-    // A raw line scan, because archunit's graph sees imports, not assignments.
-    // Deliberately syntactic and therefore conservative: it catches the shapes
-    // the historical writes actually took, not every conceivable aliasing route.
-    // It is a ratchet against regression, not a proof of purity — the real proof
-    // is `RendererModelPurity.browser.spec.ts`, which repaints and diffs.
+    // ─── I. Rendering is read-only (ADR ARC-4) ──────────────────────────────
+    // Repaints run unboundedly and share business objects with the file, so a
+    // draw-path write silently corrupts saved stories. A raw line scan, because
+    // archunit sees imports, not assignments. Syntactic, so an alias slips
+    // past: `RendererModelPurity.browser.spec.ts` is the real proof.
     describe("rendering is read-only", () => {
         it("no renderer file writes to a business object or an element", () => {
             const offenders = listSourceFiles()
@@ -656,11 +610,9 @@ describe("architecture", () => {
                         if (writes(line)) {
                             return [offence];
                         }
-                        // Only now consider the line joined with the next, so a
-                        // Prettier-wrapped statement is still seen — and skip it
-                        // when the next line is the one that really offends, or
-                        // every write would also be reported against its
-                        // innocent predecessor.
+                        // Join with the next line to catch Prettier-wrapped
+                        // writes, unless the next line offends on its own and
+                        // would be reported twice.
                         return writes(`${line} ${nextLine}`) &&
                             !writes(nextLine)
                             ? [offence]
@@ -675,16 +627,9 @@ describe("architecture", () => {
         });
     });
 
-    // ─── J. Infrastructure predicate-import ratchet ─────────────────────────
-    //
-    // ADR ARC-3: direct dependencies on the central element predicates expose
-    // places where adapters may be making notation decisions. The baseline is
-    // frozen and may only shrink through review. Keep the two directions
-    // separate so a new importer and a stale exception produce precise failures.
-    //
-    // This caps direct imports only. It cannot prove that an existing adapter
-    // contains no policy, or detect an equivalent decision hidden behind another
-    // helper. The conditional audit and ordinary review cover those limits.
+    // ─── J. Infrastructure predicate-import ratchet (ADR ARC-3) ─────────────
+    // A predicate import marks an adapter that may make notation decisions.
+    // Two tests, so a new importer and a stale entry fail separately.
     describe("infrastructure predicate-import ratchet", () => {
         it("rejects infrastructure importers outside the frozen allowlist", () => {
             const importers = infrastructurePredicateImporters();
@@ -713,16 +658,45 @@ describe("architecture", () => {
             ).toEqual([]);
         });
     });
+
+    // ─── K. Comments carry no issue or PR references (ADR ENG-5) ────────────
+    // `#` plus up to five digits, so six-digit colours and `&#…;` entities pass.
+    describe("comments carry no issue or PR references", () => {
+        const ticketReference =
+            /(?<!&)#\d{1,5}\b|github\.com\/[^\s/]+\/[^\s/]+\/(?:issues|pull)\//;
+
+        it("no code comment cites an issue or pull request", () => {
+            const offenders = listCommentScanFiles().flatMap((file) =>
+                commentsIn(file)
+                    .filter((comment) => ticketReference.test(comment.text))
+                    .map((comment) => `${file}:${comment.line}`),
+            );
+            expect(
+                offenders,
+                `comments explain why, not which ticket; git history links ` +
+                    `the PR (ADR ENG-5)`,
+            ).toEqual([]);
+        });
+
+        it("no documentation file cites an issue or pull request", () => {
+            const offenders = listDocumentationFiles().flatMap((file) =>
+                readSource(file)
+                    .split("\n")
+                    .flatMap((line, index) =>
+                        ticketReference.test(line)
+                            ? [`${file}:${index + 1}`]
+                            : [],
+                    ),
+            );
+            expect(
+                offenders,
+                `state the substance instead of the ticket (ADR ENG-5)`,
+            ).toEqual([]);
+        });
+    });
 });
 
-/**
- * Whether a cross-feature import `target` (already resolved to a `src/…` path)
- * is a legal reach into another feature or the shared kernel. Encodes rule F's
- * allowances: another feature's `domain/**` or exactly its `service` barrel are
- * open to anyone; the `shared/domain` kernel is open to any layer; and
- * `shared/infrastructure`/`assets`/`types` are open only to infrastructure
- * files. The package barrel `src/index` is never a legal internal target.
- */
+/** Rule F targets. Shared infrastructure leaves are for infrastructure only. */
 function isAllowedCrossFeatureTarget(
     target: string,
     fromInfrastructure: boolean,

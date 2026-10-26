@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Dictionary, Entry } from "../dictionary";
 
-/**
- * `Dictionary<T>` is the uniquely-keyed store behind icon sets and the label
- * dictionary. These cases pin the contract the callers now depend on: writes
- * never overwrite, `get()` throws on a miss (so a missing icon can't render as
- * nothing), `find()` stays lenient, and record conversion drops empty values.
- */
 describe("Dictionary", () => {
     it("starts empty", () => {
         const dictionary = new Dictionary<string>();

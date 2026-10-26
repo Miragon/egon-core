@@ -1,21 +1,9 @@
 import { ElementTypes } from "./elementTypes";
 
 /**
- * Structural classification predicates for Domain Storytelling elements.
- *
- * WHY: which family an element belongs to (actor, work object, activity, …) is
- * domain knowledge that the notation grammar and ~15 call sites all need. It
- * used to be re-derived ad hoc via `.includes(...)`, `=== ElementTypes.X`, and
- * raw regex; centralizing it here makes `elementTypes.ts` the single source of
- * type checks and keeps the rules pure (no diagram-js, no DOM).
- *
- * The predicates match on the type prefix because actor/work-object types carry
- * the icon name as a suffix (e.g. `domainStory:actorPerson`). `startsWith` is
- * the exact equivalent of the former anchored regexes (their trailing `\w*` was
- * vacuous) and is strictly safer than `.includes`, which could match the prefix
- * mid-string. All take structural parameters so a diagram-js `Element` — whose
- * `Record<string, any>` index signature satisfies them — can be passed without a
- * cast, accept `null`/`undefined`, and return a strict `boolean`.
+ * Element-family predicates. They match the type prefix because actor and
+ * work-object types carry the icon name as a suffix
+ * (`domainStory:actorPerson`).
  */
 
 /** The namespace every Domain Storytelling type shares; no enum member owns it. */
@@ -25,12 +13,8 @@ const DOMAIN_STORY_PREFIX = "domainStory:";
 const IMPLICIT_ROOT_PREFIX = "__implicitroot";
 
 /**
- * The structural shape these predicates read. Two members by design: the plain
- * `{ type?; id? }` accepts strict domain objects (`CanvasObject`, business
- * objects, test literals), while the index-signatured member accepts a diagram-js
- * `Element` — whose own `Record<string, any>` index signature would otherwise
- * trip TypeScript's weak-type check against an all-optional type. Together they
- * take everything the call sites pass without a cast.
+ * Two members: the index-signatured one accepts a diagram-js `Element`, whose
+ * `Record<string, any>` would otherwise trip TypeScript's weak-type check.
  */
 type TypedElement =
     | { type?: string; id?: string }
@@ -67,9 +51,7 @@ export function isGroup(element: TypedElement): boolean {
 }
 
 /**
- * The canvas background is the diagram-js implicit root, identified by its id
- * rather than a `domainStory:*` type — nothing may connect to or be created
- * "on" it except via the group/background allowances in the grammar.
+ * The background is diagram-js' implicit root, identified by id, not by type.
  */
 export function isBackground(element: TypedElement): boolean {
     return element?.id?.startsWith(IMPLICIT_ROOT_PREFIX) ?? false;

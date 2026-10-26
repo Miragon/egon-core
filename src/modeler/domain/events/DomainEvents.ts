@@ -3,10 +3,7 @@ import { IconSet } from "../../../iconSet/domain/IconTypes";
 import type { LabelDictionary } from "../../../labelDictionary/domain/LabelDictionary";
 import type { ReplayState } from "../../../story/domain/replay";
 
-/**
- * Domain events emitted by the modeler.
- * These are internal events that get mapped to user-friendly event names.
- */
+/** Internal modeler events; EgonClient maps them to public event names. */
 export interface StoryChangedEvent {
     readonly type: "StoryChanged";
 }

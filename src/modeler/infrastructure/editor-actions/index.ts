@@ -9,14 +9,9 @@ import DomainStoryModeling from "../modeling";
 import { DomainStoryEditorActions } from "./DomainStoryEditorActions";
 
 export default {
-    // One entry per token in `DomainStoryEditorActions.$inject`, except
-    // `canvas`/`elementRegistry`, which diagram-js' core always provides. Without
-    // them this module only resolved because `plugin.ts` happened to list the
-    // same features; a host composing it alone got a didi "No provider" throw.
-    //
-    // `DomainStoryModeling` is here for `SpaceTool`, not for the actions class:
-    // diagram-js' space-tool injects `modeling` but leaves it to the host to
-    // provide, so the module that pulls space-tool in has to supply it.
+    // One entry per `DomainStoryEditorActions.$inject` token not in diagram-js
+    // core. `DomainStoryModeling` is for `SpaceTool`, which injects `modeling`
+    // but leaves it to the host.
     __depends__: [
         EditorActionsModule,
         SelectionModule,

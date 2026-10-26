@@ -10,23 +10,15 @@ import type { ElementRegistryService } from "../../../../service/ElementRegistry
 import { DomainStoryNumberingRegistry } from "../../../popup/DomainStoryNumberingRegistry";
 
 /**
- * `activity.changed` as one transaction (issue #68): the handler owns the edit,
- * the renumbering cascade and the multiple-number flags, so all three survive
- * undo *and* redo.
- *
- * WHY a real `DomainStoryNumberingRegistry` instead of a mock: the cascade is
- * the thing under test. A mocked registry would only prove the handler calls a
- * method — the defects this spec locks (a snapshot taken after the edit, a redo
- * that skips the cascade, an aliased flag snapshot) all live in the interaction
- * between the two. No canvas is involved, so this stays unit tier (ADR TST-2).
+ * A real `DomainStoryNumberingRegistry`, not a mock: the cascade between handler
+ * and registry is what is under test. No canvas, so unit tier (ADR TST-2).
  */
 const activity = (
     id: string,
     number: number | undefined,
     name = "",
-    // Only the *source's* type matters: an activity is a numbered story step
-    // exactly when it starts at an actor. Left undefined by default, so a case
-    // that says nothing about the source gets no automatic re-mint.
+    // An activity is a numbered step only when its source is an actor; undefined
+    // by default so nothing re-mints a number.
     source?: { type: string },
 ) => ({
     id,
@@ -37,11 +29,7 @@ const activity = (
 /** A source shape that makes its activity a numbered story step. */
 const ACTOR_SOURCE = { type: "domainStory:actorPerson" };
 
-/**
- * The element registry stub re-sorts on every call, exactly as the real
- * `activitiesFromActors` does, so the handler sees the story order it would see
- * on a live canvas.
- */
+/** The stub re-sorts on every call, like the real `activitiesFromActors`. */
 function makeSut(activitiesFromActors: ReturnType<typeof activity>[]) {
     const eventBus = { fire: vi.fn() } as unknown as EventBus;
     const elementRegistryService = {
@@ -87,9 +75,6 @@ const numbersOf = (activities: ReturnType<typeof activity>[]) =>
 
 describe("ActivityChangedHandler", () => {
     describe("preExecute", () => {
-        // T3.1 — the headline bug: the popup used to write the new number onto
-        // the business object before executing, so the snapshot recorded the
-        // *new* number and undo left the edited activity where the edit put it.
         it("snapshots the number the activity had before the edit", () => {
             const edited = activity("a3", 3);
             const { handler } = makeSut([activity("a1", 1), edited]);
@@ -103,8 +88,6 @@ describe("ActivityChangedHandler", () => {
             expect(context.oldNumber).toBe(3);
         });
 
-        // T3.2 — no nested `modeling.updateLabel`/`updateNumber` any more; those
-        // pushed their own actions and gave their reverts the last word.
         it("leaves the model untouched", () => {
             const edited = activity("a3", 3, "old label");
             const { handler } = makeSut([edited]);
@@ -119,7 +102,6 @@ describe("ActivityChangedHandler", () => {
     });
 
     describe("execute", () => {
-        // T3.3
         it("claims the number and moves the other activities out of the way", () => {
             const first = activity("a1", 1);
             const second = activity("a2", 2);
@@ -137,9 +119,7 @@ describe("ActivityChangedHandler", () => {
             expect(edited.businessObject.name).toBe("third");
         });
 
-        // T3.4 — defect 2's lock. diagram-js' redo re-runs `execute` alone, so a
-        // cascade living outside it (as it did in the popup) is not re-applied
-        // and the duplicate numbers come back.
+        // diagram-js' redo re-runs `execute` alone, so the cascade must live there.
         it("re-applies the whole cascade on redo", () => {
             const first = activity("a1", 1);
             const second = activity("a2", 2);
@@ -163,7 +143,6 @@ describe("ActivityChangedHandler", () => {
             );
         });
 
-        // T3.5 — the flag snapshot must survive being restored and re-cascaded.
         it("returns the registry flags to their pre-edit values across undo→redo→undo", () => {
             const first = activity("a1", 1);
             const edited = activity("a2", 2);
@@ -184,9 +163,7 @@ describe("ActivityChangedHandler", () => {
             expect(numberingRegistry.isNumberMultiple(2)).toBe(false);
         });
 
-        // T3.6 — `PopupMenu` reports an empty number field as 0 and the popup
-        // maps it to undefined; cascading from a falsy number would walk the
-        // registry from its sentinel slot.
+        // A cascade from a falsy number would start at the sentinel slot.
         it("runs no cascade when the edit carries no number", () => {
             const first = activity("a1", 1);
             const edited = activity("a2", 2);
@@ -198,21 +175,14 @@ describe("ActivityChangedHandler", () => {
             handler.execute!(context);
 
             expect(first.businessObject.number).toBe(1);
-            // `null`, not `undefined` (#74): `JSON.stringify` drops `undefined`,
-            // so the key would disappear from the exported bytes, where every
-            // historical file writes `"number": null` for an unnumbered activity.
-            // This activity has no actor source, so nothing re-mints one.
+            // `null`, not `undefined`: `JSON.stringify` drops `undefined`, and
+            // every file writes `"number": null` for an unnumbered activity.
             expect(edited.businessObject.number).toBeNull();
             expect(numberingRegistry.snapshotMultipleNumberRegistry()).toEqual(
                 before,
             );
         });
 
-        // T3.7 — until #74 the repaint that followed this command found
-        // `number == null` and minted one in `renderExternalNumber`. Drawing is a
-        // read now, so the transaction that clears the number has to be the one
-        // that replaces it, or clearing the field would drop the step out of the
-        // sequence entirely.
         it("re-mints a number when an actor-sourced activity's field is cleared", () => {
             const first = activity("a1", 1, "", ACTOR_SOURCE);
             const third = activity("a3", 3, "", ACTOR_SOURCE);
@@ -223,10 +193,8 @@ describe("ActivityChangedHandler", () => {
             handler.preExecute!(context);
             handler.execute!(context);
 
-            // The lowest free number, and *not* the one just cleared: clearing
-            // frees 2, so 2 is what the mint hands back — proof it read a
-            // registry the clear had already been applied to, rather than
-            // colliding with the activity's own stale number.
+            // Clearing frees 2, so getting 2 back proves the mint read the
+            // registry after the clear.
             expect(edited.businessObject.number).toBe(2);
             expect(numbersOf([first, third])).toEqual([1, 3]);
 
@@ -256,7 +224,6 @@ describe("ActivityChangedHandler", () => {
     });
 
     describe("revert", () => {
-        // T3.7
         it("restores the edited activity's own number, label and allowance", () => {
             const first = activity("a1", 1);
             const second = activity("a2", 2);
@@ -408,8 +375,7 @@ describe("ActivityDirectionChangedHandler", () => {
             expect(element.businessObject.waypoints).not.toBe(
                 element.waypoints,
             );
-            // Reversal must not mutate the array or nested docking points that
-            // the command captured for undo.
+            // The undo snapshot must survive reversal unmutated.
             expect(originalArray).toEqual(originalGeometry);
             expect(originalArray).toEqual(originalPoints);
             const liveWaypoints = element.waypoints as TestWaypoint[];

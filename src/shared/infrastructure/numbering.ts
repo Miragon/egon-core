@@ -10,9 +10,9 @@ export interface Box {
 }
 
 /**
- * Defines the box for an activity's number, from the waypoints the activity is
- * *drawn* with — not the element's own since #65: the start point is nudged
- * clear of the source's label on a copy, and the number must follow the line.
+ * Takes the waypoints the activity is drawn with, not the element's own: the
+ * start point is nudged clear of the source's label, and the number must follow
+ * the line.
  */
 export function numberBoxDefinitions(waypoints: Point[]): Box {
     const alignment = "center";
@@ -21,13 +21,7 @@ export function numberBoxDefinitions(waypoints: Point[]): Box {
     let angle = 0;
 
     if (waypoints.length > 1) {
-        angle =
-            angleBetween(
-                // Start of a first arrow segment
-                waypoints[0],
-                // End of a first arrow segment
-                waypoints[1],
-            ) ?? 0;
+        angle = angleBetween(waypoints[0], waypoints[1]) ?? 0;
     }
     let x = waypoints[0].x;
     let y = waypoints[0].y;

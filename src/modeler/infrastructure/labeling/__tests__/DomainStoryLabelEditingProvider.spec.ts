@@ -6,27 +6,14 @@ import { DomainStoryLabelEditingProvider } from "../DomainStoryLabelEditingProvi
 import { ElementTypes } from "../../../../story/domain/elementTypes";
 
 /**
- * Regression lock for issue #7 (upstream wps/egon.io@e62bd235): `update()` must
- * hand the edited label to the model verbatim. It previously ran every label
- * through `sanitizeTextForSVGExport`, mangling user input on canvas
- * ("--" → "––"). SVG-safety is an export-time concern, not a model concern.
- *
- * Also covers the dblclick handler's one job for an activity: close the inline
- * editing box again, because an activity is edited through the numbering popup.
- * It used to stash the number here for the renderer to read back on the next
- * repaint; that hand-off died with #74, when numbering moved into commands.
+ * `update()` must hand the edited label to the model verbatim: SVG-safety is an
+ * export-time concern, and sanitizing mangles input on canvas ("--" → "––").
  */
 
 /** Fixed bounding box so `update()`'s bounds math has non-zero denominators. */
 const BBOX = { x: 0, y: 0, width: 100, height: 60 };
 
-/**
- * Build the provider with the minimal stubs its constructor and `update()`
- * touch. The constructor registers handlers/listeners and completes direct
- * editing on dblclick, so `directEditing` gets `activate`/`complete` no-ops;
- * `update()` reads `canvas.getAbsoluteBBox` and writes through
- * `modeling.updateLabel`, which is the seam under test.
- */
+/** `modeling.updateLabel` is the seam under test. */
 function setup() {
     const updateLabel = vi.fn();
 
@@ -67,11 +54,6 @@ function setup() {
     return { provider, updateLabel, eventBus, directEditing, canvas };
 }
 
-/**
- * Pull the handler the constructor registered for a given eventBus event. The
- * constructor wires everything through `eventBus.on(event, cb)`, so replaying a
- * captured `cb` is how we drive a listener in isolation.
- */
 function capturedHandler(eventBus: any, event: string): (e: any) => void {
     const call = eventBus.on.mock.calls.find(
         ([registeredEvent]: [string]) => registeredEvent === event,
@@ -197,10 +179,7 @@ describe("DomainStoryLabelEditingProvider.activate", () => {
 });
 
 describe("DomainStoryLabelEditingProvider create.end", () => {
-    /**
-     * `focusElement` reaches into the DOM for the direct-editing box, so give it
-     * a real node instead of letting it call `.focus()` on null in a timer.
-     */
+    /** A real node, so `focusElement`'s timer does not call `.focus()` on null. */
     function withEditingBoxInDom() {
         const box = document.createElement("div");
         box.className = "djs-direct-editing-content";
@@ -249,8 +228,6 @@ describe("DomainStoryLabelEditingProvider dblclick", () => {
             },
         });
 
-        // An activity's label and number are edited through the numbering popup,
-        // so the box `activateDirectEdit` just opened is completed straight away.
         expect(directEditing.activate).toHaveBeenCalledTimes(1);
         expect(directEditing.complete).toHaveBeenCalledTimes(1);
     });

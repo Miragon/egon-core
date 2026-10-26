@@ -10,13 +10,8 @@ import {
 import { toRuleResult } from "../ruleVerdictAdapter";
 
 /**
- * Pins the verdict→diagram-js mapping, one case per kind. The two that matter
- * most are the last two: `noOpinion` must be `undefined` (defer to lower-priority
- * providers, which `Rules.allowed` then default-allows) and `ignored` must be
- * `null` (a consumer skips marking entirely). Folding them together would turn
- * "not my interaction" into "nobody objected", i.e. an allowance — which is why
- * the verdict union has four members rather than three. No rule registered today
- * answers `ignored`, so this file is the only guard the mapping still has.
+ * `noOpinion` (`undefined`, defer) and `ignored` (`null`, skip) must stay
+ * distinct. No rule answers `ignored` today, so this is its only guard.
  */
 
 describe("toRuleResult", () => {

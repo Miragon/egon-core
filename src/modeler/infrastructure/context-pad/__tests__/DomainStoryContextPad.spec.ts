@@ -8,11 +8,9 @@ import { DomainStoryContextPad } from "../DomainStoryContextPad";
 import { ElementTypes } from "../../../../story/domain/elementTypes";
 
 /**
- * Regression lock for finding A6. `_getTargetBounds` reads shape bounds off the
- * model instead of the SVG box, but it used to *skip* connections outright.
- * Activities are connections, so selecting two of them left the reduce at its
- * `{top: Infinity, left: Infinity, …}` seed — `style.left = "Infinitypx"` is
- * dropped by the browser and the pad jumped to the canvas origin.
+ * Activities are connections: skipping them would leave the reduce at its
+ * Infinity seed, and the browser drops `"Infinitypx"`, so the pad jumps to the
+ * canvas origin.
  */
 
 /** Viewbox at 1:1 with no pan, so model coordinates are screen coordinates. */
@@ -47,10 +45,7 @@ function makeActivity(): Connection {
     } as unknown as Connection;
 }
 
-/**
- * Build the pad against stubs. The container sits at the viewport origin so the
- * model→screen transform is the identity and the expected numbers stay readable.
- */
+/** Container at the viewport origin: model and screen coordinates match. */
 function contextPad() {
     // A real node: ContextPad's constructor appends its parent element to it.
     const container = document.createElement("div");

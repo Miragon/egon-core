@@ -2,16 +2,9 @@ import { describe, expect, it } from "vitest";
 import { ElementTypes, getIconId } from "../elementTypes";
 
 /**
- * `getIconId` is the inverse of the type-naming convention: actor and
- * work-object types carry the icon name as a suffix
- * (`domainStory:actorPerson`), and everything that needs to *resolve* an icon —
- * the renderer, the label dictionary, the used-icon list — goes through here.
- * Get it wrong and elements render blank, because `IconDictionaryService`
- * answers `""` for an unknown name rather than throwing.
- *
- * The empty-string case matters as much as the two hits: it is what tells the
- * caller "this element has no icon", and the types that reach it (activity,
- * connection, group, annotation) are exactly the ones drawn without one.
+ * A wrong answer renders elements blank, because `IconDictionaryService`
+ * answers `""` for an unknown name instead of throwing. `""` itself means "no
+ * icon".
  */
 describe("getIconId", () => {
     it("strips the actor prefix", () => {
@@ -41,8 +34,7 @@ describe("getIconId", () => {
     });
 
     it("keeps an icon name that itself contains the prefix text", () => {
-        // Only the leading prefix is removed; `replace` without a global flag
-        // stops after the first match, which is what makes this safe.
+        // `replace` without a global flag stops after the leading prefix.
         expect(getIconId(ElementTypes.ACTOR + "actorLike")).toBe("actorLike");
     });
 });

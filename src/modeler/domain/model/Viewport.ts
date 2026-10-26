@@ -1,7 +1,4 @@
-/**
- * Value Object representing the visible area of the canvas.
- * Immutable - create a new instance for changes.
- */
+/** Immutable value object for the visible area of the canvas. */
 export class Viewport {
     constructor(
         readonly x: number,
@@ -31,8 +28,8 @@ export class Viewport {
 }
 
 /**
- * Public viewport output/input shape. Adapter outputs are fresh objects with
- * exactly these four fields, even when the underlying canvas viewbox has more.
+ * Adapter outputs are fresh objects with exactly these four fields, even when
+ * the canvas viewbox has more.
  */
 export interface ViewportData {
     x: number;

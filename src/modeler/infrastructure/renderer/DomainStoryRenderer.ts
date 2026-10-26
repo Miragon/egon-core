@@ -43,17 +43,9 @@ import type { IconSanitizerPort } from "../../../iconSet/domain/ports/IconSaniti
 import { ColorPickerPreviewState } from "../color-picker/ColorPickerPreviewState";
 
 /**
- * Draws Domain Storytelling elements — and **only** draws them.
- *
- * Rendering is a read (ADR ARC-4). Every write this class used to make on the way
- * past — the overlap nudge and the default colour (#65), then the element type,
- * the activity number, the annotation height and the host's dirty flag (#74) —
- * belonged to a command handler, an import repair or the export pass, somewhere
- * undo could see it. A repaint is not a user action, happens an unbounded number
- * of times, and for an imported story writes straight into the persisted model,
- * so anything mutated here corrupts the file format silently.
- * `RendererModelPurity.browser.spec.ts` and a raw-source rule in
- * `architecture.spec.ts` hold the line.
+ * Draws Domain Storytelling elements and never writes to the model (ADR ARC-4).
+ * A repaint is invisible to undo, and for an imported story the canvas shares
+ * the persisted business objects, so any write here silently corrupts the file.
  */
 export class DomainStoryRenderer extends BaseRenderer {
     static $inject: string[] = [
@@ -66,9 +58,7 @@ export class DomainStoryRenderer extends BaseRenderer {
         "domainStoryColorPickerPreviewState",
     ];
 
-    // Per-instance so SVG marker ids never collide between two renderers on one
-    // page. The `ids` package draws random ids, so per-instance stays unique
-    // across diagrams too (issue #12; was a module-level `new Ids()`).
+    // Per-instance so SVG marker ids never collide between two renderers on one page.
     private rendererId = new Ids().next();
 
     private markers: Record<string, SVGMarkerElement> = {};
@@ -92,10 +82,8 @@ export class DomainStoryRenderer extends BaseRenderer {
             canvas.addMarker(event.context.connection, "djs-element-hidden");
         });
 
-        // `.cancel` matters as much as `.end`: an ESC-aborted drag fires only
-        // the former (Dragging.js:283 vs :374), so listening for `.end` alone
-        // left the connection invisible until the next successful drag.
-        // diagram-js' own BendpointMovePreview cleans up on both.
+        // An ESC-aborted drag fires only `.cancel`, never `.end`; without it the
+        // connection stays hidden until the next successful drag.
         eventBus.on(
             ["bendpoint.move.end", "bendpoint.move.cancel"],
             2000,
@@ -228,10 +216,9 @@ export class DomainStoryRenderer extends BaseRenderer {
         this.renderActivityLabel(visuals, element, waypoints);
         this.renderExternalNumber(visuals, element, waypoints);
 
-        // The drawn line deliberately diverges from `element.waypoints` by the
-        // overlap offset; diagram-js' hit path, bendpoint handles and selection
-        // outline follow the model (#65 — inside the ~15px djs-hit-stroke, and
-        // the divergent stretch lies inside the source shape's own hit area).
+        // The drawn line may diverge from `element.waypoints` by the overlap
+        // offset; hit path and bendpoints follow the model, which is fine because
+        // the offset stays inside the ~15px hit stroke.
 
         // changes the color of the moved activity back to original instead of blue
         if (visuals.getAttribute("djs-dragger")) {
@@ -263,12 +250,8 @@ export class DomainStoryRenderer extends BaseRenderer {
             stroke: "none",
         };
 
-        // `element.height` is read, never written (#74). It is already correct
-        // by the time anything paints: the element factory honours a supplied
-        // height, `DomainStoryUpdateLabelHandler.postExecute` resizes through the
-        // undoable `modeling.resizeShape`, the export pass persists it as
-        // `businessObject.height`, and a pre-#74 file's `number` was translated
-        // into it by `useLegacyAnnotationNumberAsHeight` on import.
+        // `element.height` is only read; `DomainStoryUpdateLabelHandler` resizes
+        // it through an undoable command.
         const text = element.businessObject.text || "";
 
         const textElement = this.drawRect(
@@ -353,9 +336,6 @@ export class DomainStoryRenderer extends BaseRenderer {
         return path;
     }
 
-    /**
-     * creates an SVG path that describes a rectangle which encloses the given shape.
-     */
     private getRectPath(shape: Shape) {
         const offset = 5;
         const x = shape.x,
@@ -401,22 +381,11 @@ export class DomainStoryRenderer extends BaseRenderer {
     }
 
     /**
-     * The waypoints this activity is *drawn* with: the element's own, with
-     * either end nudged clear of the source's label.
+     * A copy of the waypoints with either end nudged clear of the source's label
+     * (upstream: `adjustForTextOverlap`). For an imported story `element.waypoints`
+     * is the persisted array, so nudging in place would leak into the saved file.
      *
-     * Returns a copy and never writes to the element (#65). Upstream
-     * (`adjustForTextOverlap`) nudged the point in place, and for an imported
-     * story `element.waypoints` *is* `businessObject.waypoints`, so drawing
-     * persisted 5px into the saved file and the next open re-applied it.
-     *
-     * `slice()` suffices: the only write was to `point.y`, and the point-level
-     * helper now returns a fresh point. Untouched interior points are shared
-     * with the element on purpose — the render path only reads x/y.
-     *
-     * Both ends are measured against **`source`**, the end point included.
-     * That is upstream's behaviour and probably a bug of its own; the offset is
-     * only ever non-zero for a point under `source`'s label, so correcting it
-     * here would be an unrelated behaviour change.
+     * Both ends are measured against `source`, as upstream does.
      */
     private waypointsClearOfSourceLabel(element: Connection): Point[] {
         const source = element.source;
@@ -426,9 +395,8 @@ export class DomainStoryRenderer extends BaseRenderer {
         const lastIndex = waypoints.length - 1;
 
         if (waypoints[0] && waypoints[lastIndex] && source && target) {
-            // Assigned back through the array, not via two captured locals:
-            // with a single waypoint both ends are the same entry and the
-            // offset applied twice. Reading the slot back reproduces that.
+            // Read back through the array: with a single waypoint both ends are
+            // the same slot and the offset must apply twice, as upstream does.
             waypoints[0] = this.pointClearOfSourceLabel(waypoints[0], source);
             waypoints[lastIndex] = this.pointClearOfSourceLabel(
                 waypoints[lastIndex],
@@ -520,17 +488,9 @@ export class DomainStoryRenderer extends BaseRenderer {
     }
 
     /**
-     * `point`, moved down far enough to clear `source`'s label — or `point`
-     * itself when it does not overlap.
-     *
-     * Never mutates its argument (#65; upstream: `checkIfPointOverlapsText`).
-     * The copy is a spread, so a docking point keeps its `original` anchor even
-     * though diagram-js' `Point` does not declare it — the returned array must
-     * stay substitutable for `element.waypoints`.
-     *
-     * Not pure in the wider sense: `getLineOffset` measures the source's
-     * rendered label out of the DOM, which is why this stays in the renderer
-     * instead of moving to `story/domain`.
+     * Upstream: `checkIfPointOverlapsText`. Copies via spread so a docking point
+     * keeps its undeclared `original` anchor. Stays out of `story/domain` because
+     * `getLineOffset` measures the rendered label in the DOM.
      */
     private pointClearOfSourceLabel(point: Point, source: Element): Point {
         if (point.y > source["y"] + 60) {
@@ -567,18 +527,9 @@ export class DomainStoryRenderer extends BaseRenderer {
     }
 
     /**
-     * marker functions ("markers" are arrowheads of activities)
-     */
-    /**
-     * The marker's DOM id, with everything a CSS identifier cannot carry folded
-     * to `_`.
-     *
-     * Load-bearing, not cosmetic: colours arrive as `#rrggbbaa`, and diagram-js'
-     * `PreviewSupport` clones a drag preview's arrowhead via
-     * `querySelector("marker#" + id)` — an unescaped `#` makes that throw
-     * `SyntaxError` and the drag dies. Upstream only ever hit this on a
-     * *coloured* activity; since #65 the default colour is `#000000` too, so it
-     * would otherwise break every activity drag.
+     * Folds non-identifier characters to `_`: diagram-js' `PreviewSupport` runs
+     * `querySelector("marker#" + id)`, and the `#` of a colour would throw and
+     * kill every activity drag.
      */
     private markerId(type: string, fill: string, stroke: string) {
         return [type, fill, stroke, this.rendererId]
@@ -628,7 +579,6 @@ export class DomainStoryRenderer extends BaseRenderer {
         const ref = options.ref || { x: 0, y: 0 };
         const scale = options.scale || 1;
 
-        // resetting stroke dash array
         if (attrs.strokeDasharray === "none") {
             attrs.strokeDasharray = [10000, 1];
         }
@@ -658,14 +608,6 @@ export class DomainStoryRenderer extends BaseRenderer {
         this.markers[id] = marker;
     }
 
-    /**
-     * Draws the number badge of an activity originating from an actor.
-     *
-     * Renders the number the model already carries; it does not decide it. Since
-     * #74 the number is minted and cleared by `DomainStoryActivityNumbering`
-     * (`connection.create`/`connection.reconnect`), `ActivityChangedHandler` and
-     * `ActivityDirectionChangedHandler` — all commands, all undoable.
-     */
     private drawActivityNumber(
         parentGfx: SVGElement,
         element: Element,
@@ -703,9 +645,8 @@ export class DomainStoryRenderer extends BaseRenderer {
 
         this.setCoordinates(type, text, options, parentGfx);
 
-        // !IMPORTANT!
-        // When converting svg-files via Inkscape or Photoshop, the svg-circle is converted to a black dot that obscures the number.
-        // To circumvent this, we draw an arc.
+        // An arc, not an svg circle: Inkscape and Photoshop convert circles into
+        // a black dot that hides the number.
         const circle = svgCreate("path");
         const radius = 11;
         const x = options.box.x + 18 + (number > 9 ? 3 : 0);
@@ -728,15 +669,8 @@ export class DomainStoryRenderer extends BaseRenderer {
     }
 
     /**
-     * Renders the number badge of an activity that has one.
-     *
-     * Purely a read since #74. It used to *mint* a number when an actor-sourced
-     * activity had none and *clear* the number of every other activity — two
-     * writes performed by a repaint, invisible to undo, and (for an imported
-     * story, whose business objects the canvas shares) written straight into the
-     * persisted model. Both moved onto the commands that change an activity's
-     * source; an imported file's gaps are filled once by
-     * `numberActivitiesFromActors`.
+     * Only draws an existing number; numbers are minted and cleared by undoable
+     * commands (`DomainStoryActivityNumbering`).
      */
     private renderExternalNumber(
         parentGfx: SVGElement,
@@ -803,9 +737,6 @@ export class DomainStoryRenderer extends BaseRenderer {
         }
     }
 
-    /**
-     * render a label on the canvas
-     */
     private renderLabel(
         parentGfx: SVGElement,
         label: string,
@@ -846,9 +777,6 @@ export class DomainStoryRenderer extends BaseRenderer {
         );
     }
 
-    /**
-     * determine the X-coordinate of the label / number to be rendered
-     */
     private manipulateInnerHTMLXLabel(
         children: HTMLCollection,
         x: string,
@@ -870,9 +798,6 @@ export class DomainStoryRenderer extends BaseRenderer {
         return result;
     }
 
-    /**
-     * determine the Y-coordinate of the label / number to be rendered
-     */
     private manipulateInnerHTMLYLabel(
         children: HTMLCollection,
         y: string,

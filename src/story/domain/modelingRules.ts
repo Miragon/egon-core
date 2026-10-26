@@ -18,23 +18,15 @@ import {
 
 /**
  * The Domain Storytelling notation grammar: which elements may connect, be
- * resized, and be created where.
- *
- * WHY: these are the rules of the notation, not of diagram-js. Keeping them here
- * — pure, framework-free, tested exhaustively — lets `DomainStoryRules` shrink to
- * a thin diagram-js adapter and makes the grammar the same in every host. Every
- * `judge*` function answers with a {@link RuleVerdict}, including the "no
- * opinion" and "ignore" outcomes the adapter used to invent for itself; the
- * adapter's only remaining job is the wire mapping and diagram-js' in-place
- * `newBounds` mutation contract. They are named `judge*` rather than `can*`
- * because the answer is no longer yes/no.
+ * resized, and be created where. Each `judge*` returns a {@link RuleVerdict},
+ * not a boolean, so "no opinion" stays a grammar decision.
  */
 
 /** Minimum edge length of a group, in canvas units. */
 export const GROUP_MIN_SIZE = 125;
 
 // Two members so both strict domain objects and a diagram-js `Element` are
-// assignable (see elementPredicates' TypedElement for the weak-type rationale).
+// assignable (see elementPredicates' TypedElement).
 type GrammarElement =
     | { type?: string; id?: string }
     | { type?: string; id?: string; [key: string]: unknown }
@@ -49,12 +41,9 @@ export interface Bounds {
 }
 
 /**
- * Decides whether `source` may connect to `target` and, if so, which connection
- * type results: an annotation connection when the target is a text annotation,
- * an activity otherwise. The guard order is load-bearing: each denial keeps its
- * own reason, and the annotation guards run last so an annotation is only ever
- * an edge *target*, never a source of an activity. Never defers — a connection
- * the grammar does not describe is denied, not left to someone else.
+ * Connecting to a text annotation yields an annotation connection, anything
+ * else an activity. Never defers: a connection the grammar does not describe is
+ * denied.
  */
 export function judgeConnection(
     source: GrammarElement,
@@ -70,17 +59,14 @@ export function judgeConnection(
         return DENIED;
     }
 
-    // No self-connections.
     if (source === target) {
         return DENIED;
     }
 
-    // No connection between two actors.
     if (isActor(source) && isActor(target)) {
         return DENIED;
     }
 
-    // An activity/connection is itself an edge and cannot be an endpoint.
     if (isActivity(source) || isActivity(target)) {
         return DENIED;
     }
@@ -95,8 +81,6 @@ export function judgeConnection(
         return DENIED;
     }
 
-    // Connecting to an annotation yields an annotation connection, not an
-    // activity.
     if (isAnnotation(target)) {
         return allowedAs(ElementTypes.CONNECTION);
     }
@@ -105,15 +89,9 @@ export function judgeConnection(
 }
 
 /**
- * The three annotation-edge shapes the grammar forbids on a reconnect: an
- * activity touching an annotation at *either* end, an annotation connection
- * joining two annotations, and an annotation connection from an actor/work
- * object that does not land on an annotation.
- *
- * WHY both ends are checked for an activity: `BendpointMove` retries a denied
- * reconnect with the endpoints swapped, so guarding only the target lets the
- * retry re-create the same illegal edge reversed. An annotation is only ever an
- * edge target here (its context pad cannot start a connection).
+ * Both ends are checked for an activity because `BendpointMove` retries a
+ * denied reconnect with the endpoints swapped, which would re-create the edge
+ * reversed.
  */
 export function isForbiddenAnnotationEdge(
     source: GrammarElement,
@@ -142,14 +120,7 @@ export function isForbiddenAnnotationEdge(
     );
 }
 
-/**
- * Judges moving an existing edge's endpoint onto `source`/`target`: the extra
- * annotation-edge prohibitions first, then the ordinary connection grammar.
- *
- * WHY it lives here and not in the adapter: composing the two used to be the
- * adapter's job, and it got the deny half wrong (#66). A reconnect is a single
- * grammatical question, so the grammar answers it in one call.
- */
+/** A reconnect is one grammatical question, so it is answered in one call. */
 export function judgeReconnect(
     source: GrammarElement,
     target: GrammarElement,
@@ -162,18 +133,15 @@ export function judgeReconnect(
     return judgeConnection(source, target);
 }
 
-/** Only groups are resizable. */
 export function judgeResize(shape: GrammarElement): RuleVerdict {
     return isGroup(shape) ? ALLOWED : DENIED;
 }
 
 /**
- * Clamps a requested group resize so the group never shrinks below
- * {@link GROUP_MIN_SIZE}. The active corner is inferred from which of x/y moved
- * relative to `current`: dragging an upper corner would otherwise let it cross
- * the opposite edge, so those corners are pinned a minimum span away. Returns a
- * fresh object and never mutates its inputs; the adapter applies the result onto
- * diagram-js's `newBounds` to honour its in-place contract.
+ * Keeps a group at least {@link GROUP_MIN_SIZE}. The active corner is inferred
+ * from which of x/y moved; upper corners are pinned so they cannot cross the
+ * opposite edge. Returns a fresh object; the adapter writes it onto diagram-js'
+ * `newBounds` to honour its in-place contract.
  */
 export function clampGroupBounds(current: Bounds, requested: Bounds): Bounds {
     const result: Bounds = { ...requested };
@@ -185,8 +153,8 @@ export function clampGroupBounds(current: Bounds, requested: Bounds): Bounds {
     };
     const upperRight = { x: current.x + current.width, y: current.y };
 
-    // Conditions read `result` progressively (mirroring the former in-place
-    // mutation) so a clamp on x can influence a later branch, exactly as before.
+    // Later branches read the already-clamped `result`, so a clamp on x can
+    // change which corner branch applies next.
     if (result.x !== current.x && result.y !== current.y) {
         // upper left
         if (result.x > lowerRight.x - GROUP_MIN_SIZE) {
@@ -222,15 +190,9 @@ export function clampGroupBounds(current: Bounds, requested: Bounds): Bounds {
 }
 
 /**
- * Whether `shape` may be created on (or moved onto) `target`: on the canvas
- * background, or when either the shape or the target is a group (groups may nest
- * anything and be nested anywhere).
- *
- * With no hover target at all the grammar has nothing to say — a plain shape
- * over empty canvas is neither described nor forbidden, so it defers. Denying it
- * would forbid dragging any non-group across the canvas. That deferral used to
- * live in the adapter as a hand-rolled tri-state; owning it here is why
- * `RuleVerdict` has a `noOpinion` kind.
+ * Allowed on the background, or when the shape or target is a group (groups
+ * nest anything). With no hover target it defers: denying would forbid dragging
+ * any non-group across the canvas.
  */
 export function judgeCreation(
     shape: GrammarElement,

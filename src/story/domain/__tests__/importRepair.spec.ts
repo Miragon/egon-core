@@ -11,11 +11,9 @@ import {
 import { ElementTypes } from "../elementTypes";
 import { BusinessObject } from "../businessObject";
 
-/** A shape that can be an edge endpoint. */
 const shape = (id: string, type = ElementTypes.ACTOR + "Person") =>
     ({ id, type }) as unknown as BusinessObject;
 
-/** An activity edge between two ids (either may be missing from the story). */
 const activity = (id: string, source: string, target: string) =>
     ({
         id,
@@ -57,10 +55,6 @@ describe("pruneUnreferencedConnections", () => {
         expect(result.removedConnections).toEqual([dangling]);
     });
 
-    // Regression lock for the `elements = elements.splice(i, 1)` bug: the old
-    // implementation rebound its local to the removed item, so only the *first*
-    // dangling edge was ever pruned and the rest reached addConnection with
-    // undefined endpoints. This case fails on that code and passes on this one.
     it("drops every dangling edge, not just the first", () => {
         const first = activity("e1", "a", "gone1");
         const second = activity("e2", "a", "gone2");
@@ -103,8 +97,8 @@ describe("pruneUnreferencedConnections", () => {
         expect(result.removedConnections).toHaveLength(1);
     });
 
-    // Only shapes are valid endpoints upstream and here: an edge chained onto
-    // another edge's id would give diagram-js a connection to a connection.
+    // An edge chained onto another edge would give diagram-js a connection to a
+    // connection.
     it("does not accept another edge as a valid endpoint", () => {
         const chained = activity("e2", "e1", "a");
 
@@ -298,8 +292,8 @@ describe("stripBpmnProperties", () => {
             id: "a",
             type: `${ElementTypes.ACTOR}Person`,
         });
-        // `delete`, not `= undefined`: the key must be gone, so the spread into
-        // the diagram-js attrs cannot shadow anything with `undefined`.
+        // The key must be gone, or the spread into diagram-js attrs shadows
+        // with `undefined`.
         expect("$type" in element).toBe(false);
     });
 
@@ -346,16 +340,6 @@ describe("needsPreV050Repair", () => {
     });
 });
 
-/**
- * The two repairs #74 moved off the render pass.
- *
- * Both used to happen on *every repaint* inside `DomainStoryRenderer`: the
- * annotation height was smuggled through `businessObject.number`, and a missing
- * activity number was minted in `renderExternalNumber`. Import runs no command,
- * so without these a hand-made or pre-#74 file would open degraded.
- */
-
-/** An annotation business object, optionally carrying the legacy fields. */
 const annotation = (id: string, extra: Record<string, unknown> = {}) =>
     ({
         id,
@@ -391,10 +375,8 @@ describe("useLegacyAnnotationNumberAsHeight", () => {
     });
 
     it("prefers an existing `height` but still drops `number`", () => {
-        // A file written by a version that had *both* writers: the export pass
-        // wrote `height` while the renderer wrote `number`. `height` is the field
-        // the export owns, so it wins — and the leftover must not round-trip out
-        // again, or the format never actually narrows.
+        // Some versions wrote both. `height` is the field export owns, and the
+        // leftover must not round-trip back out.
         const element = annotation("t1", { height: 120, number: 80 });
 
         useLegacyAnnotationNumberAsHeight([element]);
@@ -404,8 +386,7 @@ describe("useLegacyAnnotationNumberAsHeight", () => {
     });
 
     it("leaves an unusable `height` of 0 to be replaced", () => {
-        // `0` is what `drawAnnotation` guarded against too: a height of zero is
-        // no height at all, so the legacy value is still the better one.
+        // A height of zero is no height at all, so the legacy value is better.
         const element = annotation("t1", { height: 0, number: 45 });
 
         useLegacyAnnotationNumberAsHeight([element]);
@@ -444,8 +425,7 @@ describe("numberActivitiesFromActors", () => {
 
         numberActivitiesFromActors(elements);
 
-        // 1 and 3 are reserved before anything is handed out, so the two
-        // unnumbered steps take the lowest free slots — 2, then 4.
+        // 1 and 3 are reserved first, so the unnumbered steps take 2, then 4.
         expect(elements.map((element) => (element as any).number)).toEqual([
             undefined,
             1,
@@ -456,8 +436,6 @@ describe("numberActivitiesFromActors", () => {
     });
 
     it("leaves a work-object-sourced activity unnumbered", () => {
-        // Only an activity whose *source* is an actor is a story step; a
-        // response arrow keeps whatever it had, including nothing.
         const response = step("a1", "w1");
         const elements = [
             shape("w1", ElementTypes.WORKOBJECT + "Document"),
@@ -470,8 +448,7 @@ describe("numberActivitiesFromActors", () => {
     });
 
     it("leaves an activity whose source is not in the story unnumbered", () => {
-        // Pruning normally removes these first; if one survives, it is not a
-        // step and inventing a number for it would inflate the sequence.
+        // Pruning normally drops these; numbering one inflates the sequence.
         const dangling = step("a1", "gone");
 
         numberActivitiesFromActors([dangling]);

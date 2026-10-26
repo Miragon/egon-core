@@ -1,9 +1,7 @@
 /**
- * Ordered, uniquely-keyed name→value store backing the icon sets and the label
- * dictionary. Generic over the value type (`T`) so a caller states what it holds
- * — icon dictionaries hold SVG source strings. The first write for a key wins:
- * {@link set}/{@link putEntry} never overwrite, so importing an icon set cannot
- * silently clobber an existing entry.
+ * Ordered, uniquely-keyed store. The first write for a key wins: {@link set}
+ * and {@link putEntry} never overwrite, so importing an icon set cannot clobber
+ * an existing entry.
  */
 export class Dictionary<T> {
     private entries: Entry<T>[];
@@ -57,9 +55,8 @@ export class Dictionary<T> {
     }
 
     /**
-     * Throws on a missing key rather than returning null, so an absent icon
-     * surfaces at the call site instead of silently rendering nothing. Callers
-     * that legitimately expect an absent key use {@link find} instead.
+     * Throws on a missing key so an absent icon surfaces here instead of
+     * silently rendering nothing. Use {@link find} when absence is expected.
      */
     get(key: string): T {
         const found = this.find(key);
@@ -82,8 +79,7 @@ export class Dictionary<T> {
     }
 
     /**
-     * Skips `null`/`undefined` values so a sparse file configuration (an actor
-     * or work object missing its icon) does not create a key mapping to nothing.
+     * Skips `null`/`undefined` so a file missing an icon creates no empty key.
      */
     static fromRecord<T>(record: Record<string, T>): Dictionary<T> {
         const dictionary = new Dictionary<T>();

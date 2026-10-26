@@ -35,12 +35,9 @@ import { ColorPickerCoordinator } from "../color-picker/ColorPickerCoordinator";
 import { numberingOnDirectionChange } from "../../../story/domain/activityNumbering";
 
 /**
- * Positions the replace ("Change type") popup menu just below the open context
- * pad. Queries the live DOM instead of the deprecated ContextPad#getPad(),
- * which warns and can create a stray pad element as a side effect
- * (diagram-js#888). Scoped to the diagram container so multiple modeler
- * instances on one page cannot cross-match. Returns null when no pad is open,
- * leaving the caller to fall back to the cursor position.
+ * Positions the replace menu below the open context pad. Queries the DOM because
+ * the deprecated `ContextPad#getPad()` warns and can create a stray pad; scoped
+ * to the container so modeler instances cannot cross-match.
  */
 export function computeReplaceMenuPosition(
     diagramContainer: HTMLElement,
@@ -112,9 +109,6 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         private readonly translate: any,
         private readonly create: Create,
         private readonly canvas: Canvas,
-        // Injected only to wire up the provider and read live pad state in the
-        // constructor; no longer stored, since the deprecated getPad() lookup
-        // that used `this.contextPad` was replaced by a DOM query.
         contextPad: ContextPad,
         private readonly popupMenu: PopupMenu,
         private readonly commandStack: CommandStack,
@@ -125,11 +119,8 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         contextPad.registerProvider(this);
         popupMenu.registerProvider("ds-replace", replaceMenuProvider);
 
-        // Priority 250, below diagram-js' SelectionBehavior (500): it is the
-        // selection of the new shape that makes ContextPad open it. At the
-        // default 1000 this ran first and always saw a closed pad, so the
-        // ctrl-drop "open replace menu" gesture silently did nothing. bpmn-js
-        // registers the same listener at 250 for the same reason.
+        // Below SelectionBehavior (500), whose selection opens the pad; at the
+        // default priority this always sees a closed pad. bpmn-js uses 250 too.
         eventBus.on("create.end", 250, (event: any) => {
             const context = event.context,
                 shape = context.shape;
@@ -196,21 +187,13 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         autoActivate: boolean,
     ) => void {
         return (event: any, element: Element, autoActivate: boolean) =>
-            // Three arguments, deliberately: Connect#start treats a non-object
-            // third argument *as* autoActivate and defaults connectionStart to
-            // the element's mid (Connect.js:131). Passing an explicit
-            // `undefined` in that slot swallowed the flag. diagram-js' types
-            // only describe the Point overload.
+            // Connect#start treats a non-object third argument as autoActivate;
+            // diagram-js' types only describe the Point overload.
             // @ts-expect-error autoActivate in the connectionStart position
             this.connect.start(event, element, autoActivate);
     }
 
-    /**
-     * Mutates the entry map instead of returning a tuple, because a denied
-     * delete has to mean "omit this one entry". Returning a tuple left no way to
-     * say that, so the previous code threw — and `getContextPadEntries` has no
-     * catch, so one denying rule would have taken down the whole pad.
-     */
+    /** Mutates the map so a denied delete can simply omit its entry. */
     private addDelete(
         entries: Map<string, ContextPadEntry>,
         elements: Element[],
@@ -243,19 +226,12 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
         });
     }
 
-    /**
-     * Asks the rules whether the selection may be deleted, using the canonical
-     * flat `{ elements }` context so rules written against diagram-js/bpmn-js
-     * conventions apply unchanged (the previous nested `{ elements: { element } }`
-     * shape matched nothing).
-     */
+    /** The flat `{ elements }` context diagram-js/bpmn-js rules expect. */
     private isDeleteAllowed(elements: Element[]): boolean {
         const allowed = this.rules.allowed("elements.delete", { elements });
 
         if (isArray(allowed)) {
-            // An array verdict names the deletable subset; offer delete only
-            // when every requested element came back, so the entry never
-            // deletes more than the rule sanctioned.
+            // An array verdict names the deletable subset; require all of them.
             return (
                 allowed.length === elements.length &&
                 elements.every((element) => allowed.includes(element))
@@ -290,7 +266,6 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
                 className: "icon-domain-story-changeDirection",
                 title: this.translate("Change direction"),
                 action: {
-                    // event needs to be addressed
                     click: (_event: any, element: Connection) => {
                         this.changeDirection(element);
                         this.dirtyFlagService.makeDirty();
@@ -439,17 +414,8 @@ export class DomainStoryContextPadProvider implements ContextPadProvider<Element
     }
 
     /**
-     * Swaps an activity's ends, and hands the command the number the *swapped*
-     * activity will need: none when an actor is the current source (after the
-     * swap it starts at a work object), a freshly minted one otherwise.
-     *
-     * "None" is `null`, not `0` (#74). The `0` this used to pass was overwritten
-     * with `null` by the repaint that followed; now that drawing no longer writes
-     * to the model, it would be exported verbatim as `"number": 0`.
-     *
-     * The number is only *computed* here and travels in the command context —
-     * `ActivityDirectionChangedHandler` performs the write, so its `preExecute`
-     * snapshots the number the activity really had and an undo restores it.
+     * Computes the number the swapped activity needs (`null`, never `0`, when it
+     * will start at a work object); the command writes it so undo can restore it.
      */
     private changeDirection(element: Connection) {
         const businessObject = element.businessObject;

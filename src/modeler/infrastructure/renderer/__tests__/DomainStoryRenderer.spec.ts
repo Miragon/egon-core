@@ -4,14 +4,7 @@ import Canvas from "diagram-js/lib/core/Canvas";
 
 import { DomainStoryRenderer } from "../DomainStoryRenderer";
 
-/**
- * Issue #12: the renderer id (which seeds SVG marker ids) is now per-instance,
- * not a module-level `new Ids()`. Two renderers on one page must therefore get
- * distinct ids so their marker `<defs>` never collide.
- *
- * The second group covers the bendpoint-drag marker lifecycle, which is the
- * other thing the constructor wires up.
- */
+/** The renderer id seeds SVG marker ids, so two renderers on one page must differ. */
 function makeRenderer(eventBus: any = { on: vi.fn() }, canvas: any = {}) {
     const renderer = new DomainStoryRenderer(
         eventBus,
@@ -35,11 +28,7 @@ describe("DomainStoryRenderer", () => {
     });
 });
 
-/**
- * The dragged connection is hidden while a bendpoint moves, so the stale path is
- * not painted underneath the preview. Whatever hides it has to unhide it on
- * *every* way the drag can finish.
- */
+/** The connection hidden during a bendpoint drag must reappear however the drag ends. */
 describe("DomainStoryRenderer bendpoint drag", () => {
     function setup() {
         const eventBus = new EventBus();

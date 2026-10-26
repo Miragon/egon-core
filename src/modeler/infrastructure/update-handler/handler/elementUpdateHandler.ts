@@ -82,30 +82,16 @@ export class ElementColorChangeHandler implements CommandHandler {
 const NO_MOVE: Point = { x: 0, y: 0 };
 
 /**
- * "Remove Group without Child-Elements": drops the group's frame but keeps what
- * it contained.
+ * "Remove Group without Child-Elements": drops the group but keeps its children.
  *
- * WHY preExecute-only, with no `execute`/`revert` of its own: nested
- * `commandStack.execute` calls inherit the outer action id, so the whole
- * teardown collapses into **one** undo entry — and diagram-js' own handlers then
- * own both the graphics re-parenting and the inverse. The previous
- * implementation hand-rolled both (`document.querySelector` SVG surgery) and got
- * undo wrong in every way it could.
- *
- * Three details the order and the hints encode:
- * - children move out **before** the group is removed, because
- *   `DeleteShapeHandler.preExecute` `saveClear`s `shape.children`;
- * - `layout: false` keeps `MoveShapeHandler.postExecute` from re-laying-out the
- *   attached activities — `BaseLayouter` returns two points and would flatten
- *   every bendpoint into the saved file;
- * - connections are moved separately because `MoveHelper.moveClosure` never
- *   re-parents them, so an activity parented to the group would be deleted with
- *   it. `isConnection` here is diagram-js' (tests for `waypoints`), not the
- *   domain predicate, which only matches `ElementTypes.CONNECTION` and would
- *   misread every activity as a shape.
- *
- * `groupTeardown` is read by `DomainStoryUpdater`, which skips its geometric
- * group re-adoption for these moves — see there for why.
+ * preExecute-only: nested commands share the outer action id, so the teardown is
+ * one undo entry and diagram-js' handlers own the inverse.
+ * - Children move out first: `DeleteShapeHandler.preExecute` `saveClear`s them.
+ * - `layout: false`: `BaseLayouter` would flatten every bendpoint to two points.
+ * - Connections move separately: `MoveHelper.moveClosure` never re-parents them.
+ *   `isConnection` is diagram-js' (`waypoints` check); the domain predicate
+ *   would misread activities as shapes.
+ * - `groupTeardown` tells `DomainStoryUpdater` to skip group re-adoption.
  */
 export class RemoveGroupWithoutChildrenHandler implements CommandHandler {
     static $inject: string[] = ["modeling"];

@@ -7,16 +7,9 @@ import { DomainStoryPropertyCopy } from "../DomainStoryPropertyCopy";
 import { ElementTypes } from "../../../../story/domain/elementTypes";
 
 /**
- * Regression tests for the issue #9 paste-restore port. They drive a real
- * diagram-js EventBus with synthetic copy-paste events (no diagram bootstrap,
- * precedent: labeling/__tests__/utils.spec.ts) to prove that pasted elements
- * keep their color and that pasted text annotations keep their text. Since #74
- * the height is not restored here at all — diagram-js carries it on the paste
- * descriptor and the element factory honours it, which
- * `CopyPasteIntegration.browser.spec.ts` proves end to end.
- * The two documented deviations from upstream — the length guard on
- * `create.end` and the stash reset on `copyPaste.pasteElements` — are locked in
- * by the "palette create" and "cancelled paste" cases.
+ * Drives a real EventBus with synthetic copy-paste events, no diagram bootstrap.
+ * The "palette create" and "cancelled paste" cases lock the two deviations from
+ * upstream.
  */
 
 const ACTOR_TYPE = ElementTypes.ACTOR + "Person";
@@ -70,11 +63,8 @@ describe("DomainStoryPasteRestore", () => {
     });
 
     it("stashes the color before DomainStoryCopyPaste deletes oldBusinessObject", () => {
-        // Wire the real sibling services onto the same bus. This locks the
-        // priority ordering: DomainStoryCopyPaste (1000) strips
-        // `oldBusinessObject` while handling `copyPaste.pasteElement`, so if the
-        // restore listener did not run at the higher 10000 priority the color
-        // would already be gone by the time it looked.
+        // Real sibling services lock the priority ordering: DomainStoryCopyPaste
+        // (1000) strips `oldBusinessObject` before a lower-priority restore could read it.
         const propertyCopy = new DomainStoryPropertyCopy(eventBus);
         new DomainStoryCopyPaste(propertyCopy, eventBus);
 
@@ -104,20 +94,14 @@ describe("DomainStoryPasteRestore", () => {
         eventBus.fire("create.end", { elements: [element] });
 
         expect(element.businessObject.text).toBe("note");
-        // Inverted with #74. The height used to be restored here *and* mirrored
-        // onto `businessObject.number` so it would survive an export. Neither
-        // happens now: diagram-js carries `descriptor.height` and the element
-        // factory honours it, so the height needs no help — and the export pass
-        // writes `businessObject.height` itself, so `number` is retired.
+        // Height is carried by diagram-js on the descriptor, not by this stash.
         expect(element.height).toBeUndefined();
         expect("number" in element.businessObject).toBe(false);
     });
 
     it("ignores a legacy `number` on the copied business object", () => {
-        // A pre-#74 file's annotation still carries the old height-in-`number`
-        // hack; `useLegacyAnnotationNumberAsHeight` translates it away on import,
-        // so by paste time it is meaningless. Reading it here would resurrect the
-        // retired field and, when the two disagree, the wrong height.
+        // Legacy files store an annotation's height in `number`; import
+        // translates it, so paste must not read it back.
         eventBus.fire(
             "copyPaste.pasteElement",
             pasteElementEvent({

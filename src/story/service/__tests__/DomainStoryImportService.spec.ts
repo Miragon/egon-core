@@ -17,16 +17,14 @@ import type { IconStyleSheetPort } from "../../../iconSet/domain/ports/IconStyle
 import { DomainStoryPropertiesService } from "../../../modeler/service/DomainStoryPropertiesService";
 import { passThroughIconSanitizer } from "../../../__tests__/helpers/passThroughIconSanitizer";
 
-// The import path under test never renders, so CSS injection is irrelevant here
-// (and with no style element configured the real injector no-ops anyway).
+// Import never renders, so CSS injection is irrelevant here.
 const noopStyleSheet: IconStyleSheetPort = { addIconStyle() {} };
 
 /**
- * Recording stand-ins for the four diagram-js primitives the import service
- * touches. Nothing renders: the service only ever *adds* elements, so insertion
- * order, version gating and event sequencing are all directly observable from
- * the recorded calls. A browser test could only infer the order from the final
- * registry, which is why this lives in the fast tier (ADR TST-1).
+ * Recording fakes for the diagram-js primitives import touches. Import only
+ * adds elements, so order, version gating and events are observable from the
+ * calls; a browser test could only infer them from the final registry, hence
+ * the fast tier (ADR TST-1).
  */
 function makeHarness() {
     const added: {
@@ -41,9 +39,8 @@ function makeHarness() {
 
     const elementFactory = {
         create(kind: string, attrs: any) {
-            // Capture the factory inputs by value: import later restores a
-            // valid persisted parent on the business object, but that id must
-            // not have been supplied as an element-factory attribute.
+            // By value: import later writes the parent id onto the business
+            // object, but it must not have been a factory attribute.
             created.push({
                 kind,
                 attrs: {
@@ -51,9 +48,8 @@ function makeHarness() {
                     businessObject: { ...attrs.businessObject },
                 },
             });
-            // Spread rather than pass through: the service re-reads `.type` off
-            // the created shape for group parenting and `.id` via the registry,
-            // so the fake must behave like a distinct element object.
+            // A distinct object: the service re-reads `.type` and `.id` off the
+            // created shape.
             const element = { ...attrs };
             byId.set(element.id, element);
             return element;
@@ -365,8 +361,6 @@ describe("DomainStoryImportService insertion order", () => {
 });
 
 describe("DomainStoryImportService version gating", () => {
-    // Behavioral, not spy-based: feed both legacy work-object spellings and read
-    // back the type the element factory was handed.
     const LEGACY_WORK_OBJECTS = [
         workObject("shape_bare", { type: ElementTypes.WORKOBJECT }),
         workObject("shape_bubble", {
@@ -404,8 +398,8 @@ describe("DomainStoryImportService version gating", () => {
                           `${ElementTypes.WORKOBJECT}Bubble`,
                       ],
             );
-            // The banner is unconditional and always shows the raw string —
-            // including "?" — so the user sees what the file actually declared.
+            // Always the raw string, "?" included, so the user sees what the
+            // file declared.
             expect(harness.bannerCalls).toEqual([version]);
         },
     );
@@ -550,7 +544,7 @@ describe("DomainStoryImportService repair signalling", () => {
                 (bo: any) => bo.id,
             ),
         ).toEqual(["connection_1", "connection_2"]);
-        // Both dangling edges are gone — the old splice loop kept the second.
+        // Both dangling edges are gone, not only the first.
         expect(harness.addedSignature()).toEqual(["shape:shape_actor"]);
     });
 
@@ -572,11 +566,8 @@ describe("DomainStoryImportService repair signalling", () => {
 });
 
 describe("DomainStoryImportService repeated imports", () => {
-    // Regression lock for the never-cleared group map: the second story declares
-    // a `parent` whose group it does not contain (a shape the first import's
-    // `diagram.clear` already destroyed). The old code found the stale shape and
-    // parented onto it; a fresh instance has nothing to find and adds at top
-    // level, which is the only correct answer.
+    // The second story names a `parent` group it does not contain; the shape
+    // must land at top level, not on a group left from the first import.
     it("never parents onto a group destroyed by a previous import", () => {
         const withGroup = storyFile([
             group("shape_group"),

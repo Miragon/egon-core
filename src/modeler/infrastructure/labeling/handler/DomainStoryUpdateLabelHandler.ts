@@ -35,28 +35,23 @@ export class DomainStoryUpdateLabelHandler implements CommandHandler {
 
         let newBounds = context.newBounds;
 
-        // resize text annotation to the amount of text that is entered
         if (is(element, ElementTypes.TEXTANNOTATION)) {
             const bo = getBusinessObject(label);
 
             const text = bo.name || bo.text;
 
-            // don't resize without text
             if (!text) {
                 return;
             }
 
-            // resize an element based on labeled _or_ pre-defined bounds
             if (typeof newBounds === "undefined") {
-                // newBounds = this.domainStoryTextRenderer.getLayoutedBounds(label, text);
                 newBounds = this.domainStoryTextRenderer.getExternalLabelBounds(
                     label,
                     text,
                 );
             }
 
-            // setting newBounds to false or _null_ will
-            // disable the postExecute resize operation
+            // `false` or `null` bounds disable the resize.
             if (newBounds) {
                 this.modeling.resizeShape(label, newBounds, NULL_DIMENSIONS);
             }
@@ -64,16 +59,8 @@ export class DomainStoryUpdateLabelHandler implements CommandHandler {
     }
 
     /**
-     * Writes the label onto the element's own label carrier and reports both it
-     * and its target as changed, so an external label and the shape it belongs
-     * to redraw together.
-     *
-     * This command is label-only (#84). It once wrote an activity's *number*
-     * too, because `DomainStoryModeling` mapped `updateNumber` onto it as well —
-     * and writing both halves unconditionally made a label edit blank the number
-     * (#74). `updateNumber` is gone; `activity.changed` and
-     * `activity.directionChange` own every number write now, so there is no
-     * second half left to skip.
+     * Label-only; numbers are written by `activity.changed` and
+     * `activity.directionChange`. Returns label and target so both redraw.
      */
     private setText(element: Element, text?: string) {
         const label = element.label || element;

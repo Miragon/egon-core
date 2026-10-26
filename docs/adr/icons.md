@@ -9,7 +9,7 @@ handled.
 - History: 2026-07-22 decided (ADR 0008)
 
 **Context.** Custom icon names containing `.` or other CSS-special characters
-broke (#4, upstream wps/egon.io#264). `sanitizeIconName` treated everything
+broke, here and upstream. `sanitizeIconName` treated everything
 after the last dot as a file extension, so the stored name changed. Exports
 then lost the original name, and re-imported stories no longer matched their
 canvas business objects. The leftover dot also produced invalid CSS selectors.

@@ -51,24 +51,17 @@ interface ImportRecord extends Record<string, unknown> {
 }
 
 /**
- * Normalizes the several on-disk EGN shapes into one `{ iconSetConfiguration,
- * domainStory }` pair before anything touches the canvas. Ported from upstream
- * Egon.io's `exportToDomainStory` + `extractIconSet` so this library reads
- * everything current and historical Egon.io writes:
+ * Normalizes every on-disk EGN shape into one `{ iconSetConfiguration,
+ * domainStory }` pair. Ported from upstream `exportToDomainStory` +
+ * `extractIconSet`; the shapes Egon.io has written are:
  *
  * - v4.0.0: `{ iconSet, domainStory: { businessObjects, … } }`
  * - ≤3.0.0: `{ domain, dst: [ …elements, {info}, {version} ] }`
- * - v1.x quirk: `domain` and `dst` are JSON *strings*, not objects — the raw
- *   pass-through of these strings is the live crash this port fixes.
+ * - v1.x: `domain` and `dst` are JSON *strings*, not objects.
  * - bare legacy array: the top-level JSON is the element array itself.
  *
- * Anything else is rejected with an Error. Public import prepares this data
- * before constructing a candidate editor, so failing here leaves the active
- * diagram intact when a host passes a file that is not a domain story at all.
- *
- * Kept in the import layer (not the framework-free domain) because it is pure
- * parsing/adapter logic, and pure functions so the branch matrix is unit
- * testable without a canvas.
+ * Anything else throws. Import parses before building a candidate editor, so a
+ * file that is not a domain story leaves the active diagram intact.
  */
 
 /** Treats only `null`/`undefined` as absent — "", 0 and [] are present. */
@@ -77,10 +70,8 @@ function isPresent(value: unknown): boolean {
 }
 
 /**
- * Splits a parsed export file into the icon-set configuration and the story.
- * The icon-set configuration is the raw `{ name?, actors, workObjects }` object
- * (already string-decoded) ready for `createIconSetConfiguration`; `undefined`
- * when the file carries no icon set (oldest legacy files).
+ * The icon-set configuration is the string-decoded `{ name?, actors,
+ * workObjects }` object, or `undefined` for the oldest files, which carry none.
  */
 export function parseExportFile(parsed: unknown): {
     iconSetConfiguration: FileConfiguration | undefined;
@@ -96,13 +87,9 @@ export function parseExportFile(parsed: unknown): {
 }
 
 /**
- * Reads the icon set from `iconSet` (v4), `domain` (legacy) or `config` (the
- * oldest key), newest first. Dropping `config` meant an old
- * `{ config, dst }` file imported with an empty icon set — blank shapes on
- * canvas, and the next export wrote that emptiness back permanently.
- *
- * A string payload (the older keys were written as JSON text) is decoded here;
- * passing it on raw is exactly what crashed the previous importer.
+ * Reads `iconSet` (v4), `domain` (legacy) or `config` (oldest), newest first.
+ * Without `config`, the oldest files would import, and re-export, an empty icon
+ * set. Older keys were written as JSON text, so strings are decoded here.
  */
 export function extractIconSetConfiguration(
     parsed: unknown,
@@ -130,13 +117,12 @@ export function extractIconSetConfiguration(
 }
 
 /**
- * Reconstructs the `DomainStory` from whichever story shape the file uses,
- * preferring the v4 `domainStory` object over the legacy `dst` array. Title
- * defaults to "" (upstream derives it from the filename, which we do not have
- * at this layer).
+ * Prefers the v4 `domainStory` object over the legacy `dst` array. Title
+ * defaults to "": upstream derives it from the filename, which this layer
+ * lacks.
  *
- * @throws Error when the payload matches none of the known shapes — a silent
- * empty story would let the importer wipe the current diagram on a wrong file.
+ * @throws Error on an unknown shape: a silent empty story would let import wipe
+ * the current diagram.
  */
 export function extractDomainStory(parsed: unknown): DomainStory {
     const domainStory: DomainStory = {
@@ -146,8 +132,7 @@ export function extractDomainStory(parsed: unknown): DomainStory {
         title: "",
     };
 
-    // Neither key present → the only remaining known shape is the bare
-    // element array.
+    // Neither key: the only remaining known shape is the bare element array.
     const envelope = asOptionalRecord(parsed);
     if (!isPresent(envelope?.dst) && !isPresent(envelope?.domainStory)) {
         if (!Array.isArray(parsed)) {
@@ -160,7 +145,6 @@ export function extractDomainStory(parsed: unknown): DomainStory {
         ? envelope!.domainStory
         : envelope!.dst;
 
-    // v4 object: businessObjects + story metadata live side by side.
     const contentRecord = asOptionalRecord(content);
     if (Array.isArray(contentRecord?.businessObjects)) {
         domainStory.businessObjects =

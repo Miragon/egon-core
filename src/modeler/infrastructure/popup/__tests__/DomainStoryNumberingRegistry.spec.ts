@@ -4,10 +4,8 @@ import type EventBus from "diagram-js/lib/core/EventBus";
 import type { ElementRegistryService } from "../../../service/ElementRegistryService";
 
 /**
- * Adapter-level spec: the numbering arithmetic itself is covered exhaustively
- * in `story/domain/__tests__/activityNumbering.spec.ts`; here we only verify
- * that the registry wires domain results to the canvas — mutating business
- * objects, firing `element.changed`, and keeping the multiple-number state.
+ * Adapter-level spec: the arithmetic is covered in
+ * `story/domain/__tests__/activityNumbering.spec.ts`; this only checks the wiring.
  */
 function makeRegistry(activitiesFromActors: unknown[]): ElementRegistryService {
     return {
@@ -20,7 +18,6 @@ const activityWithNumber = (id: string, number?: number) => ({
     businessObject: { id, number },
 });
 
-/** Builds a registry with the given collaborators wired in. */
 function makeSut(activitiesFromActors: unknown[] = []) {
     const eventBus = { fire: vi.fn() } as unknown as EventBus;
     const registry = new DomainStoryNumberingRegistry(
@@ -54,9 +51,7 @@ describe("DomainStoryNumberingRegistry", () => {
             registry.generateAutomaticNumber();
             registry.generateAutomaticNumber();
 
-            // Whoever runs the command owns the write; minting a number here
-            // ahead of a command left the handler snapshotting a mutated model,
-            // so an undo restored the new number instead of the old one.
+            // A write here would hand the command an already-mutated model to snapshot.
             expect(activity.businessObject.number).toBe(1);
         });
     });
@@ -91,9 +86,7 @@ describe("DomainStoryNumberingRegistry", () => {
             const { registry } = makeSut();
             registry.setNumberIsMultiple(2, true);
 
-            // The edit itself does not allow sharing, so slot 2 loses the flag
-            // and the activity moving to 3 takes it along. The flags are read
-            // pre-edit, which is what makes this carry possible.
+            // Flags are read pre-edit, so the activity moving to 3 takes slot 2's flag.
             registry.updateExistingNumbersAtEditing(
                 [activityWithNumber("a", 2)] as never[],
                 edit(2, false),
@@ -103,7 +96,6 @@ describe("DomainStoryNumberingRegistry", () => {
             expect(registry.isNumberMultiple(2)).toBe(false);
         });
 
-        // T2.1
         it("applies the edited number's own allowance and suppresses the cascade", () => {
             const sharing = activityWithNumber("a", 2);
             const { registry, eventBus } = makeSut();
@@ -118,7 +110,6 @@ describe("DomainStoryNumberingRegistry", () => {
             expect(eventBus.fire).not.toHaveBeenCalled();
         });
 
-        // T2.2
         it("excludes the edited activity from its own cascade", () => {
             const edited = activityWithNumber("edited", 3);
             const other = activityWithNumber("a", 1);
@@ -137,10 +128,8 @@ describe("DomainStoryNumberingRegistry", () => {
     });
 
     describe("snapshot/restore of the multiple-number registry", () => {
-        // T2.3 — the aliasing lock. The command context holds one snapshot for
-        // the lifetime of the action, across undo → redo → undo. If restore
-        // installed it by reference, the redo's cascade would write through it
-        // and the second undo would restore post-edit values, silently.
+        // The command context reuses one snapshot across undo/redo/undo, so
+        // restore must not install it by reference.
         it("keeps a snapshot immune to writes made after restoring it", () => {
             const { registry } = makeSut();
             registry.setNumberIsMultiple(1, true);
@@ -156,8 +145,7 @@ describe("DomainStoryNumberingRegistry", () => {
             expect(registry.isNumberMultiple(1)).toBe(true);
         });
 
-        // T2.4 — merge-vs-replace: a per-index write-back would leave the slots
-        // the cascade appended beyond the snapshot's length in place.
+        // A per-index write-back would keep slots appended beyond the snapshot.
         it("drops flags added beyond the snapshot's length", () => {
             const { registry } = makeSut();
             const snapshot = registry.snapshotMultipleNumberRegistry();

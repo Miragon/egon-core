@@ -21,9 +21,8 @@ import { createAutocompleteForEdit, getLabel } from "./utils";
 import { canEditLabel } from "../../../story/domain/labelPolicy";
 
 export function focusElement(element: HTMLDivElement) {
-    // Opening an Angular Dialog seems to mess with the focus logic somehow.
-    // My guess is that it makes the mousedown event passive, which prevents "preventDefault" from intercepting.
-    // I am not sure how to fix it, but this seems to be a workaround.
+    // Deferred as a workaround: after a host (Angular) dialog opened, a
+    // synchronous focus is lost. The root cause is unknown.
     setTimeout(() => element.focus(), 0);
 }
 
@@ -56,18 +55,14 @@ export class DomainStoryLabelEditingProvider implements DirectEditingProvider {
 
         this.directEditing.registerProvider(this);
 
-        // listen to dblclick on non-root elements
         eventBus.on("element.dblclick", (event: any) => {
             this.activateDirectEdit(event.element);
             if (is(event.element, ElementTypes.ACTIVITY)) {
-                // An activity is edited through the numbering popup
-                // (`DomainStoryPopupService`), not the inline box, so the box
-                // that `activateDirectEdit` just opened is closed again.
+                // Activities are edited in the numbering popup instead.
                 this.directEditing.complete();
             }
         });
 
-        // complete on followup canvas operation
         eventBus.on(
             [
                 "element.mousedown",
@@ -82,7 +77,6 @@ export class DomainStoryLabelEditingProvider implements DirectEditingProvider {
             },
         );
 
-        // cancel on command stack changes
         eventBus.on(["commandStack.changed"], () => {
             if (this.directEditing.isActive()) {
                 this.directEditing.cancel();
@@ -102,10 +96,7 @@ export class DomainStoryLabelEditingProvider implements DirectEditingProvider {
             if (!canExecute) {
                 return;
             }
-            // A paste is routed through the create interaction with
-            // `createElementsBehavior: false` (diagram-js CopyPaste.js:187), the
-            // hint that tells create behaviors to keep out. Editing a pasted
-            // element would open an empty box over an already-labelled shape.
+            // A paste (`createElementsBehavior: false`) is already labelled.
             if (event.context.hints?.createElementsBehavior === false) {
                 return;
             }
@@ -119,10 +110,6 @@ export class DomainStoryLabelEditingProvider implements DirectEditingProvider {
         });
     }
 
-    /**
-     * activate direct editing for activities and text annotations.
-     * @return an object with properties bounds (position and size), text and options
-     */
     activate(element: Shape): any {
         const semanticObject = getBusinessObject(element);
         if (!canEditLabel(element, semanticObject)) {
@@ -138,7 +125,6 @@ export class DomainStoryLabelEditingProvider implements DirectEditingProvider {
             text: text,
         };
 
-        // bounds
         const bounds = this.getEditingBBox(element);
 
         assign(context, bounds);
@@ -159,21 +145,14 @@ export class DomainStoryLabelEditingProvider implements DirectEditingProvider {
         return context;
     }
 
-    /**
-     * get the editing bounding box based on the element's size and position
-     * @return an object containing information about position
-     *         and size (fixed or minimum and/or maximum)
-     */
     getEditingBBox(element: Shape) {
         const target = element.label || element;
 
         const bbox = this.canvas.getAbsoluteBBox(target);
 
-        // default position
         const bounds = { x: bbox.x, y: bbox.y };
 
-        /** The canvas is an object from diagram-js. The IDE might say that zoom is deprecated,
-         * because it thinks that canvas is the standard HTML element.**/
+        /** diagram-js `Canvas.zoom()`, not the deprecated DOM `zoom` an IDE may flag. */
         const zoom = this.canvas.zoom();
         const defaultStyle = this.domainStoryTextRenderer.getDefaultStyle();
 
@@ -188,7 +167,6 @@ export class DomainStoryLabelEditingProvider implements DirectEditingProvider {
                 this.domainStoryTextRenderer.getDefaultStyle()?.fontWeight,
         };
 
-        // adjust for groups
         if (is(element, ElementTypes.GROUP)) {
             assign(bounds, {
                 minWidth: bbox.width / 2.5 > 125 ? bbox.width / 2.5 : 125,
@@ -227,7 +205,6 @@ export class DomainStoryLabelEditingProvider implements DirectEditingProvider {
             });
         }
 
-        // text annotations
         if (is(element, ElementTypes.TEXTANNOTATION)) {
             assign(bounds, {
                 width: bbox.width,
@@ -252,12 +229,8 @@ export class DomainStoryLabelEditingProvider implements DirectEditingProvider {
 
     /**
      * `_oldText` is unused but must stay: DirectEditing calls
-     * `update(element, newText, oldText, bounds)`, so dropping it would shift
-     * the bounds argument out of place (that was bug A1).
-     *
-     * Only a text annotation is resizable while editing, so only it derives new
-     * bounds from the edit box. Every other element passes `undefined` and lets
-     * `DomainStoryUpdateLabelHandler` lay its external label out itself.
+     * `update(element, newText, oldText, bounds)`. Only a text annotation takes
+     * bounds from the edit box; others let the label handler lay out the label.
      */
     update(element: Shape, newLabel: string, _oldText: string, bounds: Rect) {
         const bbox = this.canvas.getAbsoluteBBox(element);
@@ -272,9 +245,8 @@ export class DomainStoryLabelEditingProvider implements DirectEditingProvider {
             };
         }
 
-        // SVG-safety is an export-time concern, so the raw label reaches the
-        // model verbatim (upstream wps/egon.io@e62bd235, issue #7). Sanitizing
-        // here mangled user input on canvas (e.g. "--" → "––").
+        // Raw label: SVG-safety is an export-time concern, and sanitizing here
+        // mangles input on canvas (e.g. "--" → "––").
         this.modeling.updateLabel(element, newLabel, newBounds);
     }
 

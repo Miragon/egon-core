@@ -11,17 +11,9 @@ import {
     isWorkObject,
 } from "../elementPredicates";
 
-/**
- * Pins the classification predicates against every family, their icon-suffixed
- * variants, a foreign namespace, and the null/undefined/typeless edges. These
- * are the single source of type checks now, so their exactness (prefix match,
- * strict boolean, null-safety) is what the grammar and ~15 call sites rely on.
- */
-
 const SUFFIXED_ACTOR = ElementTypes.ACTOR + "Person";
 const SUFFIXED_WORKOBJECT = ElementTypes.WORKOBJECT + "Document";
 
-/** A structural type predicate under test, applied to a `{ type }` element. */
 type TypePredicate = (element: { type?: string } | null | undefined) => boolean;
 
 const TYPE_PREDICATES: ReadonlyArray<{
@@ -76,7 +68,6 @@ const TYPE_PREDICATES: ReadonlyArray<{
     },
 ];
 
-/** Every concrete type an element can carry in the grammar. */
 const ALL_TYPES = [
     ElementTypes.ACTOR,
     SUFFIXED_ACTOR,
