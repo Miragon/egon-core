@@ -45,3 +45,6 @@ and the rules (when to write one, how superseding works).
 | [0037](0037-test-release-config-against-action-and-upgraded-library.md)  | Verify release configuration against action and library | accepted                                                                    |
 | [0038](0038-bundled-color-picker-and-provider-contract.md)               | Bundled picker + provider contract                      | accepted                                                                    |
 | [0039](0039-publish-optional-starter-icons.md)                           | Optional starter icons through a data-only entry        | accepted                                                                    |
+| [0040](0040-rich-domain-objects-over-snapshots.md)                       | Rich domain objects over snapshots                      | accepted                                                                    |
+| [0041](0041-gate-domain-code-on-per-file-mutation-scores.md)             | Per-file mutation gate for domain code                  | accepted                                                                    |
+| [0042](0042-trunk-based-delivery-with-internal-feature-flags.md)         | Trunk-based delivery, internal flags outside domain     | accepted                                                                    |

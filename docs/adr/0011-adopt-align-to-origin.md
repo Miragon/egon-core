@@ -15,7 +15,7 @@ by `canvas._fitViewport({ x: 0, y: 0 })`.
 Our core had neither. The plugin did not register the module, and hosts could
 only get/set the raw viewbox — they had no way to "fit the story to screen" or
 "keep coordinates positive for export" without reaching into diagram-js
-internals, which the host-independence boundary (see `CLAUDE.md`) forbids.
+internals, which the host-independence boundary (see `AGENTS.md`) forbids.
 
 `align()` is not free of side effects: it runs through the command stack, so it
 is undoable and fires `commandStack.changed` — the event `EgonClient` surfaces

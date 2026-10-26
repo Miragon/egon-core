@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 ## What this is
 
@@ -33,6 +33,41 @@ labelDictionary/ shared/`, each feature with up to three layers (`domain/`,
   `service/`, `infrastructure/`).
 - Multi-instance safety: no new module-level singletons (see #12 — existing
   ones in renderer/labeling are being removed).
+
+## Domain code: test-first, mutation-gated
+
+Use the `domain-tdd` skill (`.agents/skills/domain-tdd/`) for any change
+under `**/domain/**`.
+
+- **Test-first.** Write the failing spec before the code. A bug fix starts
+  with its regression test.
+- **Domain objects own invariants and return decisions** (ADR 0040).
+  Infrastructure applies those decisions through diagram-js commands, so
+  undo stays with diagram-js.
+- **Mutation gate per file** (ADR 0041; tooling arrives with #175).
+    - A new domain file needs a 100% Stryker score.
+    - An existing file must not fall below its floor in
+      `mutation-baseline.json`, and floors only go up.
+    - Remove equivalent mutants by simplifying the code first. Otherwise mark
+      them `// Stryker disable next-line <Mutator>: <reason>`.
+- **Mutation testing covers only domain code.** Service and infrastructure
+  code get normal unit or browser tests.
+
+## Delivery: trunk-based (ADR 0042)
+
+- Use short-lived branches and small PRs, merged within about two days. There
+  are no long-lived feature branches.
+- Hide unfinished work in this order:
+    1. inert code (unwired domain objects);
+    2. branch by abstraction;
+    3. an internal feature flag, only for a user-visible change that cannot land
+       in one PR.
+- Bug fixes never go behind a flag.
+- Flags are instance-scoped and default off.
+    - They are never in `domain/`, `EgonClientConfig`, or `src/index.ts`.
+    - The service or infrastructure caller chooses between two domain
+      implementations.
+    - Every flag has a removal issue.
 
 ## Upstream sync
 
