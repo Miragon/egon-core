@@ -18,16 +18,34 @@ updates:
           semver-major-days: 14
           semver-minor-days: 5
           semver-patch-days: 3
+      ignore:
+          # Preact must stay on the major diagram-js depends on: the color
+          # picker shares diagram-js's Preact runtime (ADR 0038), so a lone
+          # bump would install two runtimes. Lift once diagram-js moves.
+          - dependency-name: "preact"
+            update-types:
+                - "version-update:semver-major"
       groups:
-          # Collect all npm version updates into a single weekly PR. Security
-          # updates are intentionally left ungrouped (applies-to: version-updates)
-          # so they still arrive as individual, fast-track PRs.
-          npm-all:
+          # Weekly version updates arrive as two PRs: minor/patch bumps that
+          # should merge as-is, and majors that may need migration work, so
+          # one breaking major never blocks the routine bumps.
+          npm-minor-patch:
+              applies-to: version-updates
+              update-types:
+                  - minor
+                  - patch
+              patterns:
+                  - "*"
+          npm-major:
               applies-to: version-updates
               update-types:
                   - major
-                  - minor
-                  - patch
+              patterns:
+                  - "*"
+          # Security updates are collected into one PR as well, separate from
+          # the weekly version groups so they can still be fast-tracked.
+          npm-security:
+              applies-to: security-updates
               patterns:
                   - "*"
     # Fetch and update latest `github-actions` packages
