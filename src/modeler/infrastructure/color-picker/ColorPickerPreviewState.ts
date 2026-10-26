@@ -5,7 +5,7 @@ import type { Element } from "diagram-js/lib/model/Types";
  *
  * This service deliberately knows nothing about events, commands, selection,
  * or business objects. The coordinator owns all writes and repaint requests;
- * rendering only asks for the current override (ADR 0026).
+ * rendering only asks for the current override (ADR EDT-2).
  */
 export class ColorPickerPreviewState {
     private readonly colors = new Map<Element, string>();

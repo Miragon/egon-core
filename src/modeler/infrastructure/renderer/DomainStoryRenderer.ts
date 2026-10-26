@@ -45,7 +45,7 @@ import { ColorPickerPreviewState } from "../color-picker/ColorPickerPreviewState
 /**
  * Draws Domain Storytelling elements — and **only** draws them.
  *
- * Rendering is a read (ADR 0016). Every write this class used to make on the way
+ * Rendering is a read (ADR ARC-4). Every write this class used to make on the way
  * past — the overlap nudge and the default colour (#65), then the element type,
  * the activity number, the annotation height and the host's dirty flag (#74) —
  * belonged to a command handler, an import repair or the export pass, somewhere

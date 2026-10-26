@@ -20,7 +20,7 @@ import { ElementTypes } from "../../domain/elementTypes";
  * — the annotation height and the activity sequence — are exactly the two the
  * matrix cannot see. These cases build those states instead of reading them.
  *
- * WHY browser tier (ADR 0014): both go through `client.import`, hence
+ * WHY browser tier (ADR TST-2): both go through `client.import`, hence
  * `canvas.addShape`, hence `SVGSVGElement.createSVGTransform`.
  */
 

@@ -20,19 +20,23 @@ only from `src/index.ts`.
 
 ## Architecture (enforced, not just documented)
 
-- ADRs in `docs/adr/` are the source of truth — read the relevant ones before
-  structural changes; record new lasting decisions as ADRs (`docs/adr/README.md`).
+- ADRs in `docs/adr/` are the source of truth. They are grouped into topic
+  files (`architecture.md`, `public-api.md`, `testing.md`, …), and each
+  decision has a stable ID such as `ARC-4`. Read the relevant topic before
+  structural changes. Record new lasting decisions in their topic, or edit the
+  existing decision in place with a `History` entry, as described in
+  `docs/adr/README.md`. Cite decisions by ID (`ADR ARC-4`).
 - `src/architecture.spec.ts` runs executable layout rules (archunit graph +
   raw-source scans) in the normal test suite. **Rules are regression locks:
   fix the code, never relax a rule to make CI pass.**
 - Domain purity is path-based: every `**/domain/` folder imports only relative
   modules and only other domain files — no diagram-js, no DOM, no packages.
   Framework access goes through ports defined in `domain/`, implemented outside.
-- Flat DDD feature layout (ADR 0010): `modeler/ story/ iconSet/
+- Flat DDD feature layout (ADR ARC-1): `modeler/ story/ iconSet/
 labelDictionary/ shared/`, each feature with up to three layers (`domain/`,
   `service/`, `infrastructure/`).
-- Multi-instance safety: no new module-level singletons (see #12 — existing
-  ones in renderer/labeling are being removed).
+- Multi-instance safety: no module-level mutable state (ADR ARC-5, rule H).
+  State lives on didi-instantiated services.
 
 ## Domain code: test-first, mutation-gated
 

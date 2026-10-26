@@ -19,10 +19,10 @@ import type { DomainStoryDocument } from "../../domain/DomainStoryDocument";
  * canvas* — element factory defaults, group parenting, the renderer and the live
  * element registry all sit on that path. Only a browser can run it: diagram-js
  * lays out by measuring SVG with `getBBox`, which jsdom returns as zero
- * (ADR 0013).
+ * (ADR TST-1).
  *
  * File compatibility with the WPS web app is this library's most important
- * invariant (ADR 0007), so the assertions are deliberately strict: converging on
+ * invariant (ADR DOC-1), so the assertions are deliberately strict: converging on
  * canonical v4.0.0 is asserted for all eight rows, and each row's business
  * objects must come back byte-identical to the fixture's own modulo the
  * documented canonicalizations. A red row here is a finding, not a reason to

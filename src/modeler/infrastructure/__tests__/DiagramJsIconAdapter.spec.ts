@@ -413,7 +413,7 @@ describe("DiagramJsIconAdapter", () => {
 
     /**
      * Timer-level teardown (#69). Fake timers are legal in this tier only
-     * (ADR 0014); nothing here drives a real canvas.
+     * (ADR TST-2); nothing here drives a real canvas.
      */
     describe("debouncing and teardown", () => {
         beforeEach(() => {

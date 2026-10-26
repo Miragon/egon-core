@@ -50,7 +50,7 @@ export class ImportRepairService {
         return renameLegacyWorkObjectTypes(elements);
     }
 
-    // Conditional legacy compatibility only: ADR 0008 makes icon names
+    // Conditional legacy compatibility only: ADR ICO-1 makes icon names
     // verbatim data, so an exact spaced name wins. Hyphenate literal spaces
     // only when the historical spelling resolves to an available icon.
     removeWhitespacesFromIcons(

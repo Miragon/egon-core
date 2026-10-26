@@ -22,13 +22,13 @@ import type { DomainStoryNumberingRegistry } from "../DomainStoryNumberingRegist
  * has its own spec (`story/domain/__tests__` for `activityNumbering`); this spec
  * proves the wiring.
  *
- * WHY browser tier (ADR 0014): every case runs `modeling.*`, which reaches
+ * WHY browser tier (ADR TST-2): every case runs `modeling.*`, which reaches
  * `canvas.addShape`/`addConnection` → tiny-svg `translate()` →
  * `SVGSVGElement.createSVGTransform`, absent in jsdom.
  *
  * **Inverted by #74.** Numbering used to happen inside
  * `DomainStoryRenderer.renderExternalNumber`, so only a real *draw pass*
- * assigned it — ADR 0014's second blocker, now superseded as fact. It is a
+ * assigned it — once a reason for the browser tier, no longer true (ADR ARC-4). It is a
  * command interceptor on `connection.create`/`connection.reconnect` now, so the
  * number exists before anything paints, and undo takes it away again. The cases
  * below assert the model *before* forcing a render wherever the distinction

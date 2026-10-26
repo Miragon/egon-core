@@ -23,7 +23,7 @@ import type { DomainStoryDocument } from "../../../../story/domain/DomainStoryDo
 import type { DirtyFlagService } from "../../../service/DirtyFlagService";
 
 /**
- * Issues #65 and #74: drawing must not change the persisted model (ADR 0016).
+ * Issues #65 and #74: drawing must not change the persisted model (ADR ARC-4).
  *
  * WHY this exists: `DomainStoryRenderer` used to write to the business objects
  * it was only asked to paint. For an *imported* story `element.waypoints` **is**
@@ -41,7 +41,7 @@ import type { DirtyFlagService } from "../../../service/DirtyFlagService";
  * holds exactly the number the renderer would have written. The cases in
  * "nothing else survives a repaint" build the states the fixtures cannot.
  *
- * WHY browser tier and not jsdom (ADR 0013/0014): the nudge is measured out of
+ * WHY browser tier and not jsdom (ADRs TST-1/TST-2): the nudge is measured out of
  * the DOM — `getLineOffset` reads the source label's last `<tspan>`'s `y` — and
  * the drawn geometry is read back with `getPointAtLength`. jsdom has neither.
  *

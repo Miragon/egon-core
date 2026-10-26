@@ -112,7 +112,7 @@ describe("computeColorPickerAnchor", () => {
 });
 
 /**
- * The context-pad half of the client-scoped picker contract (ADR 0026). This
+ * The context-pad half of the client-scoped picker contract (ADR EDT-2). This
  * provider owns no request or async response state; it only hands the exact pad
  * target to the session coordinator when the user clicks the color entry.
  */

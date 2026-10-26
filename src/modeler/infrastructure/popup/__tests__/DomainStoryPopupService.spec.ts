@@ -18,7 +18,7 @@ import { ElementTypes } from "../../../../story/domain/elementTypes";
  * `handleUpdate`: the mapping under test spans `PopupMenu`'s state (an empty
  * number field becomes `0`, the checkbox has to open pre-ticked) and the
  * service's translation of it. Calling the private method would skip exactly
- * the half that was wrong. Unit tier — no canvas, no SVG (ADR 0014).
+ * the half that was wrong. Unit tier — no canvas, no SVG (ADR TST-2).
  */
 describe("DomainStoryPopupService", () => {
     const liveListeners: Map<string, (event: unknown) => void>[] = [];

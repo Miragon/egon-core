@@ -13,7 +13,7 @@ import { DirtyFlagService } from "../../../service/DirtyFlagService";
  *
  * A real `EventBus` with a stubbed `CommandStack`: the whole behaviour is "what
  * does it do with `canUndo()` when `commandStack.changed` fires", and diagram-js'
- * real stack cannot reach that state without a canvas (ADR 0014).
+ * real stack cannot reach that state without a canvas (ADR TST-2).
  */
 describe("DomainStoryDirtyFlagUpdater", () => {
     let eventBus: EventBus;

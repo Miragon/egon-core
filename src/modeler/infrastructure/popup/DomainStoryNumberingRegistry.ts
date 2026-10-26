@@ -12,7 +12,7 @@ import {
 /**
  * Applies the pure activity-numbering policy (`story/domain/activityNumbering`)
  * to the live canvas: it owns the mutable multiple-number registry (mutable
- * state must live on a didi-instantiated class, ADR 0012) and translates
+ * state must live on a didi-instantiated class, ADR ARC-5) and translates
  * computed number assignments into business-object mutations plus
  * `element.changed` events. The arithmetic itself is domain code — this class
  * only wires it to diagram-js.

@@ -116,7 +116,7 @@ Typechecking uses TypeScript 7 (`yarn tsc`, supplied by `@typescript/native`).
 The `typescript` dependency aliases the TypeScript 6 compatibility API needed
 by ESLint, declaration generation, and source-analysis tests. The isolated
 package consumer also typechecks with TypeScript 7; see
-[ADR 0035](docs/adr/0035-typescript-native-compiler-and-compatible-tooling-api.md).
+[ADR ENG-1](docs/adr/engineering-practices.md#eng-1).
 
 ## Demo and end-to-end journeys
 
@@ -166,11 +166,11 @@ by default and can recover an upload for an existing matching version release.
 
 ## Architecture
 
-Significant decisions are recorded as ADRs in [docs/adr](docs/adr/README.md).
-The layout and layering rules from
-[ADR 0005](docs/adr/0005-module-layout-and-architecture-tests.md) are enforced
-by executable architecture tests (`src/architecture.spec.ts`, run as part of
-`yarn test`).
+Significant decisions are recorded as topic-based ADRs in
+[docs/adr](docs/adr/README.md). The layout and layering rules from
+[ADR ARC-1](docs/adr/architecture.md#arc-1) are enforced by executable
+architecture tests (`src/architecture.spec.ts`, run as part of `yarn test`;
+see [ADR ARC-2](docs/adr/architecture.md#arc-2)).
 
 ## License
 

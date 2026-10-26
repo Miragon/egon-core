@@ -83,7 +83,7 @@ export class DomainStoryExportService {
 /**
  * Export-time geometry is projected into a detached record. In particular,
  * annotation height belongs to the live shape and must never be written into
- * its business object merely because a document was serialized (ADR 0016).
+ * its business object merely because a document was serialized (ADR ARC-4).
  */
 function projectBusinessObject(canvasObject: CanvasObject): BusinessObject {
     const businessObject = { ...canvasObject.businessObject };

@@ -25,7 +25,7 @@ import { ElementTypes } from "../../../../story/domain/elementTypes";
  * handler's arithmetic; only a real graph proves that undo actually leaves the
  * model exportable again. That is exactly what an upstream sync breaks silently.
  *
- * WHY browser tier (ADR 0014): every case here needs shapes on the canvas, and
+ * WHY browser tier (ADR TST-2): every case here needs shapes on the canvas, and
  * `canvas.addShape` reaches tiny-svg `translate()` →
  * `SVGSVGElement.createSVGTransform`, which jsdom does not implement.
  */
@@ -194,7 +194,7 @@ describe("update-handler commands (browser)", () => {
                 y: point.y,
             }));
             // Minted by the `connection.create` interceptor since #74; it used
-            // to take a real draw pass (ADR 0014, blocker 2 — now stale).
+            // to take a real draw pass (see ADR ARC-4).
             expect(activity.businessObject.number).toBe(1);
 
             // `null` is what the context pad passes when the *current* source is

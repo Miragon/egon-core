@@ -17,7 +17,7 @@ import type { DomainStoryTextRenderer } from "../DomainStoryTextRenderer";
  * `new Diagram({ textRenderer })` option → didi's dotted `config.textRenderer`
  * key. Every hop there is a string the compiler cannot check.
  *
- * WHY browser tier (ADR 0014): the harness boots the production adapter, whose
+ * WHY browser tier (ADR TST-2): the harness boots the production adapter, whose
  * render pass needs `getBBox`.
  */
 describe("text renderer config wiring (browser)", () => {

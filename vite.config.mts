@@ -95,7 +95,7 @@ export default defineConfig({
             transformMixedEsModules: true,
         },
     },
-    // Two tiers, split by vitest projects (ADR 0013). Root options are shared
+    // Two tiers, split by vitest projects (ADR TST-1). Root options are shared
     // via `extends: true`; each project narrows environment and file set.
     // - `unit`: fast jsdom suite; the default `yarn test`/coverage loop. Ports
     //   and diagram-js are mocked here.
@@ -115,7 +115,7 @@ export default defineConfig({
             include: ["src/**/*.ts", "src/**/*.tsx"],
             // The public-consumer harness has its own Playwright verification. Do
             // not count unrelated demo/config/launcher files as uncovered in
-            // the unit-only report (ADR 0028).
+            // the unit-only report (ADR TST-3).
             exclude: [
                 ...coverageConfigDefaults.exclude,
                 "demo/**",
