@@ -2,7 +2,7 @@ import "diagram-js/assets/diagram-js.css";
 import "../../../../styles.scss";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { page, userEvent } from "@vitest/browser/context";
+import { page, userEvent } from "vitest/browser";
 import type { Connection, Element, Shape } from "diagram-js/lib/model/Types";
 
 import {
