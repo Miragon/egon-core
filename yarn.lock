@@ -2175,10 +2175,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"didi@npm:11.0.1":
-  version: 11.0.1
-  resolution: "didi@npm:11.0.1"
-  checksum: 10c0/075f1a9be3187aaf8845a289365276169b25a2a3cfc56c4f0fad7844cd4e22d51963d6b8c4ae53f9b98425608814b51b2d24b5871b7a0d2a0e179d0936891e9f
+"didi@npm:12.0.0":
+  version: 12.0.0
+  resolution: "didi@npm:12.0.0"
+  checksum: 10c0/86e8477cd0bc4e8bdcce0986268cdaf20ea7b5ec5deeb2d3a2dde925c176a2b3380194001ff83cec69f1602fd68a6801022fc6f75dff0e512f17111980bcd314
   languageName: node
   linkType: hard
 
@@ -2288,7 +2288,7 @@ __metadata:
     diagram-js: "npm:15.28.1"
     diagram-js-direct-editing: "npm:3.6.0"
     diagram-js-minimap: "npm:5.6.0"
-    didi: "npm:11.0.1"
+    didi: "npm:12.0.0"
     dompurify: "npm:3.4.17"
     eslint: "npm:10.12.0"
     eslint-config-prettier: "npm:10.1.8"
